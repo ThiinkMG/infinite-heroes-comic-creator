@@ -1,0 +1,1754 @@
+
+/**
+ * @license
+ * SPDX-License-Identifier: Apache-2.0
+*/
+
+import React, { useState, useRef, useEffect } from 'react';
+import { GoogleGenAI } from '@google/genai';
+import jsPDF from 'jspdf';
+import { getComicConfig, ART_STYLES, GENRES, TONES, LANGUAGES, ComicFace, Beat, Persona, StoryContext, StoryOutline, CharacterProfile } from './types';
+import { Setup } from './Setup';
+import { Book } from './Book';
+import { RerollModal } from './RerollModal';
+import { OutlineDialog } from './OutlineDialog';
+import { GalleryModal } from './GalleryModal';
+import { useApiKey } from './useApiKey';
+import { ApiKeyDialog } from './ApiKeyDialog';
+import { ExportDialog } from './ExportDialog';
+import { ProfilesDialog } from './ProfilesDialog';
+import { SettingsDialog } from './SettingsDialog';
+import { OutlineStepDialog } from './OutlineStepDialog';
+
+// --- Constants ---
+const MODEL_IMAGE_GEN_NAME = "gemini-3-pro-image-preview";
+const MODEL_TEXT_NAME = "gemini-2.5-pro";
+
+const App: React.FC = () => {
+  // --- API Key Hook ---
+  const { validateApiKey, setShowApiKeyDialog, showApiKeyDialog, handleApiKeyDialogContinue } = useApiKey();
+
+  const isCastLoadedRef = useRef(false);
+
+  useEffect(() => {
+    const saved = localStorage.getItem('infinite_heroes_cast');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (parsed.hero) setHeroState(parsed.hero); heroRef.current = parsed.hero || null;
+        if (parsed.friend) setFriendState(parsed.friend); friendRef.current = parsed.friend || null;
+        if (parsed.additionalCharacters) {
+             setAdditionalCharacters(parsed.additionalCharacters);
+             additionalCharsRef.current = parsed.additionalCharacters;
+        }
+      } catch(e){ console.error("Failed to load cast", e); }
+    }
+    isCastLoadedRef.current = true;
+  }, []);
+
+  const [hero, setHeroState] = useState<Persona | null>(null);
+  const [friend, setFriendState] = useState<Persona | null>(null);
+  const [additionalCharacters, setAdditionalCharacters] = useState<Persona[]>([]);
+  const [storyContext, setStoryContext] = useState<StoryContext>({
+    title: "",
+    descriptionText: "",
+    descriptionFiles: [],
+    publisherName: "Marvel",
+    seriesTitle: "Infinite Heroes",
+    issueNumber: "1",
+    useOverlayLogo: true,
+    artStyle: ART_STYLES[0],
+    pageLength: 10
+  });
+
+  const [generateFromOutline, setGenerateFromOutline] = useState(false);
+  const [storyOutline, setStoryOutline] = useState<StoryOutline>({
+    content: "",
+    isReady: false,
+    isGenerating: false
+  });
+  const [outlineNotes, setOutlineNotes] = useState("");
+  const [showOutlineStep, setShowOutlineStep] = useState(false);
+
+  const [selectedGenre, setSelectedGenre] = useState(GENRES[0]);
+  const [selectedLanguage, setSelectedLanguage] = useState(LANGUAGES[0].code);
+  const [customPremise, setCustomPremise] = useState("");
+  const [storyTone, setStoryTone] = useState(TONES[0]);
+  const [richMode, setRichMode] = useState(true);
+  
+  const heroRef = useRef<Persona | null>(null);
+  const friendRef = useRef<Persona | null>(null);
+  const additionalCharsRef = useRef<Persona[]>([]);
+
+  useEffect(() => {
+    if (!isCastLoadedRef.current) return;
+      const payload = JSON.stringify({ hero, friend, additionalCharacters });
+      if (payload.length > 4000000) { // ~4MB safe limit
+          console.warn("Payload exceeds local storage safe limits. Stripping images to persist text metadata.");
+          const stripStr = (p: Persona|null) => p ? { ...p, base64: '', referenceImage: '', referenceImages: [], backstoryFiles: [] } : null;
+          try {
+              localStorage.setItem('infinite_heroes_cast', JSON.stringify({ 
+                  hero: stripStr(hero), 
+                  friend: stripStr(friend), 
+                  additionalCharacters: additionalCharacters.map(c => stripStr(c)!) 
+              }));
+          } catch (err) {
+              console.error("Even text metadata failed to save:", err);
+          }
+      } else {
+          try {
+              localStorage.setItem('infinite_heroes_cast', payload);
+          } catch (e) {
+              console.error("Storage save failed:", e);
+          }
+      }
+  }, [hero, friend, additionalCharacters]);
+
+  const setHero = (p: Persona | null) => { setHeroState(p); heroRef.current = p; };
+  const setFriend = (p: Persona | null) => { setFriendState(p); friendRef.current = p; };
+
+  const handleAddCharacter = () => {
+    const newChar: Persona = {
+      id: Math.random().toString(36).substr(2, 9),
+      name: `Character ${additionalCharacters.length + 3}`,
+      base64: "",
+      desc: "Additional Character",
+      backstoryFiles: []
+    };
+    setAdditionalCharacters(prev => {
+      const updated = [...prev, newChar];
+      additionalCharsRef.current = updated;
+      return updated;
+    });
+  };
+
+  const handleUpdateCharacter = (id: string, updates: Partial<Persona>) => {
+    setAdditionalCharacters(prev => {
+      const updated = prev.map(c => c.id === id ? { ...c, ...updates } : c);
+      additionalCharsRef.current = updated;
+      return updated;
+    });
+  };
+
+  const handleDeleteCharacter = (id: string) => {
+    setAdditionalCharacters(prev => {
+      const updated = prev.filter(c => c.id !== id);
+      additionalCharsRef.current = updated;
+      return updated;
+    });
+  };
+
+  const processFiles = async (files: FileList) => {
+    const results: { base64: string; mimeType: string; name: string }[] = [];
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      const base64 = await fileToBase64(file);
+      results.push({ base64, mimeType: file.type, name: file.name });
+    }
+    return results;
+  };
+  
+  const [comicFaces, setComicFaces] = useState<ComicFace[]>([]);
+  const [currentSheetIndex, setCurrentSheetIndex] = useState(0);
+  const [isStarted, setIsStarted] = useState(false);
+  
+  // --- Transition States ---
+  const [showSetup, setShowSetup] = useState(true);
+  const [isTransitioning, setIsTransitioning] = useState(false);
+  const [isGeneratingProfiles, setIsGeneratingProfiles] = useState(false);
+  const [showExportDialog, setShowExportDialog] = useState(false);
+  const [showOutlineDialog, setShowOutlineDialog] = useState(false);
+  const [showGallery, setShowGallery] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(localStorage.getItem('is_admin') === 'true');
+  const [userApiKey, setUserApiKey] = useState(localStorage.getItem('user_api_key') || '');
+  const [showProfilesStep, setShowProfilesStep] = useState(false);
+  const [tempProfiles, setTempProfiles] = useState<CharacterProfile[]>([]);
+  const [extraPages, setExtraPages] = useState(0);
+
+  const [showGlobalReroll, setShowGlobalReroll] = useState(false);
+  const [globalRerollPageInput, setGlobalRerollPageInput] = useState<string>('1');
+  const [showPageNav, setShowPageNav] = useState(true);
+  const [pageNavInput, setPageNavInput] = useState<string>('Cover');
+
+  useEffect(() => {
+     if (currentSheetIndex === 0) {
+         setPageNavInput('Cover');
+     } else {
+         setPageNavInput(`${currentSheetIndex * 2 - 1}-${currentSheetIndex * 2}`);
+     }
+  }, [currentSheetIndex]);
+
+  const generatingPages = useRef(new Set<number>());
+  const historyRef = useRef<ComicFace[]>([]);
+  const isStoppedRef = useRef(false);
+
+  const [zoom, setZoom] = useState(1);
+  const zoomIn = () => setZoom(z => Math.min(z + 0.5, 3));
+  const zoomOut = () => setZoom(z => Math.max(z - 0.5, 0.5));
+  const resetZoom = () => setZoom(1);
+
+  const characterProfilesRef = useRef<CharacterProfile[]>([]);
+  const [rerollTarget, setRerollTarget] = useState<number | null>(null);
+
+  // --- AI Helpers ---
+  // Key priority: admin (server key) → user key (localStorage) → env fallback
+  const getActiveApiKey = (): string => {
+    if (isAdmin && process.env.API_KEY) return process.env.API_KEY;
+    if (userApiKey) return userApiKey;
+    return process.env.API_KEY || '';
+  };
+
+  const getAI = () => {
+    const key = getActiveApiKey();
+    if (!key) {
+      setShowSettings(true);
+      throw new Error('No API key configured. Please add one in Settings.');
+    }
+    return new GoogleGenAI({ apiKey: key });
+  };
+
+  const handleSettingsKeyChange = (key: string | null, admin: boolean) => {
+    setIsAdmin(admin);
+    setUserApiKey(key || '');
+  };
+
+  const handleAPIError = (e: any) => {
+    const msg = String(e);
+    console.error("API Error:", msg);
+    if (
+      msg.includes('Requested entity was not found') || 
+      msg.includes('API_KEY_INVALID') || 
+      msg.toLowerCase().includes('permission denied')
+    ) {
+      setShowSettings(true);
+    }
+  };
+
+  const fileToBase64 = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve((reader.result as string).split(',')[1]);
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  };
+
+  const generateBeat = async (history: ComicFace[], isRightPage: boolean, pageNum: number, isDecisionPage: boolean, instruction?: string): Promise<Beat> => {
+    if (!heroRef.current) throw new Error("No Hero");
+    const config = getComicConfig(storyContext.pageLength, extraPages);
+    const isFinalPage = pageNum === config.MAX_STORY_PAGES;
+    const langName = LANGUAGES.find(l => l.code === selectedLanguage)?.name || "English";
+
+    // Get relevant history and last focus to prevent repetition
+    const relevantHistory = history
+        .filter(p => p.type === 'story' && p.narrative && (p.pageIndex || 0) < pageNum)
+        .sort((a, b) => (a.pageIndex || 0) - (b.pageIndex || 0));
+
+    const lastBeat = relevantHistory[relevantHistory.length - 1]?.narrative;
+    const lastFocus = lastBeat?.focus_char || 'none';
+
+    const historyText = relevantHistory.map(p => 
+      `[Page ${p.pageIndex}] [Focus: ${p.narrative?.focus_char}] (Caption: "${p.narrative?.caption || ''}") (Dialogue: "${p.narrative?.dialogue || ''}") (Scene: ${p.narrative?.scene}) ${p.resolvedChoice ? `-> USER CHOICE: "${p.resolvedChoice}"` : ''}`
+    ).join('\n');
+
+    // Aggressive Co-Star Injection Logic
+    let friendInstruction = "Not yet introduced.";
+    if (friendRef.current) {
+        friendInstruction = "ACTIVE and PRESENT (User Provided).";
+        // If the last panel wasn't the friend, strongly suggest switching to them to maintain balance.
+        if (lastFocus !== 'friend' && Math.random() > 0.4) {
+             friendInstruction += " MANDATORY: FOCUS ON THE CO-STAR FOR THIS PANEL.";
+        } else {
+             friendInstruction += " Ensure they are woven into the scene even if not the main focus.";
+        }
+    }
+
+    // Determine Core Story Driver (Genre vs Custom Premise)
+    let coreDriver = `GENRE: ${selectedGenre}. TONE: ${storyTone}.`;
+    if (selectedGenre === 'Custom') {
+        coreDriver = `STORY PREMISE: ${customPremise || "A totally unique, unpredictable adventure"}. (Follow this premise strictly over standard genre tropes).`;
+    }
+    
+    const isSliceOfLife = selectedGenre.includes("Comedy") || selectedGenre.includes("Teen") || selectedGenre.includes("Slice");
+
+    // Guardrails to prevent everything becoming "Quantum Sci-Fi"
+    const guardrails = `
+    NEGATIVE CONSTRAINTS:
+    1. UNLESS GENRE IS "Dark Sci-Fi" OR "Superhero Action" OR "Custom": DO NOT use technical jargon like "Quantum", "Timeline", "Portal", "Multiverse", or "Singularity".
+    2. IF GENRE IS "Teen Drama" OR "Lighthearted Comedy": The "stakes" must be SOCIAL, EMOTIONAL, or PERSONAL (e.g., a rumor, a competition, a broken promise, being late, embarrassing oneself). Do NOT make it life-or-death. Keep it grounded.
+    3. Avoid "The artifact" or "The device" unless established earlier.
+    `;
+
+    const getRoleLabel = (p: Persona) => {
+        if (!p.role) return '';
+        if (p.role === 'Family/Friend' || p.role === 'Custom') return p.customRole || p.role;
+        return p.role;
+    };
+
+    // Character Context
+    const charContext = [
+        `HERO: ${heroRef.current.name || 'Main Hero'}. Role: ${getRoleLabel(heroRef.current) || 'Hero'}. Backstory: ${heroRef.current.backstoryText || 'Unknown'}.`,
+        friendRef.current ? `CO-STAR: ${friendRef.current.name || 'Sidekick'}. Role: ${getRoleLabel(friendRef.current) || 'Sidekick'}. Backstory: ${friendRef.current.backstoryText || 'Unknown'}.` : null,
+        ...additionalCharsRef.current.map(c => `${c.name}: Role: ${getRoleLabel(c) || 'Supporting'}. ${c.backstoryText || 'Unknown'}.`)
+    ].filter(Boolean).join('\n');
+
+    // Story Context
+    const storyInfo = `
+    STORY TITLE: ${storyContext.title || 'Untitled Adventure'}
+    STORY DESCRIPTION: ${storyContext.descriptionText || 'A new adventure begins.'}
+    ${storyOutline.isReady ? `STORY OUTLINE: ${storyOutline.content}` : ''}
+    `;
+
+    // BASE INSTRUCTION: Strictly enforce language for output text.
+    let baseInstruction = `You are the Lead Writer for a mature comic book. Write ONE single, vivid, narrative beat for the NEXT page. ALL OUTPUT TEXT (Captions, Dialogue, Choices) MUST BE IN ${langName.toUpperCase()}. ${coreDriver} ${guardrails}`;
+    baseInstruction += `\nCONTEXT: ${storyInfo}\nCHARACTERS:\n${charContext}`;
+    if (richMode) {
+        baseInstruction += " RICH/NOVEL MODE ENABLED. Prioritize deeper character thoughts, descriptive captions, and meaningful dialogue exchanges over short punchlines.";
+    }
+    if (instruction) {
+        baseInstruction += `\nUSER REROLL INSTRUCTION: "${instruction}". (YOU MUST FOLLOW THIS OVER THE NORMAL NARRATIVE FLOW!).`;
+    }
+
+    if (isFinalPage) {
+        baseInstruction += " FINAL PAGE. KARMIC CLIFFHANGER REQUIRED. You MUST explicitly reference the User's choice from PAGE 3 in the narrative and show how that specific philosophy led to this conclusion. Text must end with 'TO BE CONTINUED...' (or localized equivalent).";
+    } else if (isDecisionPage) {
+        baseInstruction += " End with a PSYCHOLOGICAL choice about VALUES, RELATIONSHIPS, or RISK. (e.g., Truth vs. Safety, Forgive vs. Avenge). The choices MUST be a brief descriptive summary of the action the user is taking (e.g. 'Confront the suspect at the warehouse' vs 'Follow from a distance'). NEVER use generic 'Option A' or 'Option B'.";
+    } else {
+        // Neutralized Narrative Arc to avoid forcing "scary mystery" tones if the genre doesn't call for it.
+        if (pageNum === 1) {
+            baseInstruction += " INCITING INCIDENT. An event disrupts the status quo. Establish the genre's intended mood. (If Slice of Life: A social snag/surprise. If Adventure: A call to action).";
+        } else if (pageNum <= 4) {
+            baseInstruction += " RISING ACTION. The heroes engage with the new situation. Focus on dialogue, character dynamics, and initial challenges.";
+        } else if (pageNum <= 8) {
+            baseInstruction += " COMPLICATION. A twist occurs! A secret is revealed, a misunderstanding deepens, or the path is blocked. (Keep intensity appropriate to Genre - e.g. Social awkwardness for Comedy, Danger for Horror).";
+        } else {
+            baseInstruction += " CLIMAX. The confrontation with the main conflict. The truth comes out, the contest ends, or the battle is fought.";
+        }
+    }
+
+    // Dynamic text limits based on richMode
+    const capLimit = richMode ? "max 35 words. Detailed narration or internal monologue" : "max 15 words";
+    const diaLimit = richMode ? "max 30 words. Rich, character-driven speech" : "max 12 words";
+
+    const prompt = `
+You are writing a comic book script. PAGE ${pageNum} of ${config.MAX_STORY_PAGES}.
+TARGET LANGUAGE FOR TEXT: ${langName} (CRITICAL: CAPTIONS, DIALOGUE, CHOICES MUST BE IN THIS LANGUAGE).
+${coreDriver}
+
+CHARACTERS:
+- HERO: Active.
+- CO-STAR: ${friendInstruction}
+
+PREVIOUS PANELS (READ CAREFULLY):
+${historyText.length > 0 ? historyText : "Start the adventure."}
+
+RULES:
+1. NO REPETITION. Do not use the same captions or dialogue from previous pages.
+2. IF CO-STAR IS ACTIVE, THEY MUST APPEAR FREQUENTLY.
+3. VARIETY. If page ${pageNum-1} was an action shot, make this one a reaction or wide shot.
+4. LANGUAGE: All user-facing text MUST be in ${langName}.
+5. Avoid saying "CO-star" and "hero" in the text captions. Use names if established, or generic descriptors.
+
+INSTRUCTION: ${baseInstruction}
+
+OUTPUT STRICT JSON ONLY (No markdown formatting):
+{
+  "caption": "Unique narrator text in ${langName}. (${capLimit}).",
+  "dialogue": "Unique speech in ${langName}. (${diaLimit}). Optional.",
+  "scene": "Vivid visual description (ALWAYS IN ENGLISH for the artist model). MUST explicitly name EVERY character present in the scene (Hero, Co-Star, or their exact given names).",
+  "focus_char": "hero" OR "friend" OR "other",
+  "choices": ["Descriptive Action A in ${langName}", "Descriptive Action B in ${langName}"] (Only if decision page)
+}
+`;
+
+    const parts: any[] = [{ text: prompt }];
+
+    // Add Story Description Files
+    storyContext.descriptionFiles.forEach(f => {
+        parts.push({ inlineData: { mimeType: f.mimeType, data: f.base64 } });
+    });
+
+    // Add Character Backstory Files
+    if (heroRef.current?.backstoryFiles) {
+        heroRef.current.backstoryFiles.forEach(f => parts.push({ inlineData: { mimeType: f.mimeType, data: f.base64 } }));
+    }
+    if (friendRef.current?.backstoryFiles) {
+        friendRef.current.backstoryFiles.forEach(f => parts.push({ inlineData: { mimeType: f.mimeType, data: f.base64 } }));
+    }
+    additionalCharsRef.current.forEach(c => {
+        c.backstoryFiles?.forEach(f => parts.push({ inlineData: { mimeType: f.mimeType, data: f.base64 } }));
+    });
+
+    try {
+        const ai = getAI();
+        const res = await ai.models.generateContent({ 
+            model: MODEL_TEXT_NAME, 
+            contents: { parts }, 
+            config: { responseMimeType: 'application/json' } 
+        });
+        let rawText = res.text || "{}";
+        rawText = rawText.replace(/```json/g, '').replace(/```/g, '').trim();
+        
+        const parsed = JSON.parse(rawText);
+        
+        if (parsed.dialogue) parsed.dialogue = String(Array.isArray(parsed.dialogue) ? parsed.dialogue.join(' ') : parsed.dialogue).replace(/^[\w\s\-]+:\s*/i, '').replace(/["']/g, '').trim();
+        if (parsed.caption) parsed.caption = String(Array.isArray(parsed.caption) ? parsed.caption.join(' ') : parsed.caption).replace(/^[\w\s\-]+:\s*/i, '').trim();
+        if (!isDecisionPage) parsed.choices = [];
+        if (isDecisionPage && !isFinalPage && (!parsed.choices || parsed.choices.length < 2)) parsed.choices = ["Option A", "Option B"];
+        if (!['hero', 'friend', 'other'].includes(parsed.focus_char)) parsed.focus_char = 'hero';
+
+        return parsed as Beat;
+    } catch (e) {
+        console.error("Beat generation failed", e);
+        handleAPIError(e);
+        return { 
+            caption: pageNum === 1 ? "It began..." : "...", 
+            scene: `Generic scene for page ${pageNum}.`, 
+            focus_char: 'hero', 
+            choices: [] 
+        };
+    }
+  };
+
+  const generatePersona = async (desc: string): Promise<Persona> => {
+      const style = selectedGenre === 'Custom' ? "Modern American comic book art" : `${selectedGenre} comic`;
+      try {
+          const ai = getAI();
+          const res = await ai.models.generateContent({
+              model: MODEL_IMAGE_GEN_NAME,
+              contents: { text: `STYLE: Masterpiece ${style} character sheet, detailed ink, neutral background. FULL BODY. Character: ${desc}` },
+              config: { imageConfig: { aspectRatio: '1:1' } }
+          });
+          const part = res.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
+          if (part?.inlineData?.data) return { id: Math.random().toString(36).substr(2, 9), name: desc, base64: part.inlineData.data, desc, backstoryText: '', backstoryFiles: [] };
+          throw new Error("Failed");
+      } catch (e) { 
+        handleAPIError(e);
+        throw e; 
+      }
+  };
+
+  const generateImage = async (beat: Beat, type: ComicFace['type'], instruction?: string, extraRefImages?: string[], prevImage?: string, prevBeat?: Beat): Promise<string> => {
+    const contents: any[] = [];
+    const getAllRefs = (p: Persona) => p.referenceImages || (p.referenceImage ? [p.referenceImage] : []);
+    if (heroRef.current?.base64) {
+        contents.push({ text: "REFERENCE 1 [HERO]:" });
+        contents.push({ inlineData: { mimeType: 'image/jpeg', data: heroRef.current.base64 } });
+        getAllRefs(heroRef.current).forEach((ref, i) => {
+            contents.push({ text: `HERO REF SHEET ${i+1}:` });
+            contents.push({ inlineData: { mimeType: 'image/jpeg', data: ref } });
+        });
+    }
+    if (friendRef.current?.base64) {
+        contents.push({ text: "REFERENCE 2 [CO-STAR]:" });
+        contents.push({ inlineData: { mimeType: 'image/jpeg', data: friendRef.current.base64 } });
+        getAllRefs(friendRef.current).forEach((ref, i) => {
+            contents.push({ text: `CO-STAR REF SHEET ${i+1}:` });
+            contents.push({ inlineData: { mimeType: 'image/jpeg', data: ref } });
+        });
+    }
+    additionalCharsRef.current.forEach((c, i) => {
+        if (c.base64) {
+            contents.push({ text: `REFERENCE ${i + 3} [${c.name}]:` });
+            contents.push({ inlineData: { mimeType: 'image/jpeg', data: c.base64 } });
+        }
+        getAllRefs(c).forEach((ref, ri) => {
+            contents.push({ text: `${c.name} REF SHEET ${ri+1}:` });
+            contents.push({ inlineData: { mimeType: 'image/jpeg', data: ref } });
+        });
+    });
+
+    const styleEra = selectedGenre === 'Custom' ? "Modern American" : selectedGenre;
+    const artStyleTag = storyContext.artStyle ? `, ${storyContext.artStyle} style` : '';
+    
+    // 1. PREFIX REINFORCEMENT
+    let promptText = `[STRICT GENRE: ${selectedGenre}] [STRICT ART STYLE: ${storyContext.artStyle || 'Comic Book'}]\n`;
+    promptText += `STYLE: ${styleEra} comic book art${artStyleTag}, detailed ink, vibrant colors. `;
+    promptText += `STORY TITLE: ${storyContext.title || 'Untitled'}. STORY DESC: ${storyContext.descriptionText || 'Adventure'}. `;
+
+    if (type === 'cover') {
+        const langName = LANGUAGES.find(l => l.code === selectedLanguage)?.name || "English";
+        
+        if (storyContext.useOverlayLogo) {
+            promptText += `TYPE: Comic Book Cover Art. Main visual: Dynamic action shot of [HERO] (Use REFERENCE 1). LEAVE ROOM AT TOP FOR LOGO AND TITLE OVERLAY. DO NOT DRAW ANY LOGOS, TITLES, OR TEXT ON THE ARTWORK. WE WILL ADD IT DIGITALLY OVER THE IMAGE.`;
+        } else {
+            promptText += `TYPE: Comic Book Cover. SERIES TITLE: "${storyContext.seriesTitle.toUpperCase()}". STORY TITLE: "${storyContext.title || 'Untitled'}". PUBLISHER: "${storyContext.publisherName.toUpperCase()}". ISSUE: "#${storyContext.issueNumber || '1'}". Draw the series title and story title prominently on the cover. Main visual: Dynamic action shot of [HERO] (Use REFERENCE 1).`;
+            if (storyContext.publisherLogo) {
+                contents.push({ text: "PUBLISHER LOGO REFERENCE:" });
+                contents.push({ inlineData: { mimeType: 'image/jpeg', data: storyContext.publisherLogo } });
+            }
+        }
+    } else if (type === 'back_cover') {
+        promptText += `TYPE: Comic Back Cover. FULL PAGE VERTICAL ART. Dramatic teaser. Text: "NEXT ISSUE SOON".`;
+    } else {
+        promptText += `TYPE: Vertical comic panel. SCENE: ${beat.scene}. `;
+        
+        let mappings = `If scene mentions 'HERO' or '${heroRef.current?.name}', you MUST use REFERENCE 1. If scene mentions 'CO-STAR' or 'SIDEKICK' or '${friendRef.current?.name}', you MUST use REFERENCE 2.`;
+        additionalCharsRef.current.forEach((c, i) => {
+             mappings += ` If scene mentions '${c.name}', you MUST use REFERENCE ${i + 3}.`;
+        });
+        promptText += `\nINSTRUCTIONS: Maintain strict character likeness. ${mappings}\n`;
+        
+        if (beat.caption) promptText += ` INCLUDE CAPTION BOX: "${beat.caption}"`;
+        if (beat.dialogue) promptText += ` INCLUDE SPEECH BUBBLE: "${beat.dialogue}"`;
+        
+        if (instruction) {
+             promptText += ` \nUSER REROLL INSTRUCTION: "${instruction}". Ensure this explicit instruction is followed perfectly in the visual!`;
+             // Automatic background instruction for rerolls
+             promptText += ` \nWhen regenerating a character or scene, reference all selected character profiles, uploaded reference images, and attached visual assets to maintain visual consistency. Prioritize matching defining features (face, build, clothing, color palette) from the selected references before applying any stylistic changes from the user's text input.`;
+        }
+    }
+
+    if (type !== 'back_cover') {
+        promptText += ` \n[CRITICAL CONSISTENCY DIRECTIVES]:
+1. You MUST strictly copy the exact physical appearance, facial features, hairstyle, body type, and clothing from the provided REFERENCE images AND the CHARACTER VISUAL PROFILES below.
+2. The characters in the output MUST be instantly recognizable as the characters in the references. Do not invent new character designs, outfits, or hairstyles unless explicitly asked.
+3. Pay close attention to distinguishing features (scars, tattoos, specific hair colors) mentioned in the profiles and ensure they are visible.
+4. [ART STYLE & GENRE ENFORCEMENT] The overall visual style of every panel MUST be: ${styleEra} comic book art${artStyleTag}. The GENRE is: ${selectedGenre}. Do NOT deviate from this art style or genre under any circumstances. THE ENVIRONMENT, LIGHTING, AND AESTHETIC MUST MATCH THE ${selectedGenre.toUpperCase()} GENRE. The line work, coloring technique, shading, and overall aesthetic must consistently match the specified style throughout.\n`;
+
+        if (characterProfilesRef.current.length > 0) {
+            promptText += '\n--- CHARACTER VISUAL PROFILES ---\n';
+            characterProfilesRef.current.forEach(cp => {
+                promptText += `[${cp.name}] Face: ${cp.faceDescription}. Body: ${cp.bodyType}. Clothing: ${cp.clothing}. Tags: ${cp.colorPalette}. Distinguishing: ${cp.distinguishingFeatures}.\n`;
+            });
+            promptText += '---------------------------------\n';
+        }
+
+        // 5. FINAL VISUAL ANCHOR (to catch context dilution)
+        promptText += `\n[FINAL VISUAL ANCHOR]: REMEMBER, THIS PROJECT IS A ${selectedGenre.toUpperCase()} COMIC IN ${storyContext.artStyle.toUpperCase()} STYLE. EVERY PIXEL MUST REFLECT THIS.`;
+    }
+
+    // 6. PREVIOUS PAGE CONTEXT (Sequential Context)
+    if (prevImage && prevBeat) {
+        contents.push({ text: "CONTEXT: PREVIOUS PAGE VISUAL REFERENCE (PAGE BEFORE THIS ONE):" });
+        contents.push({ inlineData: { mimeType: 'image/jpeg', data: prevImage.split(',')[1] || prevImage } });
+        promptText += ` \n[SEQUENTIAL CONTEXT]: This panel follows the scene where: "${prevBeat.scene}". You MUST maintain continuity with the background, lighting, and character positions from the PREVIOUS PAGE VISUAL REFERENCE provided.`;
+    }
+
+    contents.push({ text: promptText });
+
+    // Inject extra reference images selected from the reroll modal
+    if (extraRefImages && extraRefImages.length > 0) {
+        extraRefImages.forEach((ref, i) => {
+            contents.push({ text: `REROLL EXTRA REF ${i+1}:` });
+            contents.push({ inlineData: { mimeType: 'image/jpeg', data: ref } });
+        });
+    }
+
+    try {
+        const ai = getAI();
+        const res = await ai.models.generateContent({
+          model: MODEL_IMAGE_GEN_NAME,
+          contents: contents,
+          config: { imageConfig: { aspectRatio: '2:3' } }
+        });
+        const part = res.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
+        return part?.inlineData?.data ? `data:${part.inlineData.mimeType};base64,${part.inlineData.data}` : '';
+    } catch (e) { 
+        handleAPIError(e);
+        return ''; 
+    }
+  };
+
+  const generateCharacterProfile = async (persona: Persona, forceAnalysis = false): Promise<CharacterProfile> => {
+      const contents: any[] = [];
+      let hasData = false;
+
+      if (persona.base64) {
+          contents.push({ text: `Analyze this character portrait for: ${persona.name || 'Unknown'}` });
+          contents.push({ inlineData: { mimeType: 'image/jpeg', data: persona.base64 } });
+          hasData = true;
+      }
+      
+      const allRefs = persona.referenceImages || (persona.referenceImage ? [persona.referenceImage] : []);
+      allRefs.forEach((ref, i) => {
+          contents.push({ text: `Additional reference ${i+1}:` });
+          contents.push({ inlineData: { mimeType: 'image/jpeg', data: ref } });
+          hasData = true;
+      });
+
+      if (persona.desc && persona.desc.trim().length > 0) {
+          contents.push({ text: `Character Description/Backstory: ${persona.desc}` });
+          hasData = true;
+      }
+
+      if (persona.backstoryFiles && persona.backstoryFiles.length > 0) {
+          persona.backstoryFiles.forEach(file => {
+              if (file.mimeType.startsWith('text/')) {
+                  try {
+                      const text = atob(file.base64);
+                      contents.push({ text: `Additional Details (${file.name}): ${text}` });
+                      hasData = true;
+                  } catch (err) {}
+              } else if (file.mimeType.startsWith('image/')) {
+                  contents.push({ inlineData: { mimeType: file.mimeType, data: file.base64 } });
+                  hasData = true;
+              }
+          });
+      }
+
+      if (!hasData && !forceAnalysis) {
+          console.log(`Skipping profile generation for ${persona.name} (no data provided)`);
+          return {
+              id: persona.id,
+              name: persona.name || 'Unknown',
+              faceDescription: '', bodyType: '', clothing: '', colorPalette: '', distinguishingFeatures: ''
+          };
+      }
+
+      contents.push({ text: `
+Analyze the character based on the images and text provided above. Produce a STRICT JSON visual profile.
+If only text is provided, infer the visual details based on the description.
+OUTPUT JSON ONLY (no markdown):
+{
+  "faceDescription": "Shape, eye color, nose, jawline, expression, any scars/markings",
+  "bodyType": "Height, build (slim/athletic/muscular/heavy), proportions",
+  "clothing": "Exact outfit description with all details, armor, accessories",
+  "colorPalette": "Primary and secondary colors of skin, hair, eyes, outfit",
+  "distinguishingFeatures": "Unique traits: tattoos, glowing eyes, tail, pointed ears, scars, etc."
+}
+` });
+
+      try {
+          const ai = getAI();
+          const res = await ai.models.generateContent({
+              model: MODEL_TEXT_NAME,
+              contents: contents,
+          });
+          const text = res.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
+          const cleaned = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+          const parsed = JSON.parse(cleaned);
+          return {
+              id: persona.id,
+              name: persona.name || 'Unknown',
+              faceDescription: parsed.faceDescription || '',
+              bodyType: parsed.bodyType || '',
+              clothing: parsed.clothing || '',
+              colorPalette: parsed.colorPalette || '',
+              distinguishingFeatures: parsed.distinguishingFeatures || '',
+          };
+      } catch (e) {
+          console.warn('Failed to generate character profile for', persona.name, e);
+          return {
+              id: persona.id,
+              name: persona.name || 'Unknown',
+              faceDescription: '', bodyType: '', clothing: '', colorPalette: '', distinguishingFeatures: ''
+          };
+      }
+  };
+
+  const generateAllProfiles = async () => {
+      const personas: Persona[] = [];
+      if (heroRef.current) personas.push(heroRef.current);
+      if (friendRef.current) personas.push(friendRef.current);
+      personas.push(...additionalCharsRef.current.filter(c => c.base64 || (c.desc && c.desc.trim().length > 0) || (c.backstoryFiles && c.backstoryFiles.length > 0)));
+      
+      const profiles: CharacterProfile[] = [];
+      for (const p of personas) {
+          profiles.push(await generateCharacterProfile(p));
+      }
+      
+      characterProfilesRef.current = profiles;
+      console.log('[Character Profiles Generated]', profiles);
+      return profiles;
+  };
+
+  const handleAnalyzeProfile = async (index: number) => {
+      const personas: Persona[] = [];
+      if (heroRef.current) personas.push(heroRef.current);
+      if (friendRef.current) personas.push(friendRef.current);
+      personas.push(...additionalCharsRef.current.filter(c => c.base64 || (c.desc && c.desc.trim().length > 0) || (c.backstoryFiles && c.backstoryFiles.length > 0)));
+
+      const persona = personas[index];
+      if (!persona) return;
+
+      try {
+          const newProfile = await generateCharacterProfile(persona, true); // force analysis on manual click
+          setTempProfiles(prev => {
+              const arr = [...prev];
+              arr[index] = newProfile;
+              return arr;
+          });
+      } catch (e) {
+          console.error("Manual reanalyze failed:", e);
+      }
+  };
+
+  const updateFaceState = (id: string, updates: Partial<ComicFace>) => {
+      setComicFaces(prev => prev.map(f => f.id === id ? { ...f, ...updates } : f));
+      const idx = historyRef.current.findIndex(f => f.id === id);
+      if (idx !== -1) historyRef.current[idx] = { ...historyRef.current[idx], ...updates };
+  };
+
+  const generateSinglePage = async (faceId: string, pageNum: number, type: ComicFace['type'], instruction?: string, extraRefImages?: string[]) => {
+      const config = getComicConfig(storyContext.pageLength, extraPages);
+      const isDecision = generateFromOutline ? false : config.DECISION_PAGES.includes(pageNum);
+      let beat: Beat = { scene: "", choices: [], focus_char: 'other' };
+
+      if (type === 'cover') {
+           // Cover beat is handled in generateImage
+      } else if (type === 'back_cover') {
+           beat = { scene: "Thematic teaser image", choices: [], focus_char: 'other' };
+      } else {
+           beat = await generateBeat(historyRef.current, pageNum % 2 === 0, pageNum, isDecision, instruction);
+      }
+
+      if (beat.focus_char === 'friend' && !friendRef.current && type === 'story') {
+          try {
+              const newSidekick = await generatePersona(selectedGenre === 'Custom' ? "A fitting sidekick for this story" : `Sidekick for ${selectedGenre} story.`);
+              setFriend(newSidekick);
+          } catch (e) { beat.focus_char = 'other'; }
+      }
+
+      updateFaceState(faceId, { narrative: beat, choices: beat.choices, isDecisionPage: isDecision });
+
+      // Retrieve previous context
+      let prevImage: string | undefined;
+      let prevBeat: Beat | undefined;
+      if (pageNum > 0) {
+          const prevFace = comicFaces.find(f => f.pageIndex === pageNum - 1);
+          if (prevFace?.imageUrl) {
+              prevImage = prevFace.imageUrl;
+              prevBeat = prevFace.narrative;
+          }
+      }
+
+      const url = await generateImage(beat, type, instruction, extraRefImages, prevImage, prevBeat);
+      if (isStoppedRef.current) return;
+      if (!url) {
+          updateFaceState(faceId, { isLoading: false, hasFailed: true });
+      } else {
+          updateFaceState(faceId, { imageUrl: url, isLoading: false, hasFailed: false });
+      }
+  };
+
+  const generateBatch = async (startPage: number, count: number) => {
+      const config = getComicConfig(storyContext.pageLength, extraPages);
+      const pagesToGen: number[] = [];
+      for (let i = 0; i < count; i++) {
+          const p = startPage + i;
+          if (p <= config.TOTAL_PAGES && !generatingPages.current.has(p)) {
+              pagesToGen.push(p);
+          }
+      }
+      
+      if (pagesToGen.length === 0) return;
+      pagesToGen.forEach(p => generatingPages.current.add(p));
+
+      const newFaces: ComicFace[] = [];
+      pagesToGen.forEach(pageNum => {
+          const type = pageNum === config.BACK_COVER_PAGE ? 'back_cover' : 'story';
+          newFaces.push({ id: `page-${pageNum}`, type, choices: [], isLoading: true, pageIndex: pageNum });
+      });
+
+      setComicFaces(prev => {
+          const existing = new Set(prev.map(f => f.id));
+          return [...prev, ...newFaces.filter(f => !existing.has(f.id))];
+      });
+      newFaces.forEach(f => { if (!historyRef.current.find(h => h.id === f.id)) historyRef.current.push(f); });
+
+      try {
+          for (const pageNum of pagesToGen) {
+               if (isStoppedRef.current) break;
+               await generateSinglePage(`page-${pageNum}`, pageNum, pageNum === config.BACK_COVER_PAGE ? 'back_cover' : 'story');
+               generatingPages.current.delete(pageNum);
+          }
+      } catch (e) {
+          console.error("Batch generation error", e);
+      } finally {
+          if (isStoppedRef.current) {
+              setComicFaces(prev => prev.filter(f => !f.isLoading || !!f.imageUrl || f.id === 'cover'));
+          }
+          pagesToGen.forEach(p => generatingPages.current.delete(p));
+      }
+  }
+
+  const handleStoryContextUpdate = (updates: Partial<StoryContext>) => {
+    setStoryContext(prev => ({ ...prev, ...updates }));
+  };
+
+  const handleOutlineUpload = async (file: File) => {
+    if (file.type && !file.type.startsWith('text/') && !file.name.match(/\.(txt|md)$/i)) {
+       alert("Please upload standard .txt or .md text files only. PDFs are not supported and may crash the editor.");
+       return;
+    }
+    try {
+      const content = await file.text();
+      setStoryOutline({
+        content,
+        isReady: true,
+        isGenerating: false
+      });
+    } catch (e) {
+      alert("Failed to read outline file.");
+    }
+  };
+
+  const generateOutline = async (userNotes?: string) => {
+    setStoryOutline(prev => ({ ...prev, isGenerating: true }));
+    try {
+      const ai = getAI();
+      const config = getComicConfig(storyContext.pageLength, extraPages);
+      const langName = LANGUAGES.find(l => l.code === selectedLanguage)?.name || "English";
+      
+      const charContext = [
+          `HERO: ${heroRef.current?.name || 'Main Hero'}. Backstory: ${heroRef.current?.backstoryText || 'Unknown'}.`,
+          friendRef.current ? `CO-STAR: ${friendRef.current.name || 'Sidekick'}. Backstory: ${friendRef.current.backstoryText || 'Unknown'}.` : null,
+          ...additionalCharsRef.current.map(c => `${c.name}: ${c.backstoryText || 'Unknown'}.`)
+      ].filter(Boolean).join('\n');
+
+      const prompt = `
+        Generate a structured story outline for a ${config.MAX_STORY_PAGES}-page comic book issue.
+        STORY TITLE: ${storyContext.title}
+        GENRE: ${selectedGenre}
+        LANGUAGE: ${langName}
+        CHARACTERS:
+        ${charContext}
+        STORY DESCRIPTION: ${storyContext.descriptionText}
+        ${userNotes ? `USER NOTES: ${userNotes}` : ''}
+        
+        Provide a page-by-page breakdown (Page 1 to Page ${config.MAX_STORY_PAGES}).
+        
+        [CRITICAL NARRATIVE & VISUAL RULES]:
+        1. DO NOT REPEAT POSES OR SCENES. The story must physically move forward. Vary the locations, camera angles (wide establishing shots, extreme close-ups, over-the-shoulder, action sequences).
+        2. SHOW CHARACTER DEVELOPMENT: Advance relationships between characters (Hero, Co-Star, Supporting). Show them interacting, fighting together, arguing, or discovering things.
+        3. AVOID STATIC REPETITION: If Page 1 shows a character crouching on a roof, Page 2 MUST be completely different (e.g., inside a building, talking to someone, throwing a punch).
+        
+        Keep it concise but visually highly varied to guide the generation of each page.
+        OUTPUT FORMAT: Plain text.
+      `;
+
+      const res = await ai.models.generateContent({
+        model: MODEL_TEXT_NAME,
+        contents: { text: prompt }
+      });
+
+      setStoryOutline({
+        content: res.text || "",
+        isReady: true,
+        isGenerating: false
+      });
+    } catch (e) {
+      handleAPIError(e);
+      setStoryOutline(prev => ({ ...prev, isGenerating: false }));
+    }
+  };
+
+  const launchStory = async () => {
+    const hasKey = await validateApiKey();
+    if (!hasKey) return; 
+    
+    if (!heroRef.current) return;
+    if (selectedGenre === 'Custom' && !customPremise.trim()) {
+        alert("Please enter a custom story premise.");
+        return;
+    }
+
+    setIsGeneratingProfiles(true);
+    try {
+        const profiles = await generateAllProfiles();
+        setTempProfiles(profiles);
+        setShowProfilesStep(true);
+    } catch (e) {
+        console.error("Profile generation failed before starting:", e);
+        alert("Failed to analyze character portraits. Check network or API key.");
+    } finally {
+        setIsGeneratingProfiles(false);
+    }
+  };
+
+  const continueAfterProfiles = () => {
+    characterProfilesRef.current = tempProfiles;
+    setShowProfilesStep(false);
+
+    if (generateFromOutline && !storyOutline.isReady) {
+        setShowOutlineStep(true);
+        generateOutline();
+        return;
+    }
+
+    proceedToComicGeneration();
+  };
+
+  const proceedToComicGeneration = () => {
+    const config = getComicConfig(storyContext.pageLength, extraPages);
+    setIsTransitioning(true);
+    isStoppedRef.current = false;
+    
+    let availableTones = TONES;
+    if (selectedGenre === "Teen Drama / Slice of Life" || selectedGenre === "Lighthearted Comedy") {
+        availableTones = TONES.filter(t => t.includes("CASUAL") || t.includes("WHOLESOME") || t.includes("QUIPPY"));
+    } else if (selectedGenre === "Classic Horror") {
+        availableTones = TONES.filter(t => t.includes("INNER-MONOLOGUE") || t.includes("OPERATIC"));
+    }
+    
+    setStoryTone(availableTones[Math.floor(Math.random() * availableTones.length)]);
+
+    const coverFace: ComicFace = { id: 'cover', type: 'cover', choices: [], isLoading: true, pageIndex: 0 };
+    setComicFaces([coverFace]);
+    historyRef.current = [coverFace];
+    generatingPages.current.add(0);
+
+    generateSinglePage('cover', 0, 'cover').finally(() => generatingPages.current.delete(0));
+    
+    setTimeout(async () => {
+        setIsStarted(true);
+        setShowSetup(false);
+        setIsTransitioning(false);
+        if (generateFromOutline) {
+            generateBatch(1, config.TOTAL_PAGES);
+        } else {
+            await generateBatch(1, config.INITIAL_PAGES);
+            generateBatch(config.INITIAL_PAGES + 1, config.BATCH_SIZE);
+        }
+    }, 1100);
+  };
+
+  const handleChoice = async (pageIndex: number, choice: string) => {
+      const config = getComicConfig(storyContext.pageLength, extraPages);
+      updateFaceState(`page-${pageIndex}`, { resolvedChoice: choice });
+      const maxPage = Math.max(...historyRef.current.map(f => f.pageIndex || 0));
+      if (maxPage + 1 <= config.TOTAL_PAGES) {
+          generateBatch(maxPage + 1, config.BATCH_SIZE);
+      }
+  }
+
+  const handleReroll = (pageIndex: number) => {
+      setRerollTarget(pageIndex);
+  };
+
+  const getRerollGallery = () => {
+      const items: { id: string; base64: string; label: string; charId: string }[] = [];
+      const addPersona = (p: Persona | null, label: string) => {
+          if (!p) return;
+          if (p.base64) items.push({ id: `${p.id}-portrait`, base64: p.base64, label: `${label} Portrait`, charId: p.id });
+          const refs = p.referenceImages || (p.referenceImage ? [p.referenceImage] : []);
+          refs.forEach((r, i) => items.push({ id: `${p.id}-ref-${i}`, base64: r, label: `${label} Ref ${i+1}`, charId: p.id }));
+      };
+      addPersona(hero, hero?.name || 'Hero');
+      addPersona(friend, friend?.name || 'Co-Star');
+      additionalCharacters.forEach(c => addPersona(c, c.name || 'Char'));
+      return items;
+  };
+
+  const handleRerollSubmit = (instruction: string, selectedRefImages: string[], selectedProfileIds: string[]) => {
+      if (rerollTarget === null) return;
+      const pageIndex = rerollTarget;
+      setRerollTarget(null);
+      const faceId = pageIndex === 0 ? 'cover' : `page-${pageIndex}`;
+      const type = pageIndex === 0 ? 'cover' : 'story';
+      updateFaceState(faceId, { isLoading: true, imageUrl: undefined, hasFailed: false });
+      
+      const savedProfiles = characterProfilesRef.current;
+      characterProfilesRef.current = savedProfiles.filter(p => selectedProfileIds.includes(p.id));
+      
+      generateSinglePage(faceId, pageIndex, type, instruction || undefined, selectedRefImages.length > 0 ? selectedRefImages : undefined)
+          .finally(() => {
+              characterProfilesRef.current = savedProfiles;
+          });
+  };
+
+  const handleRerollUploadRef = async (files: FileList) => {
+      // Upload new refs to the hero by default (they'll appear in the gallery)
+      try {
+          const newRefs: string[] = [];
+          for (let i = 0; i < files.length; i++) {
+              newRefs.push(await fileToBase64(files[i]));
+          }
+          const existing = hero?.referenceImages || (hero?.referenceImage ? [hero.referenceImage] : []);
+          handleHeroUpdate({ referenceImages: [...existing, ...newRefs] });
+      } catch (e) { alert('Upload failed'); }
+  };
+
+  const handleRerollDeleteRef = (charId: string, refIndex: number) => {
+      const getExisting = (p: Persona | null) => p?.referenceImages || (p?.referenceImage ? [p.referenceImage] : []);
+      if (charId === 'hero' || charId === hero?.id) {
+          handleHeroUpdate({ referenceImages: getExisting(hero).filter((_, i) => i !== refIndex) });
+      } else if (charId === 'friend' || charId === friend?.id) {
+          handleFriendUpdate({ referenceImages: getExisting(friend).filter((_, i) => i !== refIndex) });
+      } else {
+          const char = additionalCharacters.find(c => c.id === charId);
+          handleUpdateCharacter(charId, { referenceImages: getExisting(char || null).filter((_, i) => i !== refIndex) });
+      }
+  };
+
+  const handleAddPage = (instruction?: string) => {
+      const oldConfig = getComicConfig(storyContext.pageLength, extraPages);
+      const newExtraPages = extraPages + 1;
+      setExtraPages(newExtraPages);
+      
+      const newConfig = getComicConfig(storyContext.pageLength, newExtraPages);
+      const oldBackCoverId = `page-${oldConfig.BACK_COVER_PAGE}`;
+      
+      // Convert old back cover to story
+      updateFaceState(oldBackCoverId, { type: 'story', isLoading: true, imageUrl: undefined });
+      
+      // Add the new back cover to state
+      const newBackCover: ComicFace = { id: `page-${newConfig.BACK_COVER_PAGE}`, type: 'back_cover', choices: [], isLoading: true, pageIndex: newConfig.BACK_COVER_PAGE };
+      setComicFaces(prev => [...prev, newBackCover]);
+      historyRef.current.push(newBackCover);
+      
+      generatingPages.current.add(oldConfig.BACK_COVER_PAGE);
+      generateSinglePage(oldBackCoverId, oldConfig.BACK_COVER_PAGE, 'story', instruction).finally(() => {
+          generatingPages.current.delete(oldConfig.BACK_COVER_PAGE);
+          generatingPages.current.add(newConfig.BACK_COVER_PAGE);
+          generateSinglePage(`page-${newConfig.BACK_COVER_PAGE}`, newConfig.BACK_COVER_PAGE, 'back_cover').finally(() => {
+              generatingPages.current.delete(newConfig.BACK_COVER_PAGE);
+          });
+      });
+  };
+
+  const handleStop = () => {
+      isStoppedRef.current = true;
+      setComicFaces(prev => prev.filter(f => !f.isLoading || !!f.imageUrl || f.id === 'cover'));
+  };
+
+  const resetApp = () => {
+      setIsStarted(false);
+      setShowSetup(true);
+      setComicFaces([]);
+      setCurrentSheetIndex(0);
+      historyRef.current = [];
+      generatingPages.current.clear();
+      setHero(null);
+      setFriend(null);
+      setAdditionalCharacters([]);
+      setExtraPages(0);
+  };
+
+  const handleGoHome = () => {
+      if (window.confirm("Return to setup? Your current generated pages will be lost, but your characters and settings will be saved. To save your generated comic, use the 'Save Draft' button first.")) {
+          setIsStarted(false);
+          setShowSetup(true);
+          setComicFaces([]);
+          historyRef.current = [];
+          generatingPages.current.clear();
+          setExtraPages(0);
+      }
+  };
+
+  const handleClearSetup = () => {
+      if (!window.confirm("Are you sure you want to completely clear the setup and characters?")) return;
+      setHero(null);
+      setFriend(null);
+      setAdditionalCharacters([]);
+      setStoryContext({
+        title: "",
+        descriptionText: "",
+        descriptionFiles: [],
+        publisherName: "Marvel",
+        seriesTitle: "Infinite Heroes",
+        issueNumber: "1",
+        useOverlayLogo: true,
+        artStyle: ART_STYLES[0],
+        pageLength: 10
+      });
+      setCustomPremise("");
+      setSelectedGenre(GENRES[0]);
+      setStoryOutline({ content: "", isReady: false, isGenerating: false });
+      localStorage.removeItem('infinite_heroes_cast');
+  };
+
+  const compositeCover = async (imageUrl: string, context: StoryContext): Promise<string> => {
+      return new Promise((resolve) => {
+          const canvas = document.createElement('canvas');
+          canvas.width = 480;
+          canvas.height = 720;
+          const ctx = canvas.getContext('2d');
+          if (!ctx) return resolve(imageUrl);
+
+          const img = new Image();
+          img.crossOrigin = "anonymous";
+          img.onload = () => {
+               ctx.drawImage(img, 0, 0, 480, 720);
+               if (context.useOverlayLogo) {
+                   ctx.fillStyle = 'white';
+                   ctx.fillRect(160, 20, 160, 80);
+                   ctx.lineWidth = 4;
+                   ctx.strokeStyle = 'black';
+                   ctx.strokeRect(160, 20, 160, 80);
+                   
+                   ctx.fillStyle = context.publisherLogoBgColor || '#DC2626';
+                   ctx.fillRect(160, 20, 160, 45);
+                   ctx.strokeRect(160, 20, 160, 45);
+
+                   const finishText = () => {
+                       ctx.fillStyle = 'black';
+                       ctx.font = 'bold 24px "Comic Sans MS", sans-serif';
+                       ctx.textAlign = 'center';
+                       ctx.textBaseline = 'middle';
+                       ctx.fillText(`#${context.issueNumber || '1'}`, 240, 82);
+
+                       ctx.font = 'bold 44px Impact, sans-serif';
+                       ctx.textAlign = 'center';
+                       ctx.lineWidth = 6;
+                       ctx.lineJoin = 'round';
+                       ctx.strokeStyle = 'black';
+                       ctx.strokeText(context.seriesTitle.toUpperCase(), 240, 150);
+                       ctx.fillStyle = '#FFD700';
+                       ctx.fillText(context.seriesTitle.toUpperCase(), 240, 150);
+
+                       // Story Title below Series Title
+                       if (context.title) {
+                           ctx.font = 'bold 22px Impact, sans-serif';
+                           ctx.lineWidth = 4;
+                           ctx.strokeStyle = 'black';
+                           ctx.strokeText(context.title.toUpperCase(), 240, 190);
+                           ctx.fillStyle = 'white';
+                           ctx.fillText(context.title.toUpperCase(), 240, 190);
+                       }
+
+                       resolve(canvas.toDataURL('image/jpeg', 0.9));
+                   };
+
+                   if (context.publisherLogo) {
+                       const logoImg = new Image();
+                       logoImg.crossOrigin = "anonymous";
+                       logoImg.onload = () => {
+                           if (context.publisherLogoFit === 'cover') {
+                               ctx.drawImage(logoImg, 160, 20, 160, 45);
+                           } else {
+                               const aspect = logoImg.width / logoImg.height;
+                               let lw = 160, lh = 45;
+                               if (aspect > 160/45) lh = 160 / aspect;
+                               else lw = 45 * aspect;
+                               ctx.drawImage(logoImg, 160 + (160-lw)/2, 20 + (45-lh)/2, lw, lh);
+                           }
+                           finishText();
+                       };
+                       logoImg.onerror = finishText;
+                       logoImg.src = `data:image/png;base64,${context.publisherLogo}`;
+                   } else {
+                       ctx.fillStyle = 'white';
+                       ctx.font = 'bold 16px Impact, sans-serif';
+                       ctx.textAlign = 'center';
+                       ctx.textBaseline = 'middle';
+                       ctx.fillText(context.publisherName.substring(0, 15).toUpperCase(), 240, 42);
+                       finishText();
+                   }
+               } else {
+                   resolve(imageUrl);
+               }
+          };
+          img.onerror = () => resolve(imageUrl);
+          img.src = imageUrl;
+      });
+  };
+
+  const downloadPDF = async (faces: ComicFace[]) => {
+    const PAGE_WIDTH = 480;
+    const PAGE_HEIGHT = 720;
+    const doc = new jsPDF({ orientation: 'portrait', unit: 'pt', format: [PAGE_WIDTH, PAGE_HEIGHT] });
+    const pagesToPrint = faces.filter(face => face.imageUrl && !face.isLoading).sort((a, b) => (a.pageIndex || 0) - (b.pageIndex || 0));
+
+    for (let index = 0; index < pagesToPrint.length; index++) {
+        const face = pagesToPrint[index];
+        if (index > 0) doc.addPage([PAGE_WIDTH, PAGE_HEIGHT], 'portrait');
+        if (face.imageUrl) {
+            const finalImg = (face.type === 'cover' && storyContext.useOverlayLogo) 
+                ? await compositeCover(face.imageUrl, storyContext) 
+                : face.imageUrl;
+            doc.addImage(finalImg, 'JPEG', 0, 0, PAGE_WIDTH, PAGE_HEIGHT);
+        }
+    }
+    doc.save(`${storyContext.title || 'Infinite-Heroes'}-Issue.pdf`);
+  };
+
+  const downloadImages = async (faces: ComicFace[], format: 'webp' | 'png' | 'jpeg') => {
+    const pagesToPrint = faces.filter(face => face.imageUrl && !face.isLoading).sort((a, b) => (a.pageIndex || 0) - (b.pageIndex || 0));
+    
+    for (const face of pagesToPrint) {
+      if (!face.imageUrl) continue;
+      
+      let downloadUrl = face.imageUrl;
+      
+      if (face.type === 'cover' && storyContext.useOverlayLogo) {
+          downloadUrl = await compositeCover(face.imageUrl, storyContext);
+      }
+      
+      // If the requested format is different from the source, we might need to convert
+      // But for simplicity and browser compatibility, we'll try to trigger download with the requested extension
+      // Most modern browsers will handle the data URL correctly regardless of the extension if it's a valid image
+      // However, to be precise, we can use a canvas to convert
+      
+      if (!face.imageUrl.includes(`image/${format}`)) {
+        downloadUrl = await new Promise<string>((resolve) => {
+          const img = new Image();
+          img.crossOrigin = "anonymous";
+          img.onload = () => {
+            const canvas = document.createElement('canvas');
+            canvas.width = img.width;
+            canvas.height = img.height;
+            const ctx = canvas.getContext('2d');
+            ctx?.drawImage(img, 0, 0);
+            resolve(canvas.toDataURL(`image/${format}`));
+          };
+          img.src = face.imageUrl!;
+        });
+      }
+
+      const link = document.createElement('a');
+      link.href = downloadUrl;
+      link.download = `${storyContext.title || 'Infinite-Heroes'}-Page-${face.pageIndex}.${format}`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      
+      // Small delay to prevent browser from blocking multiple downloads
+      await new Promise(r => setTimeout(r, 200));
+    }
+  };
+
+  const handleExport = async (format: 'pdf' | 'webp' | 'png' | 'jpeg') => {
+    setShowExportDialog(false);
+    const faces = comicFaces.filter(f => f.imageUrl && !f.isLoading);
+    if (faces.length === 0) {
+      alert("No pages ready to export yet!");
+      return;
+    }
+
+    if (format === 'pdf') {
+      await downloadPDF(faces);
+    } else {
+      await downloadImages(faces, format);
+    }
+  };
+
+  const handleHeroUpdate = async (updates: Partial<Persona>) => {
+    setHero(hero ? { ...hero, ...updates } : { id: 'hero', name: 'Hero', base64: '', desc: 'Main Hero', ...updates });
+  };
+
+  const handleFriendUpdate = async (updates: Partial<Persona>) => {
+    setFriend(friend ? { ...friend, ...updates } : { id: 'friend', name: 'Co-Star', base64: '', desc: 'Sidekick', ...updates });
+  };
+
+  const handlePortraitUpload = async (id: string, file: File) => {
+    try {
+      const base64 = await fileToBase64(file);
+      if (id === 'hero') handleHeroUpdate({ base64 });
+      else if (id === 'friend') handleFriendUpdate({ base64 });
+      else handleUpdateCharacter(id, { base64 });
+    } catch (e) { alert("Upload failed"); }
+  };
+
+  const handleRefUpload = async (id: string, files: FileList) => {
+    try {
+      const newRefs: string[] = [];
+      for (let i = 0; i < files.length; i++) {
+        newRefs.push(await fileToBase64(files[i]));
+      }
+      const getExisting = (p: Persona | null) => p?.referenceImages || (p?.referenceImage ? [p.referenceImage] : []);
+      if (id === 'hero') handleHeroUpdate({ referenceImages: [...getExisting(hero), ...newRefs] });
+      else if (id === 'friend') handleFriendUpdate({ referenceImages: [...getExisting(friend), ...newRefs] });
+      else {
+        const char = additionalCharacters.find(c => c.id === id);
+        handleUpdateCharacter(id, { referenceImages: [...getExisting(char || null), ...newRefs] });
+      }
+    } catch (e) { alert("Upload failed"); }
+  };
+
+  const handleRefRemove = (id: string, index: number) => {
+    const getExisting = (p: Persona | null) => p?.referenceImages || (p?.referenceImage ? [p.referenceImage] : []);
+    if (id === 'hero') handleHeroUpdate({ referenceImages: getExisting(hero).filter((_, i) => i !== index) });
+    else if (id === 'friend') handleFriendUpdate({ referenceImages: getExisting(friend).filter((_, i) => i !== index) });
+    else {
+      const char = additionalCharacters.find(c => c.id === id);
+      handleUpdateCharacter(id, { referenceImages: getExisting(char || null).filter((_, i) => i !== index) });
+    }
+  };
+
+  const handleBackstoryFileUpload = async (id: string, files: FileList) => {
+    try {
+      const processed = await processFiles(files);
+      if (id === 'hero') handleHeroUpdate({ backstoryFiles: [...(hero?.backstoryFiles || []), ...processed] });
+      else if (id === 'friend') handleFriendUpdate({ backstoryFiles: [...(friend?.backstoryFiles || []), ...processed] });
+      else {
+        const char = additionalCharacters.find(c => c.id === id);
+        handleUpdateCharacter(id, { backstoryFiles: [...(char?.backstoryFiles || []), ...processed] });
+      }
+    } catch (e) { alert("Upload failed"); }
+  };
+
+  const handleBackstoryFileRemove = (id: string, index: number) => {
+    if (id === 'hero') handleHeroUpdate({ backstoryFiles: hero?.backstoryFiles?.filter((_, i) => i !== index) });
+    else if (id === 'friend') handleFriendUpdate({ backstoryFiles: friend?.backstoryFiles?.filter((_, i) => i !== index) });
+    else {
+      const char = additionalCharacters.find(c => c.id === id);
+      handleUpdateCharacter(id, { backstoryFiles: char?.backstoryFiles?.filter((_, i) => i !== index) });
+    }
+  };
+
+  const handleStoryFileUpload = async (files: FileList) => {
+    // Filter out non-text and non-image files
+    const validFiles = Array.from(files).filter(f => f.type.startsWith('text/') || f.type.startsWith('image/') || f.name.match(/\.(txt|md)$/i));
+    if (validFiles.length < files.length) alert("Only text files (.txt, .md) and images are supported.");
+    if (validFiles.length === 0) return;
+    
+    try {
+      // Use filtered list
+      const dataTransfer = new DataTransfer();
+      validFiles.forEach(f => dataTransfer.items.add(f));
+      
+      const processed = await processFiles(dataTransfer.files);
+      handleStoryContextUpdate({ descriptionFiles: [...storyContext.descriptionFiles, ...processed] });
+    } catch (e) { alert("Upload failed"); }
+  };
+
+  const handleStoryFileRemove = (index: number) => {
+    handleStoryContextUpdate({ descriptionFiles: storyContext.descriptionFiles.filter((_, i) => i !== index) });
+  };
+
+  const exportDraft = () => {
+    const data = JSON.stringify({ 
+        comicFaces, 
+        history: historyRef.current, 
+        hero, 
+        friend, 
+        additionalCharacters, 
+        storyContext, 
+        extraPages,
+        storyOutline,
+        generateFromOutline,
+        richMode,
+        selectedGenre,
+        selectedLanguage,
+        customPremise
+    });
+    const blob = new Blob([data], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${storyContext.title ? storyContext.title.replace(/\s+/g,'_') : 'Infinite_Heroes'}_Draft.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const importDraft = (file: File) => {
+    console.log('[importDraft] Called with file:', file.name, file.size, 'bytes');
+    if (!file.name.endsWith('.json') && file.type !== 'application/json') {
+        alert('Please select a valid .json draft file.');
+        return;
+    }
+    try {
+      const reader = new FileReader();
+      reader.onerror = () => { alert('Failed to read the draft file.'); };
+      reader.onload = (e) => {
+        try {
+          const text = e.target?.result as string;
+          if (!text || !text.trim().startsWith('{')) { alert('Invalid draft file format.'); return; }
+          const parsed = JSON.parse(text);
+          console.log('[importDraft] Parsed keys:', Object.keys(parsed));
+          setComicFaces(parsed.comicFaces || []);
+          historyRef.current = parsed.history || [];
+          setHero(parsed.hero || null);
+          setFriend(parsed.friend || null);
+          setAdditionalCharacters(parsed.additionalCharacters || []);
+          setStoryContext(prev => ({ ...prev, ...(parsed.storyContext || {}) }));
+          setExtraPages(parsed.extraPages || 0);
+
+          if (parsed.storyOutline) setStoryOutline(parsed.storyOutline);
+          if (parsed.generateFromOutline !== undefined) setGenerateFromOutline(parsed.generateFromOutline);
+          if (parsed.richMode !== undefined) setRichMode(parsed.richMode);
+          if (parsed.selectedGenre) setSelectedGenre(parsed.selectedGenre);
+          if (parsed.selectedLanguage) setSelectedLanguage(parsed.selectedLanguage);
+          if (parsed.customPremise !== undefined) setCustomPremise(parsed.customPremise);
+
+          if (parsed.comicFaces && parsed.comicFaces.length > 0) {
+              setIsStarted(true);
+              setShowSetup(false);
+              setIsTransitioning(false);
+              setCurrentSheetIndex(1);
+          } else {
+              alert("Setup fields populated successfully!");
+          }
+        } catch(err) { 
+          console.error('Draft parse error:', err);
+          alert("Invalid draft file. Could not parse JSON."); 
+        }
+      };
+      reader.readAsText(file);
+    } catch (err) {
+      console.error('Draft import error:', err);
+      alert('Failed to import draft file.');
+    }
+  };
+
+  const handleSheetClick = (index: number) => {
+      if (!isStarted) return;
+      if (index === 0 && currentSheetIndex === 0) return;
+      
+      const config = getComicConfig(storyContext.pageLength, extraPages);
+      const maxSheetIndex = Math.ceil((config.TOTAL_PAGES + 2) / 2); // Including covers
+      
+      if (index < currentSheetIndex) {
+          setCurrentSheetIndex(index);
+      } else if (index === currentSheetIndex && currentSheetIndex < maxSheetIndex) {
+          setCurrentSheetIndex(prev => prev + 1);
+      }
+  };
+
+  const handleSurpriseMe = () => {
+    const randomAdjectives = ["Neon", "Dark", "Savage", "Quantum", "Infinite", "Crimson", "Shadow", "Cosmic", "Neon", "Gothic"];
+    const randomNouns = ["Knights", "Syndicate", "Horizon", "Phantom", "Legends", "Vanguard", "Zero", "Wanderer", "Chronicles"];
+    const title = `${randomAdjectives[Math.floor(Math.random()*randomAdjectives.length)]} ${randomNouns[Math.floor(Math.random()*randomNouns.length)]}`;
+    const genre = GENRES[Math.floor(Math.random()*GENRES.length)];
+    const style = ART_STYLES[Math.floor(Math.random()*ART_STYLES.length)];
+    
+    setStoryContext(prev => ({
+      ...prev,
+      title: title,
+      seriesTitle: title.toUpperCase(),
+      artStyle: style,
+      descriptionText: "An unpredictable, explosive action story."
+    }));
+    setSelectedGenre(genre);
+    if(genre === 'Custom') setCustomPremise("A mysterious anomaly forces unusual heroes to team up.");
+  };
+
+  // Pan/Zoom State
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const startPos = useRef({ x: 0, y: 0 });
+  const scrollPos = useRef({ x: 0, y: 0 });
+
+  const handleMouseDown = (e: React.MouseEvent) => {
+      if (zoom <= 1) return;
+      setIsDragging(true);
+      startPos.current = { x: e.pageX, y: e.pageY };
+      scrollPos.current = { x: containerRef.current!.scrollLeft, y: containerRef.current!.scrollTop };
+  };
+
+  const handleMouseMove = (e: React.MouseEvent) => {
+      if (!isDragging || zoom <= 1) return;
+      e.preventDefault();
+      const dx = e.pageX - startPos.current.x;
+      const dy = e.pageY - startPos.current.y;
+      containerRef.current!.scrollLeft = scrollPos.current.x - dx;
+      containerRef.current!.scrollTop = scrollPos.current.y - dy;
+  };
+
+  const handleMouseUp = () => setIsDragging(false);
+
+  return (
+    <div className="comic-scene">
+      {showApiKeyDialog && <ApiKeyDialog onContinue={handleApiKeyDialogContinue} />}
+      
+      {/* Settings Gear — always visible */}
+      <button 
+          onClick={() => setShowSettings(true)}
+          className="fixed bottom-20 left-6 z-[250] w-12 h-12 bg-white/90 hover:bg-white border-[3px] border-black rounded-full flex items-center justify-center shadow-[3px_3px_0px_rgba(0,0,0,1)] hover:shadow-[5px_5px_0px_rgba(0,0,0,1)] hover:-translate-y-0.5 transition-all cursor-pointer"
+          title="Settings"
+      >
+          <span className="text-2xl">⚙️</span>
+      </button>
+
+      {/* Settings Dialog */}
+      {showSettings && (
+          <SettingsDialog
+              serverKeyExists={!!process.env.API_KEY}
+              adminPasswordHash={process.env.ADMIN_PASSWORD || ''}
+              onClose={() => setShowSettings(false)}
+              onKeyChange={handleSettingsKeyChange}
+          />
+      )}
+      
+      <Setup 
+          show={showSetup}
+          isTransitioning={isTransitioning}
+          isGeneratingProfiles={isGeneratingProfiles}
+          hero={hero}
+          friend={friend}
+          additionalCharacters={additionalCharacters}
+          storyContext={storyContext}
+          selectedGenre={selectedGenre}
+          selectedLanguage={selectedLanguage}
+          customPremise={customPremise}
+          richMode={richMode}
+          generateFromOutline={generateFromOutline}
+          outlineNotes={outlineNotes}
+          onHeroUpdate={handleHeroUpdate}
+          onResetHero={() => setHero(null)}
+          onFriendUpdate={handleFriendUpdate}
+          onResetFriend={() => setFriend(null)}
+          onAddCharacter={handleAddCharacter}
+          onUpdateCharacter={handleUpdateCharacter}
+          onDeleteCharacter={handleDeleteCharacter}
+          onStoryContextUpdate={handleStoryContextUpdate}
+          onPortraitUpload={handlePortraitUpload}
+          onRefUpload={handleRefUpload}
+          onRefRemove={handleRefRemove}
+          onBackstoryFileUpload={handleBackstoryFileUpload}
+          onBackstoryFileRemove={handleBackstoryFileRemove}
+          onStoryFileUpload={handleStoryFileUpload}
+          onStoryFileRemove={handleStoryFileRemove}
+          onGenreChange={setSelectedGenre}
+          onLanguageChange={setSelectedLanguage}
+          onPremiseChange={setCustomPremise}
+          onRichModeChange={setRichMode}
+          onGenerateFromOutlineChange={setGenerateFromOutline}
+          onLaunch={launchStory}
+          onSurpriseMe={handleSurpriseMe}
+          onExportDraft={exportDraft}
+          onImportDraft={importDraft}
+          onClearSetup={handleClearSetup}
+      />
+
+      {/* Outline Step Dialog */}
+      <OutlineStepDialog 
+          show={showOutlineStep}
+          storyOutline={storyOutline}
+          outlineNotes={outlineNotes}
+          onOutlineUpdate={(val) => setStoryOutline(prev => ({ ...prev, content: val }))}
+          onOutlineNotesChange={setOutlineNotes}
+          onGenerateOutline={generateOutline}
+          onOutlineUpload={handleOutlineUpload}
+          onProceedWithOutline={() => {
+              setShowOutlineStep(false);
+              proceedToComicGeneration();
+          }}
+          onCancelOutline={() => {
+              setShowOutlineStep(false);
+              setIsTransitioning(false);
+          }}
+      />
+      
+      {/* Profiles Review Dialog */}
+      {showProfilesStep && (
+          <ProfilesDialog 
+              profiles={tempProfiles}
+              onUpdate={(index, updated) => {
+                  setTempProfiles(prev => prev.map((p, i) => i === index ? updated : p));
+              }}
+              onAnalyze={handleAnalyzeProfile}
+              onConfirm={continueAfterProfiles}
+              onCancel={() => {
+                  setShowProfilesStep(false);
+                  setIsTransitioning(false); // Back to setup
+              }}
+          />
+      )}
+
+      {/* Reroll Modal */}
+      {rerollTarget !== null && (
+          <RerollModal
+              pageIndex={rerollTarget}
+              outline={storyOutline.content}
+              allRefImages={getRerollGallery()}
+              availableProfiles={characterProfilesRef.current.map(p => ({ id: p.id, name: p.name }))}
+              onSubmit={handleRerollSubmit}
+              onClose={() => setRerollTarget(null)}
+              onUploadRef={handleRerollUploadRef}
+              onDeleteRef={handleRerollDeleteRef}
+          />
+      )}
+
+      {/* Page Navigation & Zoom Controls */}
+      {isStarted && !showSetup && (
+          <div className="fixed bottom-6 right-6 z-[100] flex flex-col gap-2 pointer-events-auto items-end">
+              {showPageNav && (
+                  <div className="flex bg-white border-[3px] border-black p-2 shadow-[4px_4px_0px_rgba(0,0,0,1)] rounded divide-x-[3px] divide-black items-center">
+                      <div className="flex items-center gap-2 px-3">
+                          <button 
+                              onClick={() => setCurrentSheetIndex(Math.max(0, currentSheetIndex - 1))}
+                              disabled={currentSheetIndex === 0}
+                              className="comic-btn w-8 h-8 rounded-full bg-yellow-400 hover:bg-yellow-300 border-[2px] border-black flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed shadow-[2px_2px_0px_rgba(0,0,0,1)] active:translate-y-1 active:shadow-none transition-all"
+                          >
+                              <span className="font-bold text-sm">◀</span>
+                          </button>
+                      
+                          <span className="font-comic font-bold text-sm hidden sm:inline ml-1">PAGE</span>
+                          <input 
+                              type="text"
+                              value={pageNavInput}
+                              onChange={(e) => setPageNavInput(e.target.value)}
+                              onKeyDown={(e) => {
+                                  if (e.key === 'Enter') {
+                                      let pageNum = parseInt(pageNavInput);
+                                      if (isNaN(pageNum) || pageNavInput.toLowerCase() === 'cover') pageNum = 0;
+                                      
+                                      const config = getComicConfig(storyContext.pageLength, extraPages);
+                                      if (pageNum >= 0 && pageNum <= config.TOTAL_PAGES + 1) {
+                                          const targetSheet = pageNum === 0 ? 0 : Math.ceil(pageNum / 2);
+                                          setCurrentSheetIndex(targetSheet);
+                                      }
+                                  }
+                              }}
+                              className="w-16 h-8 text-center border-2 border-black font-bold focus:outline-none"
+                          />
+                          <span className="font-comic font-bold text-gray-500 text-sm hidden sm:inline">/ {getComicConfig(storyContext.pageLength, extraPages).TOTAL_PAGES}</span>
+                          <button 
+                              onClick={() => {
+                                  let pageNum = parseInt(pageNavInput);
+                                  if (isNaN(pageNum) || pageNavInput.toLowerCase() === 'cover') pageNum = 0;
+                                  
+                                  const config = getComicConfig(storyContext.pageLength, extraPages);
+                                  if (pageNum >= 0 && pageNum <= config.TOTAL_PAGES + 1) {
+                                      const targetSheet = pageNum === 0 ? 0 : Math.ceil(pageNum / 2);
+                                      setCurrentSheetIndex(targetSheet);
+                                  }
+                              }}
+                              className="comic-btn ml-1 bg-blue-600 text-white text-xs font-bold px-2 py-1 border-[2px] border-black hover:bg-blue-500"
+                          >
+                              GO
+                          </button>
+
+                          <button 
+                              onClick={() => {
+                                  const maxSheet = Math.ceil((getComicConfig(storyContext.pageLength, extraPages).TOTAL_PAGES + 1) / 2);
+                                  setCurrentSheetIndex(Math.min(maxSheet, currentSheetIndex + 1));
+                              }}
+                              disabled={currentSheetIndex >= Math.ceil((getComicConfig(storyContext.pageLength, extraPages).TOTAL_PAGES + 1) / 2)}
+                              className="comic-btn w-8 h-8 rounded-full bg-yellow-400 hover:bg-yellow-300 border-[2px] border-black flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed shadow-[2px_2px_0px_rgba(0,0,0,1)] active:translate-y-1 active:shadow-none transition-all ml-2"
+                          >
+                              <span className="font-bold text-sm">▶</span>
+                          </button>
+                      </div>
+                      <div className="flex gap-1 pl-3">
+                          <button onClick={zoomOut} className="comic-btn w-8 h-8 bg-gray-200 hover:bg-gray-300 font-bold text-lg flex items-center justify-center border-[2px] border-black">-</button>
+                          <button onClick={resetZoom} className="comic-btn px-2 h-8 bg-gray-200 hover:bg-gray-300 font-bold flex items-center justify-center border-[2px] border-black text-xs">{Math.round(zoom * 100)}%</button>
+                          <button onClick={zoomIn} className="comic-btn w-8 h-8 bg-gray-200 hover:bg-gray-300 font-bold text-lg flex items-center justify-center border-[2px] border-black">+</button>
+                      </div>
+                  </div>
+              )}
+              {/* Toggle Page Nav Button */}
+              <button 
+                  onClick={() => setShowPageNav(!showPageNav)} 
+                  className="comic-btn text-xs bg-black text-white px-3 py-1 font-comic tracking-widest border-[2px] border-white shadow-[2px_2px_0_rgba(0,0,0,1)] hover:bg-gray-800 self-end"
+              >
+                  {showPageNav ? 'HIDE NAV' : 'SHOW NAV'}
+              </button>
+          </div>
+      )}
+
+      {/* Main Container */}
+      <div 
+          ref={containerRef}
+          className={`absolute inset-0 z-0 overflow-auto flex items-center justify-center ${showSetup && !isTransitioning ? 'pointer-events-none opacity-0' : 'opacity-100'}`}
+          style={{ cursor: zoom > 1 ? (isDragging ? 'grabbing' : 'grab') : 'default' }}
+          onMouseDown={handleMouseDown}
+          onMouseMove={handleMouseMove}
+          onMouseUp={handleMouseUp}
+          onMouseLeave={handleMouseUp}
+      >
+          <div style={{ transform: `scale(${zoom})`, transformOrigin: 'center center', transition: zoom === 1 ? 'transform 0.2s ease-out' : 'none', minWidth: 'max-content', minHeight: 'max-content', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <Book 
+          comicFaces={comicFaces}
+          currentSheetIndex={currentSheetIndex}
+          isStarted={isStarted}
+          isSetupVisible={showSetup && !isTransitioning}
+          storyContext={storyContext}
+          extraPages={extraPages}
+          generateFromOutline={generateFromOutline}
+          onSheetClick={handleSheetClick}
+          onChoice={handleChoice}
+          onReroll={handleReroll}
+          onAddPage={handleAddPage}
+          onStop={handleStop}
+          onOpenBook={() => setCurrentSheetIndex(1)}
+          onDownload={() => setShowExportDialog(true)}
+                  onReset={resetApp}
+              />
+          </div>
+      </div>
+
+      {/* Top Left Mode Badge */}
+      {isStarted && !showSetup && (
+        <div className="fixed top-4 left-4 z-[100] flex gap-2 items-center pointer-events-none">
+            <div className="bg-black/90 px-5 py-2 border-[3px] border-white shadow-[4px_4px_0_rgba(0,0,0,1)] flex items-center gap-2 rounded-sm transform -rotate-1">
+                <span className="text-yellow-400 font-comic text-xl tracking-wider uppercase font-bold">
+                   {generateFromOutline ? "📖 OUTLINE MODE" : "🎲 NOVEL MODE"}
+                </span>
+            </div>
+        </div>
+      )}
+
+      {/* Top Right Navigation */}
+      {isStarted && !showSetup && (
+        <div className="fixed top-4 right-4 z-[100] flex gap-2">
+            <button onClick={handleGoHome} className="comic-btn bg-gray-200 text-black font-comic px-4 py-2 border-[3px] border-black shadow-[4px_4px_0px_rgba(0,0,0,1)] hover:bg-gray-300 hover:scale-105 transition-all outline-none text-sm tracking-widest font-bold">
+                🏠 HOME
+            </button>
+            {storyOutline.content && (
+                <button onClick={() => setShowOutlineDialog(true)} className="comic-btn bg-purple-600 text-white font-comic px-4 py-2 border-[3px] border-black shadow-[4px_4px_0px_rgba(0,0,0,1)] hover:scale-105 transition-all outline-none text-sm tracking-widest font-bold">
+                    📖 OUTLINE
+                </button>
+            )}
+            
+            {/* Global Reroll Dropdown */}
+            <div className="relative">
+                <button onClick={() => setShowGlobalReroll(!showGlobalReroll)} className="comic-btn bg-orange-500 text-white font-comic px-4 py-2 border-[3px] border-black shadow-[4px_4px_0px_rgba(0,0,0,1)] hover:scale-105 transition-all outline-none text-sm tracking-widest font-bold">
+                    🎲 REROLL PAGE
+                </button>
+                {showGlobalReroll && (
+                    <div className="absolute top-14 right-0 bg-white border-[3px] border-black p-3 shadow-[4px_4px_0_rgba(0,0,0,1)] z-[200] flex flex-col gap-2 min-w-[200px]">
+                        <h3 className="font-comic font-bold text-center border-b-2 border-black pb-1 mb-1 whitespace-nowrap">Reroll Specific Page</h3>
+                        <div className="flex items-center justify-center gap-1">
+                            <button onClick={() => setGlobalRerollPageInput(String(Math.max(1, parseInt(globalRerollPageInput || '1') - 1)))} className="comic-btn w-8 h-8 bg-yellow-400 font-bold text-lg border-2 border-black flex items-center justify-center">-</button>
+                            <input 
+                                type="number" 
+                                value={globalRerollPageInput} 
+                                onChange={e => setGlobalRerollPageInput(e.target.value)}
+                                className="w-14 h-8 text-center font-bold text-lg border-2 border-black focus:outline-none"
+                            />
+                            <button onClick={() => setGlobalRerollPageInput(String(Math.min(getComicConfig(storyContext.pageLength, extraPages).TOTAL_PAGES, parseInt(globalRerollPageInput || '1') + 1)))} className="comic-btn w-8 h-8 bg-yellow-400 font-bold text-lg border-2 border-black flex items-center justify-center">+</button>
+                        </div>
+                        <button 
+                            onClick={() => {
+                                const pageNum = parseInt(globalRerollPageInput);
+                                const maxPage = getComicConfig(storyContext.pageLength, extraPages).TOTAL_PAGES;
+                                if (pageNum >= 1 && pageNum <= maxPage) {
+                                    handleReroll(pageNum);
+                                    setShowGlobalReroll(false);
+                                }
+                            }}
+                            className="comic-btn w-full bg-red-600 text-white py-1.5 font-bold tracking-widest border-2 border-black hover:bg-red-500 mt-1"
+                        >
+                            GO
+                        </button>
+                    </div>
+                )}
+            </div>
+
+            <button onClick={() => setShowGallery(true)} className="comic-btn bg-yellow-400 text-black font-comic px-4 py-2 border-[3px] border-black shadow-[4px_4px_0px_rgba(0,0,0,1)] hover:scale-105 transition-all outline-none text-sm tracking-widest font-bold">
+                🖼️ GALLERY
+            </button>
+            <button onClick={exportDraft} className="comic-btn bg-blue-600 text-white font-comic px-4 py-2 border-[3px] border-black shadow-[4px_4px_0px_rgba(0,0,0,1)] hover:scale-105 transition-all outline-none text-sm tracking-widest font-bold">
+                SAVE DRAFT
+            </button>
+            <button 
+                onClick={() => setShowExportDialog(true)}
+                className="comic-btn bg-red-600 text-white font-comic px-4 py-2 border-[3px] border-black shadow-[4px_4px_0px_rgba(0,0,0,1)] hover:scale-105 transition-all uppercase font-bold tracking-widest text-sm"
+            >
+                Export Comic
+            </button>
+        </div>
+      )}
+
+      {showExportDialog && (
+        <ExportDialog 
+          onClose={() => setShowExportDialog(false)} 
+          onExport={handleExport} 
+        />
+      )}
+
+      {showOutlineDialog && (
+        <OutlineDialog
+          outline={storyOutline.content}
+          title={storyContext.title || 'Comic Outline'}
+          onClose={() => setShowOutlineDialog(false)}
+        />
+      )}
+
+      {showGallery && (
+        <GalleryModal
+          faces={comicFaces}
+          title={storyContext.title || 'Comic'}
+          onClose={() => setShowGallery(false)}
+        />
+      )}
+    </div>
+  );
+};
+
+export default App;
