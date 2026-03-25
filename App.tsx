@@ -946,9 +946,11 @@ OUTPUT STRICT JSON ONLY (No markdown formatting):
           hasData = true;
       }
 
-      if (persona.desc && persona.desc.trim().length > 0) {
-          claudeContent.push(createTextContent(`Character Description/Backstory: ${persona.desc}`));
-          geminiContent.push({ text: `Character Description/Backstory: ${persona.desc}` });
+      // Include character description/backstory text (check both fields for compatibility)
+      const descriptionText = persona.backstoryText || persona.desc || '';
+      if (descriptionText.trim().length > 0) {
+          claudeContent.push(createTextContent(`Character Description/Backstory: ${descriptionText}`));
+          geminiContent.push({ text: `Character Description/Backstory: ${descriptionText}` });
           hasData = true;
       }
 
