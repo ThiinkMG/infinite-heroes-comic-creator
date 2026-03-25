@@ -87,6 +87,9 @@ export const RerollModal: React.FC<RerollModalProps> = ({
     const [balloonShapeOverride, setBalloonShapeOverride] = useState<BalloonShape | undefined>(undefined);
     const [applyFlashbackStyle, setApplyFlashbackStyle] = useState(false);
 
+    // Tips panel state
+    const [showTips, setShowTips] = useState(false);
+
     const toggleImage = (id: string) => {
         if (deleteMode) return;
         setSelectedIds(prev => {
@@ -228,11 +231,107 @@ export const RerollModal: React.FC<RerollModalProps> = ({
                     <h2 className="font-comic text-lg md:text-2xl font-bold uppercase tracking-wider text-black">
                         🎲 Reroll Panel #{pageIndex}
                     </h2>
-                    <button
-                        onClick={onClose}
-                        className="comic-btn bg-red-600 text-white w-10 h-10 flex items-center justify-center font-bold text-xl border-[3px] border-black hover:bg-red-500"
-                    >✕</button>
+                    <div className="flex items-center gap-2">
+                        <button
+                            onClick={() => setShowTips(!showTips)}
+                            className={`comic-btn ${showTips ? 'bg-green-600' : 'bg-blue-600'} text-white px-3 py-2 flex items-center gap-1 font-bold text-sm border-[3px] border-black hover:opacity-90`}
+                            title="Show regeneration tips and best practices"
+                        >
+                            💡 Tips
+                        </button>
+                        <button
+                            onClick={onClose}
+                            className="comic-btn bg-red-600 text-white w-10 h-10 flex items-center justify-center font-bold text-xl border-[3px] border-black hover:bg-red-500"
+                        >✕</button>
+                    </div>
                 </div>
+
+                {/* Tips Panel */}
+                {showTips && (
+                    <div className="bg-gradient-to-r from-green-50 to-blue-50 border-b-[4px] border-black p-4 md:p-5">
+                        <div className="flex justify-between items-start mb-3">
+                            <h3 className="font-comic text-lg font-bold text-green-800 uppercase">💡 Regeneration Tips & Best Practices</h3>
+                            <button onClick={() => setShowTips(false)} className="text-gray-500 hover:text-black text-lg">✕</button>
+                        </div>
+
+                        <div className="space-y-4 text-sm font-comic">
+                            {/* Keep Scene, Change Characters */}
+                            <div className="bg-white border-2 border-green-300 p-3 rounded">
+                                <p className="font-bold text-green-700 mb-1">🎭 Keep Scene, Fix Characters</p>
+                                <ul className="list-disc ml-4 text-gray-700 space-y-1">
+                                    <li>Select <strong>"Characters Only"</strong> mode</li>
+                                    <li>Enable <strong>"🖼️ Regenerate using selected reference images"</strong></li>
+                                    <li>Make sure all character portraits and references are selected below</li>
+                                    <li>In instructions, describe what's wrong: <em>"Fix hero's face to match reference"</em></li>
+                                </ul>
+                            </div>
+
+                            {/* Update Emblem/Weapon */}
+                            <div className="bg-white border-2 border-amber-300 p-3 rounded">
+                                <p className="font-bold text-amber-700 mb-1">⭐ Fix Emblem or ⚔️ Weapon</p>
+                                <ul className="list-disc ml-4 text-gray-700 space-y-1">
+                                    <li>Select <strong>"Update Emblem"</strong> or <strong>"Update Weapon"</strong> mode</li>
+                                    <li>Upload the emblem/weapon reference image if you haven't already</li>
+                                    <li>Enable <strong>"🖼️ Regenerate using selected reference images"</strong></li>
+                                    <li>Tip: Combine with "Characters Only" to keep the background unchanged</li>
+                                </ul>
+                            </div>
+
+                            {/* Change Outfit Only */}
+                            <div className="bg-white border-2 border-purple-300 p-3 rounded">
+                                <p className="font-bold text-purple-700 mb-1">👕 Change Outfit/Costume</p>
+                                <ul className="list-disc ml-4 text-gray-700 space-y-1">
+                                    <li>Select <strong>"Outfit Only"</strong> mode</li>
+                                    <li>Describe the change: <em>"Hero wears casual clothes instead of suit"</em></li>
+                                    <li>Use negative prompt to exclude unwanted items: <em>"no cape, no mask"</em></li>
+                                </ul>
+                            </div>
+
+                            {/* Use Generated Panel as Reference */}
+                            <div className="bg-white border-2 border-blue-300 p-3 rounded">
+                                <p className="font-bold text-blue-700 mb-1">🖼️ Using Generated Panels as References</p>
+                                <ul className="list-disc ml-4 text-gray-700 space-y-1">
+                                    <li><strong>Yes!</strong> Download a good panel and upload it as a reference image</li>
+                                    <li>This helps AI maintain consistent poses, lighting, and style</li>
+                                    <li>Great for keeping a specific background or scene composition</li>
+                                    <li>Upload via the "📸 Add Reference Images" section below</li>
+                                </ul>
+                            </div>
+
+                            {/* Expression Only */}
+                            <div className="bg-white border-2 border-pink-300 p-3 rounded">
+                                <p className="font-bold text-pink-700 mb-1">😊 Change Expression Only</p>
+                                <ul className="list-disc ml-4 text-gray-700 space-y-1">
+                                    <li>Select <strong>"Expression Only"</strong> mode</li>
+                                    <li>Describe the emotion: <em>"Hero looks determined and confident"</em></li>
+                                    <li>Best for subtle emotional changes without redoing the whole panel</li>
+                                </ul>
+                            </div>
+
+                            {/* Full Reroll Tips */}
+                            <div className="bg-white border-2 border-gray-300 p-3 rounded">
+                                <p className="font-bold text-gray-700 mb-1">🎲 Full Reroll Best Practices</p>
+                                <ul className="list-disc ml-4 text-gray-700 space-y-1">
+                                    <li>Always enable reference images for character consistency</li>
+                                    <li>Use camera shot override to control framing (close-up, wide, etc.)</li>
+                                    <li>Edit character profiles below if AI keeps getting features wrong</li>
+                                    <li>Use negative prompts to exclude recurring unwanted elements</li>
+                                </ul>
+                            </div>
+
+                            {/* Pro Tips */}
+                            <div className="bg-yellow-100 border-2 border-yellow-400 p-3 rounded">
+                                <p className="font-bold text-yellow-800 mb-1">⚡ Pro Tips</p>
+                                <ul className="list-disc ml-4 text-yellow-900 space-y-1">
+                                    <li><strong>Combine modes:</strong> "Characters Only" + "Update Emblem" for targeted fixes</li>
+                                    <li><strong>Be specific:</strong> Instead of "fix the face", say "match the angular jaw and green eyes from reference"</li>
+                                    <li><strong>Use AI Improve:</strong> Click "✨ AI IMPROVE" to enhance your instructions</li>
+                                    <li><strong>Check profiles:</strong> Scroll down to edit character descriptions if they're wrong</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                )}
 
                 <div className="p-3 md:p-5 flex flex-col gap-4 md:gap-5">
 
