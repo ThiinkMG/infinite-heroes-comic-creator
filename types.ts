@@ -467,6 +467,9 @@ export function formatConsistencyInstruction(
   if (profile.emblemDescription) {
     const placement = profile.emblemPlacement ? ` at ${profile.emblemPlacement}` : '';
     emblemReinforcement = `\nEMBLEM/LOGO REQUIREMENT: ${profile.name} MUST have their emblem (${profile.emblemDescription})${placement}. Copy the exact design from the reference image - same shape, colors, and proportions.`;
+  } else {
+    // No emblem description - instruct AI to rely on reference images if uploaded
+    emblemReinforcement = `\nEMBLEM/LOGO FALLBACK: No emblem description available for ${profile.name}. If an EMBLEM reference image was uploaded for this character, you MUST study it carefully and reproduce the exact emblem design, shape, colors, and placement from that reference image.`;
   }
 
   // Build clothing/armor reinforcement
@@ -474,6 +477,9 @@ export function formatConsistencyInstruction(
   if (profile.clothing) {
     const clothingStr = safeString(profile.clothing);
     clothingReinforcement = `\nCLOTHING/ARMOR REQUIREMENT: ${profile.name} MUST wear their signature outfit as shown in reference: ${clothingStr}. Do not change, simplify, or modify the costume design.`;
+  } else {
+    // No clothing description - instruct AI to rely on reference images if uploaded
+    clothingReinforcement = `\nCLOTHING/ARMOR FALLBACK: No suit/clothing description available for ${profile.name}. You MUST rely HEAVILY on the uploaded portrait and character reference images to accurately reproduce their costume, suit, armor, and accessories. Copy every visible detail from the reference images exactly.`;
   }
 
   return `
