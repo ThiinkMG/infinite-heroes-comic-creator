@@ -2992,11 +2992,17 @@ Create a powerful, memorable conclusion that honors the user's story path.
           title={storyContext.title || 'Comic'}
           onClose={() => setShowGallery(false)}
           onReplaceImage={(faceId, newImageUrl) => {
+            // Update both state and historyRef to ensure persistence
             setComicFaces(prev => prev.map(face =>
               face.id === faceId
                 ? { ...face, imageUrl: newImageUrl }
                 : face
             ));
+            // Also update historyRef so exports and other operations use the new image
+            const idx = historyRef.current.findIndex(f => f.id === faceId);
+            if (idx !== -1) {
+              historyRef.current[idx] = { ...historyRef.current[idx], imageUrl: newImageUrl };
+            }
           }}
         />
       )}
