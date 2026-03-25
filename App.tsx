@@ -1250,8 +1250,9 @@ For hardNegatives, analyze the image and add negatives for:
   }
 
   const generateSinglePage = async (faceId: string, pageNum: number, type: ComicFace['type'], instruction?: string, extraRefImages?: string[], previousChoices?: string[], comicOverrides?: ComicOverrides) => {
-      const config = getComicConfig(storyContext.pageLength, extraPages);
-      const isDecision = generateFromOutline ? false : config.DECISION_PAGES.includes(pageNum);
+      const isNovelMode = !generateFromOutline;
+      const config = getComicConfig(storyContext.pageLength, extraPages, isNovelMode);
+      const isDecision = isNovelMode ? (type === 'story') : config.DECISION_PAGES.includes(pageNum);
       let beat: Beat = { scene: "", choices: [], focus_char: 'other' };
 
       if (type === 'cover') {
