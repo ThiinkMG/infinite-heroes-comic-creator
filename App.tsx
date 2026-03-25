@@ -7,7 +7,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { GoogleGenAI } from '@google/genai';
 import jsPDF from 'jspdf';
-import { getComicConfig, ART_STYLES, GENRES, TONES, LANGUAGES, ComicFace, Beat, Persona, StoryContext, StoryOutline, CharacterProfile } from './types';
+import { getComicConfig, ART_STYLES, GENRES, TONES, LANGUAGES, ComicFace, Beat, Persona, StoryContext, StoryOutline, CharacterProfile, NOVEL_MODE_BATCH_SIZE, generateHardNegatives, formatIdentityHeader, formatReinforcedScene, formatConsistencyInstruction, IdentityHeader, RegenerationMode, PageCharacterPlan, TransitionType, ShotType, PanelLayout, EmotionalBeat, PacingIntent, BalloonShape, RerollOptions, getLayoutInstructions, getShotInstructions, getTransitionContext, getFlashbackInstructions } from './types';
 import { Setup } from './Setup';
 import { Book } from './Book';
 import { RerollModal } from './RerollModal';
@@ -19,6 +19,7 @@ import { ExportDialog } from './ExportDialog';
 import { ProfilesDialog } from './ProfilesDialog';
 import { SettingsDialog } from './SettingsDialog';
 import { OutlineStepDialog } from './OutlineStepDialog';
+import { ModeSelectionScreen } from './ModeSelectionScreen';
 
 // --- Constants ---
 const MODEL_IMAGE_GEN_NAME = "gemini-3-pro-image-preview";
@@ -154,6 +155,7 @@ const App: React.FC = () => {
   
   // --- Transition States ---
   const [showSetup, setShowSetup] = useState(true);
+  const [showModeSelection, setShowModeSelection] = useState(false);
   const [isTransitioning, setIsTransitioning] = useState(false);
   const [isGeneratingProfiles, setIsGeneratingProfiles] = useState(false);
   const [showExportDialog, setShowExportDialog] = useState(false);
@@ -234,7 +236,7 @@ const App: React.FC = () => {
     });
   };
 
-  const generateBeat = async (history: ComicFace[], isRightPage: boolean, pageNum: number, isDecisionPage: boolean, instruction?: string): Promise<Beat> => {
+  const generateBeat = async (history: ComicFace[], isRightPage: boolean, pageNum: number, isDecisionPage: boolean, instruction?: string, previousChoices?: string[]): Promise<Beat> => {
     if (!heroRef.current) throw new Error("No Hero");
     const config = getComicConfig(storyContext.pageLength, extraPages);
     const isFinalPage = pageNum === config.MAX_STORY_PAGES;
@@ -314,6 +316,10 @@ const App: React.FC = () => {
         baseInstruction += " FINAL PAGE. KARMIC CLIFFHANGER REQUIRED. You MUST explicitly reference the User's choice from PAGE 3 in the narrative and show how that specific philosophy led to this conclusion. Text must end with 'TO BE CONTINUED...' (or localized equivalent).";
     } else if (isDecisionPage) {
         baseInstruction += " End with a PSYCHOLOGICAL choice about VALUES, RELATIONSHIPS, or RISK. (e.g., Truth vs. Safety, Forgive vs. Avenge). The choices MUST be a brief descriptive summary of the action the user is taking (e.g. 'Confront the suspect at the warehouse' vs 'Follow from a distance'). NEVER use generic 'Option A' or 'Option B'.";
+        // Novel Mode reroll: avoid previously rejected choices
+        if (previousChoices && previousChoices.length > 0) {
+            baseInstruction += ` REJECTED CHOICES (DO NOT REUSE): ${previousChoices.map(c => `"${c}"`).join(', ')}. Generate COMPLETELY DIFFERENT choices that explore alternative story directions.`;
+        }
     } else {
         // Neutralized Narrative Arc to avoid forcing "scary mystery" tones if the genre doesn't call for it.
         if (pageNum === 1) {
@@ -325,6 +331,53 @@ const App: React.FC = () => {
         } else {
             baseInstruction += " CLIMAX. The confrontation with the main conflict. The truth comes out, the contest ends, or the battle is fought.";
         }
+    }
+
+    // === COMIC FUNDAMENTALS CONTEXT ===
+    // Inject layout, shot, transition guidance from page breakdown if available
+    const pagePlan = storyOutline.pageBreakdown?.find(p => p.pageIndex === pageNum);
+    if (pagePlan) {
+      // Layout instructions
+      baseInstruction += `\n\n=== COMIC FUNDAMENTALS FOR PAGE ${pageNum} ===`;
+      baseInstruction += `\n${getLayoutInstructions(pagePlan.panelLayout)}`;
+      baseInstruction += `\n${getShotInstructions(pagePlan.suggestedShot)}`;
+
+      // Transition from previous page
+      if (pageNum > 1) {
+        const prevScene = relevantHistory[relevantHistory.length - 1]?.narrative?.scene;
+        baseInstruction += `\n${getTransitionContext(pagePlan.transitionType, prevScene)}`;
+      }
+
+      // Emotional beat guidance
+      const beatGuidance: Record<EmotionalBeat, string> = {
+        'establishing': 'BEAT: ESTABLISHING - Set the scene, introduce the location/mood.',
+        'action': 'BEAT: ACTION - Focus on physical movement, dynamic poses, kinetic energy.',
+        'dialogue': 'BEAT: DIALOGUE - Conversation focus, reaction shots, character interplay.',
+        'reaction': 'BEAT: REACTION - Show emotional response to what just happened.',
+        'climax': 'BEAT: CLIMAX - This is the PEAK MOMENT. Maximum drama and stakes!',
+        'transition': 'BEAT: TRANSITION - Bridge scene, moving from one situation to next.',
+        'reveal': 'BEAT: REVEAL - Important information disclosed. Dramatic impact moment.',
+      };
+      baseInstruction += `\n${beatGuidance[pagePlan.emotionalBeat]}`;
+
+      // Pacing guidance
+      const pacingGuidance: Record<PacingIntent, string> = {
+        'slow': 'PACING: SLOW - Take time with this moment. Detailed descriptions, contemplative tone.',
+        'medium': 'PACING: MEDIUM - Standard narrative flow. Balance action and reflection.',
+        'fast': 'PACING: FAST - Quick, punchy beats. Short sentences, rapid progression.',
+      };
+      baseInstruction += `\n${pacingGuidance[pagePlan.pacingIntent]}`;
+
+      // Flashback indicator
+      if (pagePlan.isFlashback) {
+        baseInstruction += `\nFLASHBACK: This scene takes place in the PAST. Use nostalgic/memory tone in narration.`;
+      }
+
+      // Specified characters
+      if (pagePlan.primaryCharacters.length > 0) {
+        baseInstruction += `\nPLANNED CHARACTERS: Focus on ${pagePlan.primaryCharacters.join(', ')}.`;
+      }
+      baseInstruction += `\n=== END COMIC FUNDAMENTALS ===\n`;
     }
 
     // Dynamic text limits based on richMode
@@ -429,7 +482,7 @@ OUTPUT STRICT JSON ONLY (No markdown formatting):
       }
   };
 
-  const generateImage = async (beat: Beat, type: ComicFace['type'], instruction?: string, extraRefImages?: string[], prevImage?: string, prevBeat?: Beat): Promise<string> => {
+  const generateImage = async (beat: Beat, type: ComicFace['type'], instruction?: string, extraRefImages?: string[], prevImage?: string, prevBeat?: Beat, pageIndex?: number, comicOverrides?: { shotTypeOverride?: ShotType; balloonShapeOverride?: BalloonShape; applyFlashbackStyle?: boolean }): Promise<{ imageUrl: string; originalPrompt: string }> => {
     const contents: any[] = [];
     const getAllRefs = (p: Persona) => p.referenceImages || (p.referenceImage ? [p.referenceImage] : []);
     if (heroRef.current?.base64) {
@@ -482,8 +535,68 @@ OUTPUT STRICT JSON ONLY (No markdown formatting):
     } else if (type === 'back_cover') {
         promptText += `TYPE: Comic Back Cover. FULL PAGE VERTICAL ART. Dramatic teaser. Text: "NEXT ISSUE SOON".`;
     } else {
-        promptText += `TYPE: Vertical comic panel. SCENE: ${beat.scene}. `;
-        
+        // LAYER 3: Scene Reinforcement - Embed key visual features into scene description
+        let sceneText = beat.scene;
+        const focusProfile = characterProfilesRef.current.find(cp => {
+            if (beat.focus_char === 'hero') return cp.name === heroRef.current?.name;
+            if (beat.focus_char === 'friend') return cp.name === friendRef.current?.name;
+            return cp.name.toLowerCase() === beat.focus_char.toLowerCase();
+        });
+
+        if (focusProfile) {
+            // Extract environment from scene (everything after character action)
+            const envMatch = sceneText.match(/\b(in|at|on|near|inside|outside|within)\b.*/i);
+            const environment = envMatch ? envMatch[0] : 'the scene';
+            const action = sceneText.replace(environment, '').trim() || 'poses';
+            sceneText = formatReinforcedScene(focusProfile, action, environment);
+        }
+
+        promptText += `TYPE: Vertical comic panel. SCENE: ${sceneText}. `;
+
+        // === COMIC FUNDAMENTALS: Shot framing and layout ===
+        const pagePlan = pageIndex !== undefined ? storyOutline.pageBreakdown?.find(p => p.pageIndex === pageIndex) : undefined;
+
+        // Determine effective values (overrides take precedence over page plan)
+        const effectiveShotType = comicOverrides?.shotTypeOverride || pagePlan?.suggestedShot;
+        const effectiveFlashback = comicOverrides?.applyFlashbackStyle ?? pagePlan?.isFlashback;
+        const effectiveBalloonShape = comicOverrides?.balloonShapeOverride;
+
+        // Shot type instructions (from override or page plan)
+        if (effectiveShotType) {
+          promptText += `\n${getShotInstructions(effectiveShotType)} `;
+        }
+
+        // Layout composition hints (only from page plan, not overrideable in reroll)
+        if (pagePlan) {
+          if (pagePlan.panelLayout === 'splash') {
+            promptText += `COMPOSITION: This is a SPLASH PAGE - full dramatic composition, maximum visual impact. `;
+          } else if (pagePlan.panelLayout === 'grid-2x3' || pagePlan.panelLayout === 'grid-3x3') {
+            promptText += `COMPOSITION: Design as part of a multi-panel page - tighter framing, efficient use of space. `;
+          } else if (pagePlan.panelLayout === 'asymmetric') {
+            promptText += `COMPOSITION: Dynamic layout - this may be the dramatic payoff panel (larger) or a quick beat (smaller). `;
+          }
+        }
+
+        // Flashback styling (from override or page plan)
+        if (effectiveFlashback) {
+          promptText += `\n${getFlashbackInstructions()} `;
+        }
+
+        // Balloon shape override instructions
+        if (effectiveBalloonShape) {
+          const balloonInstructions: Record<BalloonShape, string> = {
+            'oval': 'DIALOGUE STYLE: Use standard oval speech bubbles for normal conversation.',
+            'burst': 'DIALOGUE STYLE: Use BURST/EXPLOSION speech bubbles - spiky edges indicating SHOUTING or excitement!',
+            'wavy': 'DIALOGUE STYLE: Use WAVY/WOBBLY speech bubbles indicating weak, distressed, or injured speech...',
+            'dashed': 'DIALOGUE STYLE: Use DASHED-OUTLINE speech bubbles indicating whispered or quiet speech.',
+            'cloud': 'DIALOGUE STYLE: Use CLOUD/THOUGHT bubbles for internal thoughts.',
+            'rectangle': 'DIALOGUE STYLE: Use RECTANGULAR speech boxes for robotic, electronic, or AI voices.',
+            'jagged': 'DIALOGUE STYLE: Use JAGGED/ELECTRIC speech bubbles for radio, phone, or broadcast transmissions.',
+            'inverted': 'DIALOGUE STYLE: Use INVERTED (black background, white text) speech bubbles for alien or otherworldly voices.',
+          };
+          promptText += `\n${balloonInstructions[effectiveBalloonShape]} `;
+        }
+
         let mappings = `If scene mentions 'HERO' or '${heroRef.current?.name}', you MUST use REFERENCE 1. If scene mentions 'CO-STAR' or 'SIDEKICK' or '${friendRef.current?.name}', you MUST use REFERENCE 2.`;
         additionalCharsRef.current.forEach((c, i) => {
              mappings += ` If scene mentions '${c.name}', you MUST use REFERENCE ${i + 3}.`;
@@ -507,12 +620,20 @@ OUTPUT STRICT JSON ONLY (No markdown formatting):
 3. Pay close attention to distinguishing features (scars, tattoos, specific hair colors) mentioned in the profiles and ensure they are visible.
 4. [ART STYLE & GENRE ENFORCEMENT] The overall visual style of every panel MUST be: ${styleEra} comic book art${artStyleTag}. The GENRE is: ${selectedGenre}. Do NOT deviate from this art style or genre under any circumstances. THE ENVIRONMENT, LIGHTING, AND AESTHETIC MUST MATCH THE ${selectedGenre.toUpperCase()} GENRE. The line work, coloring technique, shading, and overall aesthetic must consistently match the specified style throughout.\n`;
 
+        // LAYER 2: Structured Identity Headers for each character
         if (characterProfilesRef.current.length > 0) {
-            promptText += '\n--- CHARACTER VISUAL PROFILES ---\n';
+            promptText += '\n--- CHARACTER IDENTITY BLOCKS (LAYER 2) ---\n';
             characterProfilesRef.current.forEach(cp => {
-                promptText += `[${cp.name}] Face: ${cp.faceDescription}. Body: ${cp.bodyType}. Clothing: ${cp.clothing}. Tags: ${cp.colorPalette}. Distinguishing: ${cp.distinguishingFeatures}.\n`;
+                promptText += formatIdentityHeader(cp) + '\n\n';
             });
-            promptText += '---------------------------------\n';
+            promptText += '--- END CHARACTER IDENTITY BLOCKS ---\n';
+
+            // LAYER 4: Consistency Instructions for characters appearing in this scene
+            promptText += '\n--- CONSISTENCY REQUIREMENTS (LAYER 4) ---\n';
+            characterProfilesRef.current.forEach(cp => {
+                promptText += formatConsistencyInstruction(cp, storyContext.artStyle || 'Comic Book') + '\n\n';
+            });
+            promptText += '--- END CONSISTENCY REQUIREMENTS ---\n';
         }
 
         // 5. FINAL VISUAL ANCHOR (to catch context dilution)
@@ -544,10 +665,11 @@ OUTPUT STRICT JSON ONLY (No markdown formatting):
           config: { imageConfig: { aspectRatio: '2:3' } }
         });
         const part = res.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
-        return part?.inlineData?.data ? `data:${part.inlineData.mimeType};base64,${part.inlineData.data}` : '';
-    } catch (e) { 
+        const imageUrl = part?.inlineData?.data ? `data:${part.inlineData.mimeType};base64,${part.inlineData.data}` : '';
+        return { imageUrl, originalPrompt: promptText };
+    } catch (e) {
         handleAPIError(e);
-        return ''; 
+        return { imageUrl: '', originalPrompt: promptText };
     }
   };
 
@@ -600,14 +722,31 @@ OUTPUT STRICT JSON ONLY (No markdown formatting):
       contents.push({ text: `
 Analyze the character based on the images and text provided above. Produce a STRICT JSON visual profile.
 If only text is provided, infer the visual details based on the description.
+
 OUTPUT JSON ONLY (no markdown):
 {
   "faceDescription": "Shape, eye color, nose, jawline, expression, any scars/markings",
   "bodyType": "Height, build (slim/athletic/muscular/heavy), proportions",
   "clothing": "Exact outfit description with all details, armor, accessories",
   "colorPalette": "Primary and secondary colors of skin, hair, eyes, outfit",
-  "distinguishingFeatures": "Unique traits: tattoos, glowing eyes, tail, pointed ears, scars, etc."
+  "distinguishingFeatures": "Unique traits: tattoos, glowing eyes, tail, pointed ears, scars, etc.",
+  "identityHeader": {
+    "face": "Face shape, cheekbones, chin, distinctive facial features",
+    "eyes": "Eye color, shape, spacing, typical expression",
+    "hair": "Hair color, style, length, texture",
+    "skin": "Skin tone, any visible marks (scars, tattoos, moles)",
+    "build": "Body type, height impression, posture",
+    "signature": ["item1 always worn/visible", "item2 if any"]
+  },
+  "hardNegatives": ["feature to never include based on what you see - e.g. if no glasses, add 'no glasses'"]
 }
+
+For hardNegatives, analyze the image and add negatives for:
+- If they have a specific hairstyle, add "no [opposite style]" (e.g., curly hair -> "no straight hair")
+- If they don't wear glasses, add "no glasses"
+- If specific eye color, add "no [other colors] eyes"
+- If clean-shaven, add "no beard", "no facial hair"
+- If no bangs, add "no bangs"
 ` });
 
       try {
@@ -619,6 +758,20 @@ OUTPUT JSON ONLY (no markdown):
           const text = res.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
           const cleaned = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
           const parsed = JSON.parse(cleaned);
+
+          // Build structured identity header if not provided
+          const identityHeader = parsed.identityHeader || {
+              face: parsed.faceDescription || '',
+              eyes: (parsed.faceDescription?.match(/eye[s]?[:\s]+([^,.]+)/i)?.[1] || '').trim(),
+              hair: (parsed.colorPalette?.match(/hair[:\s]+([^,.]+)/i)?.[1] || '').trim(),
+              skin: (parsed.colorPalette?.match(/skin[:\s]+([^,.]+)/i)?.[1] || '').trim(),
+              build: parsed.bodyType || '',
+              signature: parsed.distinguishingFeatures?.split(',').map((s: string) => s.trim()).filter(Boolean) || [],
+          };
+
+          // Generate hard negatives if not provided
+          const hardNegatives = parsed.hardNegatives || generateHardNegatives(identityHeader);
+
           return {
               id: persona.id,
               name: persona.name || 'Unknown',
@@ -627,6 +780,9 @@ OUTPUT JSON ONLY (no markdown):
               clothing: parsed.clothing || '',
               colorPalette: parsed.colorPalette || '',
               distinguishingFeatures: parsed.distinguishingFeatures || '',
+              identityHeader,
+              hardNegatives,
+              contrastFeatures: [],
           };
       } catch (e) {
           console.warn('Failed to generate character profile for', persona.name, e);
@@ -681,7 +837,14 @@ OUTPUT JSON ONLY (no markdown):
       if (idx !== -1) historyRef.current[idx] = { ...historyRef.current[idx], ...updates };
   };
 
-  const generateSinglePage = async (faceId: string, pageNum: number, type: ComicFace['type'], instruction?: string, extraRefImages?: string[]) => {
+  // Comic fundamentals overrides for reroll
+  interface ComicOverrides {
+      shotTypeOverride?: ShotType;
+      balloonShapeOverride?: BalloonShape;
+      applyFlashbackStyle?: boolean;
+  }
+
+  const generateSinglePage = async (faceId: string, pageNum: number, type: ComicFace['type'], instruction?: string, extraRefImages?: string[], previousChoices?: string[], comicOverrides?: ComicOverrides) => {
       const config = getComicConfig(storyContext.pageLength, extraPages);
       const isDecision = generateFromOutline ? false : config.DECISION_PAGES.includes(pageNum);
       let beat: Beat = { scene: "", choices: [], focus_char: 'other' };
@@ -691,7 +854,7 @@ OUTPUT JSON ONLY (no markdown):
       } else if (type === 'back_cover') {
            beat = { scene: "Thematic teaser image", choices: [], focus_char: 'other' };
       } else {
-           beat = await generateBeat(historyRef.current, pageNum % 2 === 0, pageNum, isDecision, instruction);
+           beat = await generateBeat(historyRef.current, pageNum % 2 === 0, pageNum, isDecision, instruction, previousChoices);
       }
 
       if (beat.focus_char === 'friend' && !friendRef.current && type === 'story') {
@@ -714,17 +877,19 @@ OUTPUT JSON ONLY (no markdown):
           }
       }
 
-      const url = await generateImage(beat, type, instruction, extraRefImages, prevImage, prevBeat);
+      const result = await generateImage(beat, type, instruction, extraRefImages, prevImage, prevBeat, pageNum, comicOverrides);
       if (isStoppedRef.current) return;
-      if (!url) {
-          updateFaceState(faceId, { isLoading: false, hasFailed: true });
+      if (!result.imageUrl) {
+          updateFaceState(faceId, { isLoading: false, hasFailed: true, originalPrompt: result.originalPrompt });
       } else {
-          updateFaceState(faceId, { imageUrl: url, isLoading: false, hasFailed: false });
+          updateFaceState(faceId, { imageUrl: result.imageUrl, isLoading: false, hasFailed: false, originalPrompt: result.originalPrompt });
       }
   };
 
   const generateBatch = async (startPage: number, count: number) => {
-      const config = getComicConfig(storyContext.pageLength, extraPages);
+      // Pass isNovelMode flag - Novel Mode is when NOT generating from outline
+      const isNovelMode = !generateFromOutline;
+      const config = getComicConfig(storyContext.pageLength, extraPages, isNovelMode);
       const pagesToGen: number[] = [];
       for (let i = 0; i < count; i++) {
           const p = startPage + i;
@@ -791,43 +956,102 @@ OUTPUT JSON ONLY (no markdown):
       const ai = getAI();
       const config = getComicConfig(storyContext.pageLength, extraPages);
       const langName = LANGUAGES.find(l => l.code === selectedLanguage)?.name || "English";
-      
+
+      // Build character names list for the prompt
+      const characterNames: string[] = [];
+      if (heroRef.current?.name) characterNames.push(heroRef.current.name);
+      if (friendRef.current?.name) characterNames.push(friendRef.current.name);
+      additionalCharsRef.current.forEach(c => { if (c.name) characterNames.push(c.name); });
+
       const charContext = [
           `HERO: ${heroRef.current?.name || 'Main Hero'}. Backstory: ${heroRef.current?.backstoryText || 'Unknown'}.`,
           friendRef.current ? `CO-STAR: ${friendRef.current.name || 'Sidekick'}. Backstory: ${friendRef.current.backstoryText || 'Unknown'}.` : null,
           ...additionalCharsRef.current.map(c => `${c.name}: ${c.backstoryText || 'Unknown'}.`)
       ].filter(Boolean).join('\n');
 
+      // Enhanced outline prompt with comic fundamentals
       const prompt = `
-        Generate a structured story outline for a ${config.MAX_STORY_PAGES}-page comic book issue.
-        STORY TITLE: ${storyContext.title}
-        GENRE: ${selectedGenre}
-        LANGUAGE: ${langName}
-        CHARACTERS:
-        ${charContext}
-        STORY DESCRIPTION: ${storyContext.descriptionText}
-        ${userNotes ? `USER NOTES: ${userNotes}` : ''}
-        
-        Provide a page-by-page breakdown (Page 1 to Page ${config.MAX_STORY_PAGES}).
-        
-        [CRITICAL NARRATIVE & VISUAL RULES]:
-        1. DO NOT REPEAT POSES OR SCENES. The story must physically move forward. Vary the locations, camera angles (wide establishing shots, extreme close-ups, over-the-shoulder, action sequences).
-        2. SHOW CHARACTER DEVELOPMENT: Advance relationships between characters (Hero, Co-Star, Supporting). Show them interacting, fighting together, arguing, or discovering things.
-        3. AVOID STATIC REPETITION: If Page 1 shows a character crouching on a roof, Page 2 MUST be completely different (e.g., inside a building, talking to someone, throwing a punch).
-        
-        Keep it concise but visually highly varied to guide the generation of each page.
-        OUTPUT FORMAT: Plain text.
-      `;
+You are a professional comic book writer planning a ${config.MAX_STORY_PAGES}-page story.
+
+STORY TITLE: ${storyContext.title}
+GENRE: ${selectedGenre}
+LANGUAGE: ${langName}
+ART STYLE: ${storyContext.artStyle}
+CHARACTERS: ${characterNames.join(', ')}
+${charContext}
+STORY DESCRIPTION: ${storyContext.descriptionText}
+${userNotes ? `USER NOTES: ${userNotes}` : ''}
+
+For EACH page, provide the following structured breakdown:
+
+PAGE [N]:
+- Characters: [who appears, comma-separated]
+- Focus: [primary character name]
+- Scene: [1-2 sentence visual description]
+- Layout: [splash|horizontal-split|vertical-split|grid-2x2|grid-2x3|grid-3x3|asymmetric]
+- Shot: [extreme-close-up|close-up|medium|full|wide|extreme-wide]
+- Transition: [moment-to-moment|action-to-action|subject-to-subject|scene-to-scene|aspect-to-aspect]
+- Beat: [establishing|action|dialogue|reaction|climax|transition|reveal]
+- Pacing: [slow|medium|fast]
+- Flashback: [yes|no]
+
+=== COMIC LAYOUT GUIDELINES ===
+- Use "splash" for: character introductions, major reveals, climaxes (MAX 2-3 per issue)
+- Use "grid-2x3" for: dialogue scenes, standard narrative (MOST COMMON - 60%+)
+- Use "grid-3x3" for: building tension, dense information
+- Use "asymmetric" for: action sequences, dynamic moments (small-small-small-LARGE pattern)
+- Use "horizontal-split" for: panoramic environments, cause-and-effect
+- Use "vertical-split" for: simultaneous events, character comparisons
+
+=== SHOT TYPE GUIDELINES ===
+- extreme-close-up: Eyes/detail only, maximum emotional impact
+- close-up: Face fills frame, emotion focus
+- medium: Waist-up, balance of character and context (MOST COMMON)
+- full: Full body visible, body language emphasis
+- wide: Environment prominent with characters
+- extreme-wide: Establishing shots, vast environments
+
+=== TRANSITION GUIDELINES (McCloud's Types) ===
+- action-to-action: Physical action progression (~65% of panels - MOST COMMON)
+- subject-to-subject: Same scene, different subject - dialogue/reactions (~20%)
+- scene-to-scene: Time/location jump - "Meanwhile..." or "Later..." (~10%)
+- moment-to-moment: Slow-motion emphasis - dramatic pauses (rare)
+- aspect-to-aspect: Mood/atmosphere - environmental poetry (rare)
+
+=== PACING RHYTHM ===
+- Pages 1-2: SLOW (establishing, setting the scene)
+- Pages 3-5: MEDIUM (rising action, character dynamics)
+- Pages 6-7: FAST (complication, tension building)
+- Page 8-9: SLOW→FAST (climax build)
+- Page ${config.MAX_STORY_PAGES}: SLOW (resolution/cliffhanger)
+
+=== CRITICAL RULES ===
+1. DO NOT REPEAT poses, locations, or camera angles between consecutive pages
+2. VARY layouts - don't use the same layout more than 3 times in a row
+3. SHOW character development through interactions
+4. Decision pages (${config.DECISION_PAGES.join(', ')}) should use dramatic layouts (splash or asymmetric)
+
+OUTPUT: Structured text EXACTLY as shown above for each page.
+`;
 
       const res = await ai.models.generateContent({
         model: MODEL_TEXT_NAME,
         contents: { text: prompt }
       });
 
+      const outlineText = res.text || "";
+
+      // Parse the enhanced outline into page breakdown
+      const pageBreakdown = parseEnhancedOutline(outlineText, config);
+
       setStoryOutline({
-        content: res.text || "",
+        content: outlineText,
         isReady: true,
-        isGenerating: false
+        isGenerating: false,
+        pageBreakdown: pageBreakdown.length > 0 ? pageBreakdown : undefined,
+        isEnhanced: pageBreakdown.length > 0,
+        lastEditedAt: Date.now(),
+        version: 1
       });
     } catch (e) {
       handleAPIError(e);
@@ -835,15 +1059,132 @@ OUTPUT JSON ONLY (no markdown):
     }
   };
 
+  /**
+   * Parse enhanced outline text into structured PageCharacterPlan array
+   */
+  const parseEnhancedOutline = (
+    text: string,
+    config: ReturnType<typeof getComicConfig>
+  ): PageCharacterPlan[] => {
+    const plans: PageCharacterPlan[] = [];
+
+    // Regex to match each page block
+    const pageRegex = /PAGE\s*(\d+):\s*\n-\s*Characters:\s*(.+)\n-\s*Focus:\s*(.+)\n-\s*Scene:\s*(.+)\n-\s*Layout:\s*(.+)\n-\s*Shot:\s*(.+)\n-\s*Transition:\s*(.+)\n-\s*Beat:\s*(.+)\n-\s*Pacing:\s*(.+)\n-\s*Flashback:\s*(.+)/gi;
+
+    let match;
+    while ((match = pageRegex.exec(text)) !== null) {
+      const pageIndex = parseInt(match[1]);
+
+      // Map character names to IDs
+      const charNames = match[2].split(',').map(c => c.trim().toLowerCase());
+      const primaryCharacters: string[] = [];
+      charNames.forEach(name => {
+        if (name.includes('hero') || name === heroRef.current?.name?.toLowerCase()) {
+          primaryCharacters.push('hero');
+        } else if (name.includes('co-star') || name.includes('sidekick') || name === friendRef.current?.name?.toLowerCase()) {
+          primaryCharacters.push('friend');
+        } else {
+          // Check additional characters
+          const found = additionalCharsRef.current.find(c => c.name.toLowerCase() === name);
+          if (found) primaryCharacters.push(found.id);
+        }
+      });
+
+      // Map focus character
+      const focusName = match[3].trim().toLowerCase();
+      let focusCharacter = 'hero';
+      if (focusName.includes('co-star') || focusName.includes('sidekick') || focusName === friendRef.current?.name?.toLowerCase()) {
+        focusCharacter = 'friend';
+      } else {
+        const found = additionalCharsRef.current.find(c => c.name.toLowerCase() === focusName);
+        if (found) focusCharacter = found.id;
+      }
+
+      // Parse layout
+      const layoutStr = match[5].trim().toLowerCase();
+      const validLayouts: PanelLayout[] = ['splash', 'horizontal-split', 'vertical-split', 'grid-2x2', 'grid-2x3', 'grid-3x3', 'asymmetric'];
+      const panelLayout: PanelLayout = validLayouts.includes(layoutStr as PanelLayout)
+        ? (layoutStr as PanelLayout)
+        : 'grid-2x3'; // default
+
+      // Parse shot
+      const shotStr = match[6].trim().toLowerCase();
+      const validShots: ShotType[] = ['extreme-close-up', 'close-up', 'medium', 'full', 'wide', 'extreme-wide'];
+      const suggestedShot: ShotType = validShots.includes(shotStr as ShotType)
+        ? (shotStr as ShotType)
+        : 'medium'; // default
+
+      // Parse transition
+      const transStr = match[7].trim().toLowerCase();
+      const validTransitions: TransitionType[] = ['moment-to-moment', 'action-to-action', 'subject-to-subject', 'scene-to-scene', 'aspect-to-aspect', 'non-sequitur'];
+      const transitionType: TransitionType = validTransitions.includes(transStr as TransitionType)
+        ? (transStr as TransitionType)
+        : 'action-to-action'; // default
+
+      // Parse beat
+      const beatStr = match[8].trim().toLowerCase();
+      const validBeats: EmotionalBeat[] = ['establishing', 'action', 'dialogue', 'reaction', 'climax', 'transition', 'reveal'];
+      const emotionalBeat: EmotionalBeat = validBeats.includes(beatStr as EmotionalBeat)
+        ? (beatStr as EmotionalBeat)
+        : 'action'; // default
+
+      // Parse pacing
+      const pacingStr = match[9].trim().toLowerCase();
+      const pacingIntent: PacingIntent = ['slow', 'medium', 'fast'].includes(pacingStr)
+        ? (pacingStr as PacingIntent)
+        : 'medium'; // default
+
+      // Parse flashback
+      const isFlashback = match[10].trim().toLowerCase() === 'yes';
+
+      plans.push({
+        pageIndex,
+        primaryCharacters: primaryCharacters.length > 0 ? primaryCharacters : ['hero'],
+        focusCharacter,
+        sceneDescription: match[4].trim(),
+        isDecisionPage: config.DECISION_PAGES.includes(pageIndex),
+        panelLayout,
+        suggestedShot,
+        transitionType,
+        emotionalBeat,
+        pacingIntent,
+        isFlashback
+      });
+    }
+
+    return plans;
+  };
+
+  // Mode Selection Handlers
+  const handleStartAdventure = () => {
+    // Validate basic requirements before showing mode selection
+    if (!heroRef.current) {
+      alert("Please upload a hero portrait first.");
+      return;
+    }
+    if (selectedGenre === 'Custom' && !customPremise.trim()) {
+      alert("Please enter a custom story premise.");
+      return;
+    }
+    setShowModeSelection(true);
+  };
+
+  const handleModeSelect = (mode: 'novel' | 'outline') => {
+    setGenerateFromOutline(mode === 'outline');
+    setShowModeSelection(false);
+    launchStory();
+  };
+
+  const handleModeSelectionBack = () => {
+    setShowModeSelection(false);
+  };
+
   const launchStory = async () => {
     const hasKey = await validateApiKey();
-    if (!hasKey) return; 
-    
+    if (!hasKey) return;
+
+    // Basic validation already done in handleStartAdventure
     if (!heroRef.current) return;
-    if (selectedGenre === 'Custom' && !customPremise.trim()) {
-        alert("Please enter a custom story premise.");
-        return;
-    }
 
     setIsGeneratingProfiles(true);
     try {
@@ -872,7 +1213,8 @@ OUTPUT JSON ONLY (no markdown):
   };
 
   const proceedToComicGeneration = () => {
-    const config = getComicConfig(storyContext.pageLength, extraPages);
+    const isNovelMode = !generateFromOutline;
+    const config = getComicConfig(storyContext.pageLength, extraPages, isNovelMode);
     setIsTransitioning(true);
     isStoppedRef.current = false;
     
@@ -906,7 +1248,8 @@ OUTPUT JSON ONLY (no markdown):
   };
 
   const handleChoice = async (pageIndex: number, choice: string) => {
-      const config = getComicConfig(storyContext.pageLength, extraPages);
+      const isNovelMode = !generateFromOutline;
+      const config = getComicConfig(storyContext.pageLength, extraPages, isNovelMode);
       updateFaceState(`page-${pageIndex}`, { resolvedChoice: choice });
       const maxPage = Math.max(...historyRef.current.map(f => f.pageIndex || 0));
       if (maxPage + 1 <= config.TOTAL_PAGES) {
@@ -932,18 +1275,51 @@ OUTPUT JSON ONLY (no markdown):
       return items;
   };
 
-  const handleRerollSubmit = (instruction: string, selectedRefImages: string[], selectedProfileIds: string[]) => {
+  const handleRerollSubmit = (options: RerollOptions) => {
       if (rerollTarget === null) return;
+      const { instruction, selectedRefImages, selectedProfileIds, regenerationMode, shotTypeOverride, balloonShapeOverride, applyFlashbackStyle } = options;
+
       const pageIndex = rerollTarget;
       setRerollTarget(null);
       const faceId = pageIndex === 0 ? 'cover' : `page-${pageIndex}`;
       const type = pageIndex === 0 ? 'cover' : 'story';
-      updateFaceState(faceId, { isLoading: true, imageUrl: undefined, hasFailed: false });
-      
+
+      // Get previous choices from the face being rerolled (for Novel Mode choice reroll)
+      const currentFace = comicFaces.find(f => f.id === faceId);
+      const previousChoices = currentFace?.isDecisionPage ? currentFace.choices : undefined;
+
+      // Store previous choices in face state for potential future rerolls
+      const existingPreviousChoices = currentFace?.previousChoices || [];
+      const allPreviousChoices = previousChoices
+          ? [...existingPreviousChoices, ...previousChoices]
+          : existingPreviousChoices;
+
+      // Build final instruction based on regeneration mode
+      let finalInstruction = instruction || '';
+      if (regenerationMode && regenerationMode !== 'full') {
+          const modeInstructions: Record<RegenerationMode, string> = {
+              'full': '',
+              'characters_only': '[CHARACTERS ONLY] Keep the exact same background, environment, and scene composition. ONLY regenerate the character(s) with improved consistency to their reference images.',
+              'expression_only': '[EXPRESSION ONLY] Keep everything exactly the same (pose, clothing, background). ONLY change the facial expression of the character(s).',
+              'outfit_only': '[OUTFIT ONLY] Keep everything exactly the same (face, pose, background). ONLY change the clothing/outfit of the character(s).'
+          };
+          const modePrefix = modeInstructions[regenerationMode];
+          finalInstruction = modePrefix + (instruction ? ` Additional: ${instruction}` : '');
+      }
+
+      // Build comic fundamentals overrides object
+      const comicOverrides = {
+          shotTypeOverride,
+          balloonShapeOverride,
+          applyFlashbackStyle,
+      };
+
+      updateFaceState(faceId, { isLoading: true, imageUrl: undefined, hasFailed: false, previousChoices: allPreviousChoices });
+
       const savedProfiles = characterProfilesRef.current;
       characterProfilesRef.current = savedProfiles.filter(p => selectedProfileIds.includes(p.id));
-      
-      generateSinglePage(faceId, pageIndex, type, instruction || undefined, selectedRefImages.length > 0 ? selectedRefImages : undefined)
+
+      generateSinglePage(faceId, pageIndex, type, finalInstruction || undefined, selectedRefImages.length > 0 ? selectedRefImages : undefined, allPreviousChoices.length > 0 ? allPreviousChoices : undefined, comicOverrides)
           .finally(() => {
               characterProfilesRef.current = savedProfiles;
           });
@@ -1465,8 +1841,6 @@ OUTPUT JSON ONLY (no markdown):
           selectedLanguage={selectedLanguage}
           customPremise={customPremise}
           richMode={richMode}
-          generateFromOutline={generateFromOutline}
-          outlineNotes={outlineNotes}
           onHeroUpdate={handleHeroUpdate}
           onResetHero={() => setHero(null)}
           onFriendUpdate={handleFriendUpdate}
@@ -1486,12 +1860,18 @@ OUTPUT JSON ONLY (no markdown):
           onLanguageChange={setSelectedLanguage}
           onPremiseChange={setCustomPremise}
           onRichModeChange={setRichMode}
-          onGenerateFromOutlineChange={setGenerateFromOutline}
-          onLaunch={launchStory}
+          onLaunch={handleStartAdventure}
           onSurpriseMe={handleSurpriseMe}
           onExportDraft={exportDraft}
           onImportDraft={importDraft}
           onClearSetup={handleClearSetup}
+      />
+
+      {/* Mode Selection Screen */}
+      <ModeSelectionScreen
+          show={showModeSelection}
+          onSelect={handleModeSelect}
+          onBack={handleModeSelectionBack}
       />
 
       {/* Outline Step Dialog */}
@@ -1536,6 +1916,7 @@ OUTPUT JSON ONLY (no markdown):
               outline={storyOutline.content}
               allRefImages={getRerollGallery()}
               availableProfiles={characterProfilesRef.current.map(p => ({ id: p.id, name: p.name }))}
+              originalPrompt={comicFaces.find(f => f.pageIndex === rerollTarget)?.originalPrompt}
               onSubmit={handleRerollSubmit}
               onClose={() => setRerollTarget(null)}
               onUploadRef={handleRerollUploadRef}

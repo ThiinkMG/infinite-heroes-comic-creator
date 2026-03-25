@@ -4,6 +4,27 @@
  */
 
 import React, { useState, useRef } from 'react';
+import { RegenerationMode, ShotType, BalloonShape, RerollOptions } from './types';
+
+// Shot type options with icons
+const SHOT_OPTIONS: { shot: ShotType; icon: string; label: string }[] = [
+    { shot: 'extreme-close-up', icon: '👁️', label: 'XCU' },
+    { shot: 'close-up', icon: '😊', label: 'Close-up' },
+    { shot: 'medium', icon: '🧍', label: 'Medium' },
+    { shot: 'full', icon: '🧑', label: 'Full' },
+    { shot: 'wide', icon: '🏙️', label: 'Wide' },
+    { shot: 'extreme-wide', icon: '🌆', label: 'Establishing' },
+];
+
+// Balloon shape options
+const BALLOON_OPTIONS: { shape: BalloonShape; label: string; desc: string }[] = [
+    { shape: 'oval', label: 'Normal', desc: 'Standard speech' },
+    { shape: 'burst', label: 'Shouting!', desc: 'Loud, excited' },
+    { shape: 'wavy', label: 'Weak...', desc: 'Distressed, injured' },
+    { shape: 'dashed', label: 'Whisper', desc: 'Quiet, secretive' },
+    { shape: 'jagged', label: 'Radio/Phone', desc: 'Electronic' },
+    { shape: 'rectangle', label: 'Robot/AI', desc: 'Mechanical voice' },
+];
 
 interface RefImage {
     id: string;
@@ -17,7 +38,8 @@ interface RerollModalProps {
     outline: string;
     allRefImages: RefImage[];
     availableProfiles: { id: string, name: string }[];
-    onSubmit: (instruction: string, selectedRefImages: string[], selectedProfileIds: string[]) => void;
+    originalPrompt?: string;  // For debugging/reference
+    onSubmit: (options: RerollOptions) => void;
     onClose: () => void;
     onUploadRef: (files: FileList) => void;
     onDeleteRef: (charId: string, refIndex: number) => void;
@@ -28,6 +50,7 @@ export const RerollModal: React.FC<RerollModalProps> = ({
     outline,
     allRefImages,
     availableProfiles,
+    originalPrompt,
     onSubmit,
     onClose,
     onUploadRef,
@@ -37,7 +60,14 @@ export const RerollModal: React.FC<RerollModalProps> = ({
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set(allRefImages.map(r => r.id)));
     const [selectedProfileIds, setSelectedProfileIds] = useState<Set<string>>(new Set(availableProfiles.map(p => p.id)));
     const [deleteMode, setDeleteMode] = useState(false);
+    const [regenerationMode, setRegenerationMode] = useState<RegenerationMode>('full');
+    const [showOriginalPrompt, setShowOriginalPrompt] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
+
+    // Comic fundamentals overrides
+    const [shotTypeOverride, setShotTypeOverride] = useState<ShotType | undefined>(undefined);
+    const [balloonShapeOverride, setBalloonShapeOverride] = useState<BalloonShape | undefined>(undefined);
+    const [applyFlashbackStyle, setApplyFlashbackStyle] = useState(false);
 
     const toggleImage = (id: string) => {
         if (deleteMode) return;
@@ -59,10 +89,21 @@ export const RerollModal: React.FC<RerollModalProps> = ({
     };
 
     const handleSubmit = () => {
-        const selected = allRefImages
+        const selectedRefImages = allRefImages
             .filter(r => selectedIds.has(r.id))
             .map(r => r.base64);
-        onSubmit(instruction, selected, Array.from(selectedProfileIds));
+
+        const options: RerollOptions = {
+            regenerationMode,
+            instruction,
+            selectedRefImages,
+            selectedProfileIds: Array.from(selectedProfileIds),
+            shotTypeOverride,
+            balloonShapeOverride,
+            applyFlashbackStyle: applyFlashbackStyle || undefined,
+        };
+
+        onSubmit(options);
     };
 
     const handleDownloadOutline = () => {
@@ -79,14 +120,14 @@ export const RerollModal: React.FC<RerollModalProps> = ({
     const selectNone = () => setSelectedIds(new Set());
 
     return (
-        <div className="fixed inset-0 z-[500] flex items-center justify-center bg-black/80 backdrop-blur-sm" onClick={onClose}>
+        <div className="fixed inset-0 z-[500] flex items-end md:items-center justify-center bg-black/80 backdrop-blur-sm" onClick={onClose}>
             <div
-                className="bg-white border-[6px] border-black shadow-[8px_8px_0px_rgba(0,0,0,1)] max-w-[750px] w-full max-h-[90vh] overflow-y-auto m-4 relative"
+                className="bg-white border-[6px] border-black shadow-[8px_8px_0px_rgba(0,0,0,1)] max-w-[750px] w-full max-h-[90vh] md:max-h-[90vh] overflow-y-auto m-0 md:m-4 rounded-t-lg md:rounded-none relative"
                 onClick={(e) => e.stopPropagation()}
             >
                 {/* Header */}
-                <div className="bg-yellow-400 border-b-[4px] border-black px-6 py-3 flex justify-between items-center sticky top-0 z-10">
-                    <h2 className="font-comic text-2xl font-bold uppercase tracking-wider text-black">
+                <div className="bg-yellow-400 border-b-[4px] border-black px-4 md:px-6 py-3 flex justify-between items-center sticky top-0 z-10">
+                    <h2 className="font-comic text-lg md:text-2xl font-bold uppercase tracking-wider text-black">
                         🎲 Reroll Panel #{pageIndex}
                     </h2>
                     <button
@@ -95,7 +136,7 @@ export const RerollModal: React.FC<RerollModalProps> = ({
                     >✕</button>
                 </div>
 
-                <div className="p-5 flex flex-col gap-5">
+                <div className="p-3 md:p-5 flex flex-col gap-4 md:gap-5">
 
                     {/* Story Outline Section */}
                     {outline && (
@@ -113,6 +154,138 @@ export const RerollModal: React.FC<RerollModalProps> = ({
                         </div>
                     )}
 
+                    {/* Regeneration Mode Selector */}
+                    <div className="border-[3px] border-black bg-indigo-50 p-4">
+                        <p className="font-comic text-sm font-bold uppercase text-indigo-900 mb-2">
+                            🔄 Regeneration Mode
+                        </p>
+                        <div className="grid grid-cols-2 gap-2">
+                            {[
+                                { mode: 'full' as RegenerationMode, label: '🎲 Full Reroll', desc: 'Regenerate entire panel from scratch' },
+                                { mode: 'characters_only' as RegenerationMode, label: '👥 Characters Only', desc: 'Keep scene/background, refresh characters' },
+                                { mode: 'expression_only' as RegenerationMode, label: '😊 Expression Only', desc: 'Keep everything, change facial expression' },
+                                { mode: 'outfit_only' as RegenerationMode, label: '👔 Outfit Only', desc: 'Keep everything, change clothing' }
+                            ].map(opt => (
+                                <label
+                                    key={opt.mode}
+                                    className={`flex flex-col p-2 border-2 cursor-pointer transition-colors ${
+                                        regenerationMode === opt.mode
+                                            ? 'border-indigo-500 bg-indigo-100'
+                                            : 'border-gray-300 bg-white hover:border-indigo-300'
+                                    }`}
+                                >
+                                    <div className="flex items-center gap-2">
+                                        <input
+                                            type="radio"
+                                            name="regenerationMode"
+                                            checked={regenerationMode === opt.mode}
+                                            onChange={() => setRegenerationMode(opt.mode)}
+                                            className="w-4 h-4 accent-indigo-600"
+                                        />
+                                        <span className="font-comic text-xs font-bold">{opt.label}</span>
+                                    </div>
+                                    <span className="font-comic text-[10px] text-gray-500 ml-6">{opt.desc}</span>
+                                </label>
+                            ))}
+                        </div>
+                    </div>
+
+                    {/* Shot Type Selector - Comic Fundamentals */}
+                    <div className="border-[3px] border-black bg-cyan-50 p-4">
+                        <p className="font-comic text-sm font-bold uppercase text-cyan-900 mb-2">
+                            📷 Camera Shot Override
+                        </p>
+                        <p className="font-comic text-[10px] text-cyan-700 mb-2">
+                            Override the default camera framing for this panel
+                        </p>
+                        <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
+                            <button
+                                onClick={() => setShotTypeOverride(undefined)}
+                                className={`flex flex-col items-center p-2 border-2 transition-colors ${
+                                    shotTypeOverride === undefined
+                                        ? 'border-cyan-500 bg-cyan-100'
+                                        : 'border-gray-300 bg-white hover:border-cyan-300'
+                                }`}
+                            >
+                                <span className="text-lg">🎯</span>
+                                <span className="font-comic text-[10px] font-bold">Auto</span>
+                            </button>
+                            {SHOT_OPTIONS.map(opt => (
+                                <button
+                                    key={opt.shot}
+                                    onClick={() => setShotTypeOverride(opt.shot)}
+                                    className={`flex flex-col items-center p-2 border-2 transition-colors ${
+                                        shotTypeOverride === opt.shot
+                                            ? 'border-cyan-500 bg-cyan-100'
+                                            : 'border-gray-300 bg-white hover:border-cyan-300'
+                                    }`}
+                                    title={opt.shot}
+                                >
+                                    <span className="text-lg">{opt.icon}</span>
+                                    <span className="font-comic text-[10px] font-bold">{opt.label}</span>
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+
+                    {/* Balloon Shape Selector - Comic Fundamentals */}
+                    <div className="border-[3px] border-black bg-pink-50 p-4">
+                        <p className="font-comic text-sm font-bold uppercase text-pink-900 mb-2">
+                            💬 Dialogue Style Override
+                        </p>
+                        <p className="font-comic text-[10px] text-pink-700 mb-2">
+                            Change how speech bubbles appear in this panel
+                        </p>
+                        <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+                            <button
+                                onClick={() => setBalloonShapeOverride(undefined)}
+                                className={`flex flex-col p-2 border-2 transition-colors ${
+                                    balloonShapeOverride === undefined
+                                        ? 'border-pink-500 bg-pink-100'
+                                        : 'border-gray-300 bg-white hover:border-pink-300'
+                                }`}
+                            >
+                                <span className="font-comic text-xs font-bold">Auto</span>
+                                <span className="font-comic text-[9px] text-gray-500">From context</span>
+                            </button>
+                            {BALLOON_OPTIONS.map(opt => (
+                                <button
+                                    key={opt.shape}
+                                    onClick={() => setBalloonShapeOverride(opt.shape)}
+                                    className={`flex flex-col p-2 border-2 transition-colors ${
+                                        balloonShapeOverride === opt.shape
+                                            ? 'border-pink-500 bg-pink-100'
+                                            : 'border-gray-300 bg-white hover:border-pink-300'
+                                    }`}
+                                    title={opt.desc}
+                                >
+                                    <span className="font-comic text-xs font-bold">{opt.label}</span>
+                                    <span className="font-comic text-[9px] text-gray-500">{opt.desc}</span>
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+
+                    {/* Flashback Toggle - Comic Fundamentals */}
+                    <div className="border-[3px] border-black bg-amber-50 p-4">
+                        <label className="flex items-center gap-3 cursor-pointer">
+                            <input
+                                type="checkbox"
+                                checked={applyFlashbackStyle}
+                                onChange={(e) => setApplyFlashbackStyle(e.target.checked)}
+                                className="w-5 h-5 accent-amber-600 cursor-pointer"
+                            />
+                            <div>
+                                <p className="font-comic text-sm font-bold uppercase text-amber-900">
+                                    📜 Apply Flashback Styling
+                                </p>
+                                <p className="font-comic text-[10px] text-amber-700">
+                                    Sepia tones, soft vignette edges, desaturated colors - memory/nostalgic quality
+                                </p>
+                            </div>
+                        </label>
+                    </div>
+
                     {/* Instruction Text Input */}
                     <div className="border-[3px] border-black bg-green-50 p-4">
                         <p className="font-comic text-sm font-bold uppercase text-green-900 mb-2">
@@ -125,6 +298,24 @@ export const RerollModal: React.FC<RerollModalProps> = ({
                             className="w-full p-3 border-2 border-black font-comic text-sm resize-none h-24 focus:outline-none focus:ring-2 focus:ring-yellow-400"
                         />
                     </div>
+
+                    {/* Original Prompt (Debug) */}
+                    {originalPrompt && (
+                        <div className="border-[3px] border-black bg-gray-50 p-4">
+                            <button
+                                onClick={() => setShowOriginalPrompt(!showOriginalPrompt)}
+                                className="flex items-center gap-2 font-comic text-sm font-bold uppercase text-gray-700 hover:text-gray-900"
+                            >
+                                <span>{showOriginalPrompt ? '▼' : '▶'}</span>
+                                🔍 Original Prompt (Debug)
+                            </button>
+                            {showOriginalPrompt && (
+                                <pre className="mt-2 text-[10px] font-mono bg-white border-2 border-gray-300 p-3 max-h-48 overflow-y-auto whitespace-pre-wrap text-gray-600">
+                                    {originalPrompt}
+                                </pre>
+                            )}
+                        </div>
+                    )}
 
                     {/* Reference Image Gallery */}
                     <div className="border-[3px] border-black bg-purple-50 p-4">

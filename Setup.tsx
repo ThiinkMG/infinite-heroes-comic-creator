@@ -31,8 +31,6 @@ interface SetupProps {
     selectedLanguage: string;
     customPremise: string;
     richMode: boolean;
-    generateFromOutline: boolean;
-    outlineNotes: string;
     onHeroUpdate: (updates: Partial<Persona>) => void;
     onResetHero: () => void;
     onFriendUpdate: (updates: Partial<Persona>) => void;
@@ -52,7 +50,6 @@ interface SetupProps {
     onLanguageChange: (val: string) => void;
     onPremiseChange: (val: string) => void;
     onRichModeChange: (val: boolean) => void;
-    onGenerateFromOutlineChange: (val: boolean) => void;
     onLaunch: () => void;
     onSurpriseMe: () => void;
     onExportDraft: () => void;
@@ -497,17 +494,15 @@ export const Setup: React.FC<SetupProps> = (props) => {
                                 </div>
                             </div>
                             
-                            <div className="mt-auto pt-2 border-t-2 border-black flex flex-col gap-1">
-                                <label className="flex items-center gap-1 font-comic text-sm cursor-pointer text-black p-1 hover:bg-yellow-100 rounded border-2 border-transparent hover:border-yellow-300 transition-colors">
-                                    <input type="checkbox" checked={props.generateFromOutline} onChange={(e) => props.onGenerateFromOutlineChange(e.target.checked)} className="w-4 h-4 accent-black" />
-                                    <span className="text-black font-bold uppercase">Generate from Outline</span>
-                                    <Tooltip text="Generate a script overview first, edit it, and then fully automate the entire comic generation start-to-finish without stopping for choices." />
-                                </label>
+                            <div className="mt-auto pt-2 border-t-2 border-black">
                                 <label className="flex items-center gap-1 font-comic text-sm cursor-pointer text-black p-1 hover:bg-yellow-100 rounded border-2 border-transparent hover:border-yellow-300 transition-colors">
                                     <input type="checkbox" checked={props.richMode} onChange={(e) => props.onRichModeChange(e.target.checked)} className="w-4 h-4 accent-black" />
-                                    <span className="text-black">NOVEL MODE (Rich Dialogue)</span>
-                                    <Tooltip text="Uses longer, descriptive captions and deep internal monologues vs standard punchy comic dialogue." />
+                                    <span className="text-black">✨ Rich Dialogue Mode</span>
+                                    <Tooltip text="Uses longer, descriptive captions and deep internal monologues vs standard punchy comic dialogue. Works with both Novel Mode and Outline Mode." />
                                 </label>
+                                <p className="font-comic text-[10px] text-gray-500 mt-1 pl-1">
+                                    Story mode (Novel/Outline) is selected after clicking "Start Adventure"
+                                </p>
                             </div>
                         </div>
                     </div>
@@ -570,7 +565,7 @@ export const Setup: React.FC<SetupProps> = (props) => {
                             <span className="bg-yellow-400 text-black px-2 py-1 font-bold border-2 border-black">3</span>
                             <div>
                                 <p className="font-bold text-lg leading-tight uppercase">Choose A Mode</p>
-                                <p className="text-gray-700"><strong>Generate as you go:</strong> The app pauses every few pages and asks you to make narrative choices. <br/><strong>Outline Mode:</strong> Generates a full story outline for your review, and then completely automates the 10-page comic from start to finish!</p>
+                                <p className="text-gray-700"><strong>🎲 Novel Mode (Default):</strong> Generates 3 pages at a time, pauses for your narrative choices, then continues. Your decisions shape the story! <br/><strong>📖 Outline Mode:</strong> Generates a full story outline for your review, then fully automates the entire comic from start to finish!</p>
                             </div>
                         </div>
                         
