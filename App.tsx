@@ -1762,7 +1762,7 @@ OUTPUT: Structured text EXACTLY as shown above for each page.
 
   const handleRerollSubmit = (options: RerollOptions) => {
       if (rerollTarget === null) return;
-      const { instruction, negativePrompt, selectedRefImages, selectedProfileIds, regenerationModes, shotTypeOverride, balloonShapeOverride, applyFlashbackStyle } = options;
+      const { instruction, negativePrompt, selectedRefImages, selectedProfileIds, regenerationModes, shotTypeOverride, balloonShapeOverride, applyFlashbackStyle, reinforceWithReferenceImages } = options;
 
       const pageIndex = rerollTarget;
       setRerollTarget(null);
@@ -1802,6 +1802,11 @@ OUTPUT: Structured text EXACTLY as shown above for each page.
       // Add negative prompt if provided - explicitly tell AI what NOT to include
       if (negativePrompt) {
           finalInstruction += ` [IMPORTANT - DO NOT INCLUDE THE FOLLOWING: ${negativePrompt}. These elements must NOT appear in the generated image.]`;
+      }
+
+      // Add reference image reinforcement if enabled
+      if (reinforceWithReferenceImages && selectedRefImages.length > 0) {
+          finalInstruction += ` [CRITICAL REFERENCE IMAGE DIRECTIVE] You MUST carefully study ALL ${selectedRefImages.length} selected reference images. Match character appearances, costumes, accessories, emblems, and weapons EXACTLY as shown in these references. The reference images are your PRIMARY source of truth for visual consistency - copy every visible detail precisely.`;
       }
 
       // Build comic fundamentals overrides object

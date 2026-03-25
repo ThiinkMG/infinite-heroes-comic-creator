@@ -75,6 +75,8 @@ export const RerollModal: React.FC<RerollModalProps> = ({
     const [showOriginalPrompt, setShowOriginalPrompt] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [isImprovingInstruction, setIsImprovingInstruction] = useState(false);
+    const [isImprovingNegative, setIsImprovingNegative] = useState(false);
+    const [useReferenceImages, setUseReferenceImages] = useState(false);
 
     // Profile editor state
     const [expandedProfileId, setExpandedProfileId] = useState<string | null>(null);
@@ -118,6 +120,7 @@ export const RerollModal: React.FC<RerollModalProps> = ({
             shotTypeOverride,
             balloonShapeOverride,
             applyFlashbackStyle: applyFlashbackStyle || undefined,
+            reinforceWithReferenceImages: useReferenceImages || undefined,
         };
 
         onSubmit(options);
@@ -192,6 +195,25 @@ export const RerollModal: React.FC<RerollModalProps> = ({
             alert('Failed to improve text. Please try again.');
         } finally {
             setIsImprovingInstruction(false);
+        }
+    };
+
+    const handleImproveNegative = async () => {
+        if (!onImproveText || !negativePrompt.trim()) return;
+        setIsImprovingNegative(true);
+        try {
+            // Use regeneration_instruction purpose but the AI will understand it's a negative prompt from context
+            const improved = await onImproveText(
+                `Convert this to a concise negative prompt list (comma-separated items to EXCLUDE from image): ${negativePrompt}`,
+                undefined,
+                'regeneration_instruction'
+            );
+            setNegativePrompt(improved);
+        } catch (e) {
+            console.error('Failed to improve negative prompt:', e);
+            alert('Failed to improve text. Please try again.');
+        } finally {
+            setIsImprovingNegative(false);
         }
     };
 
@@ -400,13 +422,45 @@ export const RerollModal: React.FC<RerollModalProps> = ({
                             placeholder="e.g. 'Make the hero look determined', 'Change background to a rooftop at sunset', 'Close-up on the villain's face'..."
                             className="w-full p-3 border-2 border-black font-comic text-sm resize-none h-24 focus:outline-none focus:ring-2 focus:ring-yellow-400"
                         />
+                        {/* Reinforce with Reference Images Checkbox */}
+                        <label className="flex items-center gap-2 mt-3 cursor-pointer group">
+                            <input
+                                type="checkbox"
+                                checked={useReferenceImages}
+                                onChange={(e) => setUseReferenceImages(e.target.checked)}
+                                className="w-5 h-5 accent-green-600 cursor-pointer"
+                            />
+                            <span className="font-comic text-xs sm:text-sm font-bold text-green-800">
+                                🖼️ Regenerate using selected reference images
+                            </span>
+                            <span className="text-green-600 cursor-help text-sm relative" title="When enabled, the AI prompt explicitly instructs to study and match the selected reference images for character appearance, costumes, and accessories.">
+                                ℹ️
+                            </span>
+                        </label>
+                        {useReferenceImages && (
+                            <p className="font-comic text-[10px] text-green-700 mt-1 ml-7 italic">
+                                AI will be explicitly instructed to study and match selected reference images
+                            </p>
+                        )}
                     </div>
 
                     {/* Negative Prompt - Things to EXCLUDE */}
                     <div className="border-[3px] border-black bg-red-50 p-4">
-                        <p className="font-comic text-sm font-bold uppercase text-red-900 mb-2">
-                            🚫 Exclude From Image (Negative Prompt)
-                        </p>
+                        <div className="flex items-center justify-between mb-2">
+                            <p className="font-comic text-sm font-bold uppercase text-red-900">
+                                🚫 Exclude From Image (Negative Prompt)
+                            </p>
+                            {onImproveText && (
+                                <button
+                                    onClick={handleImproveNegative}
+                                    disabled={isImprovingNegative || !negativePrompt.trim()}
+                                    className="comic-btn bg-purple-600 text-white text-[10px] px-2 py-0.5 hover:bg-purple-500 border-2 border-black uppercase disabled:opacity-50 disabled:cursor-not-allowed"
+                                    title="Improve negative prompt with AI"
+                                >
+                                    {isImprovingNegative ? '⏳ IMPROVING...' : '✨ AI IMPROVE'}
+                                </button>
+                            )}
+                        </div>
                         <p className="font-comic text-[10px] text-red-700 mb-2">
                             Specify what should NOT appear in the regenerated image. Helps with character consistency.
                         </p>

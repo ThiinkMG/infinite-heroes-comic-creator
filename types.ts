@@ -168,6 +168,9 @@ export interface RerollOptions {
 
   /** Apply flashback styling (sepia, soft edges) */
   applyFlashbackStyle?: boolean;
+
+  /** Reinforce instruction with selected reference images (adds explicit AI directive) */
+  reinforceWithReferenceImages?: boolean;
 }
 
 export interface Persona {
