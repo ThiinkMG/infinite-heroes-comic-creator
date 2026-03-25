@@ -59,6 +59,7 @@ interface SetupProps {
     onExportDraft: () => void;
     onImportDraft: (file: File) => void;
     onClearSetup: () => void;
+    onImproveText?: (text: string, context?: string, purpose?: 'story_description' | 'regeneration_instruction' | 'backstory') => Promise<string>;
 }
 
 const Footer = () => {
@@ -99,49 +100,6 @@ const Footer = () => {
     </div>
   );
 };
-
-const MultimodalInput: React.FC<{
-    label: string;
-    textValue: string;
-    files: { name: string; base64?: string; mimeType?: string }[];
-    onTextChange: (val: string) => void;
-    onFileUpload: (files: FileList) => void;
-    onFileRemove: (index: number) => void;
-    placeholder?: string;
-}> = ({ label, textValue, files, onTextChange, onFileUpload, onFileRemove, placeholder }) => (
-    <div className="mb-3">
-        <p className="font-comic text-base mb-1 font-bold text-gray-800 uppercase">{label}</p>
-        <textarea 
-            value={textValue} 
-            onChange={(e) => onTextChange(e.target.value)} 
-            placeholder={placeholder} 
-            className="w-full p-2 border-2 border-black font-comic text-sm h-20 resize-none shadow-[3px_3px_0px_rgba(0,0,0,0.1)] mb-2" 
-        />
-        <div className="flex flex-wrap gap-2 items-center">
-            <label className="comic-btn bg-gray-200 text-black text-xs px-2 py-1 hover:bg-gray-300 cursor-pointer border-2 border-black">
-                UPLOAD FILES
-                <input 
-                    type="file" 
-                    multiple 
-                    accept=".txt,.md,image/*" 
-                    className="hidden" 
-                    onChange={(e) => e.target.files && onFileUpload(e.target.files)} 
-                />
-            </label>
-            {files.map((f, i) => (
-                <div key={i} className="bg-yellow-100 border border-black p-1 text-[10px] flex items-center gap-2">
-                    {f.mimeType?.startsWith('image/') && f.base64 ? (
-                        <img src={`data:${f.mimeType};base64,${f.base64}`} alt={f.name} className="w-8 h-8 object-cover border border-black" />
-                    ) : (
-                        <div className="w-8 h-8 flex items-center justify-center bg-gray-200 border border-black text-gray-500 font-bold">DOC</div>
-                    )}
-                    <span className="truncate max-w-[80px]">{f.name}</span>
-                    <button onClick={() => onFileRemove(i)} className="text-red-600 font-bold hover:scale-110 text-lg leading-none">×</button>
-                </div>
-            ))}
-        </div>
-    </div>
-);
 
 const CharacterCard: React.FC<{
     title: string;
@@ -429,6 +387,56 @@ const CharacterCard: React.FC<{
 
 export const Setup: React.FC<SetupProps> = (props) => {
     const [showTutorial, setShowTutorial] = useState(false);
+    const [isImprovingStory, setIsImprovingStory] = useState(false);
+    const [selectedContextChars, setSelectedContextChars] = useState<Set<string>>(new Set());
+    const [showContextDropdown, setShowContextDropdown] = useState(false);
+
+    // Get all characters for context dropdown
+    const allCharacters = [
+        props.hero ? { id: 'hero', name: props.hero.name || 'Hero', backstory: props.hero.backstoryText || '' } : null,
+        props.friend ? { id: 'friend', name: props.friend.name || 'Co-Star', backstory: props.friend.backstoryText || '' } : null,
+        ...props.additionalCharacters.map(c => ({ id: c.id, name: c.name || 'Character', backstory: c.backstoryText || '' }))
+    ].filter(Boolean) as { id: string; name: string; backstory: string }[];
+
+    const handleImproveStory = async () => {
+        if (!props.onImproveText || !props.storyContext.descriptionText.trim()) return;
+
+        setIsImprovingStory(true);
+        try {
+            // Build context from selected characters
+            let context = '';
+            if (selectedContextChars.size > 0) {
+                const contextParts = allCharacters
+                    .filter(c => selectedContextChars.has(c.id))
+                    .map(c => `${c.name}: ${c.backstory}`)
+                    .filter(s => s.length > 10);
+                if (contextParts.length > 0) {
+                    context = contextParts.join('\n\n');
+                }
+            }
+
+            const improved = await props.onImproveText(
+                props.storyContext.descriptionText,
+                context || undefined,
+                'story_description'
+            );
+            props.onStoryContextUpdate({ descriptionText: improved });
+        } catch (e) {
+            console.error('Failed to improve story:', e);
+            alert('Failed to improve text. Please try again.');
+        } finally {
+            setIsImprovingStory(false);
+        }
+    };
+
+    const toggleContextChar = (id: string) => {
+        setSelectedContextChars(prev => {
+            const next = new Set(prev);
+            if (next.has(id)) next.delete(id);
+            else next.add(id);
+            return next;
+        });
+    };
 
     if (!props.show && !props.isTransitioning && !showTutorial) {
         return null;
@@ -555,15 +563,90 @@ export const Setup: React.FC<SetupProps> = (props) => {
                                 />
                             </div>
 
-                            <MultimodalInput 
-                                label="Describe Your Story"
-                                textValue={props.storyContext.descriptionText}
-                                files={props.storyContext.descriptionFiles}
-                                onTextChange={(val) => props.onStoryContextUpdate({ descriptionText: val })}
-                                onFileUpload={props.onStoryFileUpload}
-                                onFileRemove={props.onStoryFileRemove}
-                                placeholder="Type or paste a synopsis, script, or plot points..."
-                            />
+                            {/* Story Description with AI Improve */}
+                            <div className="mb-3">
+                                <div className="flex items-center justify-between mb-1">
+                                    <p className="font-comic text-base font-bold text-gray-800 uppercase">Describe Your Story</p>
+                                    {props.onImproveText && (
+                                        <div className="relative">
+                                            <button
+                                                onClick={() => setShowContextDropdown(!showContextDropdown)}
+                                                disabled={isImprovingStory || !props.storyContext.descriptionText.trim()}
+                                                className="comic-btn bg-purple-600 text-white text-[10px] px-2 py-0.5 hover:bg-purple-500 border-2 border-black uppercase disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
+                                                title="Improve story description with AI"
+                                            >
+                                                {isImprovingStory ? '⏳ IMPROVING...' : '✨ AI IMPROVE'}
+                                            </button>
+                                            {/* Character Context Dropdown */}
+                                            {showContextDropdown && !isImprovingStory && (
+                                                <div className="absolute right-0 top-full mt-1 bg-white border-2 border-black shadow-[3px_3px_0px_rgba(0,0,0,0.3)] z-50 min-w-[200px]">
+                                                    <div className="p-2 border-b-2 border-gray-200">
+                                                        <p className="font-comic text-[10px] text-gray-600 uppercase">Include character context (optional):</p>
+                                                    </div>
+                                                    <div className="max-h-32 overflow-y-auto">
+                                                        {allCharacters.length > 0 ? allCharacters.map(c => (
+                                                            <label key={c.id} className="flex items-center gap-2 px-2 py-1.5 hover:bg-purple-50 cursor-pointer">
+                                                                <input
+                                                                    type="checkbox"
+                                                                    checked={selectedContextChars.has(c.id)}
+                                                                    onChange={() => toggleContextChar(c.id)}
+                                                                    className="w-4 h-4 accent-purple-600"
+                                                                />
+                                                                <span className="font-comic text-xs truncate">{c.name}</span>
+                                                            </label>
+                                                        )) : (
+                                                            <p className="text-xs text-gray-400 p-2 italic">No characters added yet</p>
+                                                        )}
+                                                    </div>
+                                                    <div className="p-2 border-t-2 border-gray-200 flex gap-2">
+                                                        <button
+                                                            onClick={() => { handleImproveStory(); setShowContextDropdown(false); }}
+                                                            className="flex-1 comic-btn bg-green-600 text-white text-xs px-2 py-1 border-2 border-black hover:bg-green-500 font-bold"
+                                                        >
+                                                            ✨ IMPROVE
+                                                        </button>
+                                                        <button
+                                                            onClick={() => setShowContextDropdown(false)}
+                                                            className="comic-btn bg-gray-400 text-white text-xs px-2 py-1 border-2 border-black hover:bg-gray-300"
+                                                        >
+                                                            ✕
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
+                                <textarea
+                                    value={props.storyContext.descriptionText}
+                                    onChange={(e) => props.onStoryContextUpdate({ descriptionText: e.target.value })}
+                                    placeholder="Type or paste a synopsis, script, or plot points..."
+                                    className="w-full p-2 border-2 border-black font-comic text-sm h-20 resize-none shadow-[3px_3px_0px_rgba(0,0,0,0.1)] mb-2"
+                                />
+                                <div className="flex flex-wrap gap-2 items-center">
+                                    <label className="comic-btn bg-gray-200 text-black text-xs px-2 py-1 hover:bg-gray-300 cursor-pointer border-2 border-black">
+                                        UPLOAD FILES
+                                        <input
+                                            type="file"
+                                            multiple
+                                            accept=".txt,.md,image/*"
+                                            className="hidden"
+                                            onChange={(e) => e.target.files && props.onStoryFileUpload(e.target.files)}
+                                        />
+                                    </label>
+                                    {props.storyContext.descriptionFiles.map((f, i) => (
+                                        <div key={i} className="bg-yellow-100 border border-black p-1 text-[10px] flex items-center gap-2">
+                                            {f.mimeType?.startsWith('image/') && f.base64 ? (
+                                                <img src={`data:${f.mimeType};base64,${f.base64}`} alt={f.name} className="w-8 h-8 object-cover border border-black" />
+                                            ) : (
+                                                <div className="w-8 h-8 flex items-center justify-center bg-gray-200 border border-black text-gray-500 font-bold">DOC</div>
+                                            )}
+                                            <span className="truncate max-w-[80px]">{f.name}</span>
+                                            <button onClick={() => props.onStoryFileRemove(i)} className="text-red-600 font-bold hover:scale-110 text-lg leading-none">×</button>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
 
                             <div className="grid grid-cols-2 gap-2 mb-3">
                                 <div>
@@ -690,8 +773,8 @@ export const Setup: React.FC<SetupProps> = (props) => {
                 <div className="flex flex-col gap-2 w-full mt-2">
                     {/* Utility Buttons: 2x2 grid on mobile, row on tablet+ */}
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 w-full">
-                        <button onClick={() => setShowTutorial(true)} className="comic-btn bg-yellow-500 text-black text-base sm:text-lg lg:text-xl px-3 py-2.5 sm:py-3 hover:bg-yellow-400 uppercase tracking-wider border-[3px] border-black font-bold">
-                            ❓ HELP?
+                        <button onClick={() => setShowTutorial(true)} className="comic-btn bg-blue-600 text-white text-base sm:text-lg lg:text-xl px-3 py-2.5 sm:py-3 hover:bg-blue-500 uppercase tracking-wider border-[3px] border-black font-bold">
+                            📖 HELP
                         </button>
                         <button onClick={props.onExportDraft} className="comic-btn bg-indigo-600 text-white text-base sm:text-lg lg:text-xl px-3 py-2.5 sm:py-3 hover:bg-indigo-500 uppercase tracking-wider border-[3px] border-black font-bold">
                             💾 SAVE

@@ -21,7 +21,7 @@ import { ProfilesDialog } from './ProfilesDialog';
 import { SettingsDialog } from './SettingsDialog';
 import { OutlineStepDialog } from './OutlineStepDialog';
 import { ModeSelectionScreen } from './ModeSelectionScreen';
-import { createImageContent, createTextContent, extractJsonFromResponse, getTextFromClaudeResponse, ClaudeContentBlock } from './claudeHelpers';
+import { createImageContent, createTextContent, extractJsonFromResponse, getTextFromClaudeResponse, ClaudeContentBlock, detectImageMimeType } from './claudeHelpers';
 
 // --- Constants ---
 const MODEL_IMAGE_GEN_NAME = "gemini-3-pro-image-preview";
@@ -233,6 +233,67 @@ const App: React.FC = () => {
 
   const hasClaudeAccess = (): boolean => !!getAnthropicApiKey();
 
+  /**
+   * AI Text Improvement Function
+   * Uses Claude if available, otherwise falls back to Gemini
+   * @param text - The original text to improve
+   * @param context - Optional character descriptions or context to use
+   * @param purpose - What the text is for (e.g., 'story description', 'regeneration instruction')
+   */
+  const improveTextWithAI = async (
+    text: string,
+    context?: string,
+    purpose: 'story_description' | 'regeneration_instruction' | 'backstory' = 'story_description'
+  ): Promise<string> => {
+    const claude = getClaude();
+
+    const purposeInstructions = {
+      story_description: `You are a creative writing assistant helping craft compelling comic book story descriptions.
+        Enhance this story premise/description to be more engaging, dramatic, and visually interesting while maintaining the original intent.
+        Make it suitable for AI image generation - include vivid visual details, action beats, and dramatic moments.
+        Keep it concise but impactful (2-4 paragraphs max).`,
+      regeneration_instruction: `You are helping improve a regeneration instruction for an AI comic panel generator.
+        Make this instruction clearer, more specific, and more effective for guiding image generation.
+        Include visual details, composition suggestions, and emotional tone.
+        Keep it focused and actionable (1-2 paragraphs max).`,
+      backstory: `You are helping enhance a character backstory for a comic book.
+        Make it more compelling and interesting while keeping the core character traits.
+        Add depth, motivations, and visual details that will help AI image generation.
+        Keep it concise but rich (2-3 paragraphs max).`
+    };
+
+    const systemPrompt = purposeInstructions[purpose];
+    const contextSection = context ? `\n\nRELEVANT CHARACTER/STORY CONTEXT:\n${context}` : '';
+    const userPrompt = `${contextSection}\n\nORIGINAL TEXT TO IMPROVE:\n${text}\n\nPlease provide an improved version. Return ONLY the improved text, no explanations or markdown.`;
+
+    try {
+      if (claude) {
+        // Use Claude
+        const response = await claude.messages.create({
+          model: MODEL_TEXT_NAME_CLAUDE,
+          max_tokens: 1024,
+          system: systemPrompt,
+          messages: [{ role: 'user', content: userPrompt }]
+        });
+        return getTextFromClaudeResponse(response.content).trim();
+      } else {
+        // Fallback to Gemini
+        const ai = getAI();
+        const model = ai.models.generateContent({
+          model: MODEL_TEXT_NAME,
+          contents: [{ role: 'user', parts: [{ text: `${systemPrompt}\n\n${userPrompt}` }] }]
+        });
+        const result = await model;
+        return result.text?.trim() || text;
+      }
+    } catch (e) {
+      console.error('AI text improvement failed:', e);
+      if (claude) handleAnthropicError(e);
+      else handleAPIError(e);
+      throw new Error('Failed to improve text with AI. Please try again.');
+    }
+  };
+
   const handleSettingsKeyChange = (geminiKey: string | null, anthropicKey: string | null, admin: boolean) => {
     setIsAdmin(admin);
     setUserApiKey(geminiKey || '');
@@ -340,9 +401,21 @@ const App: React.FC = () => {
     ${storyOutline.isReady ? `STORY OUTLINE: ${storyOutline.content}` : ''}
     `;
 
+    // Batch-of-3 generation context for narrative continuity
+    const batchPosition = ((pageNum - 1) % 3) + 1; // 1, 2, or 3
+    const batchStart = pageNum - batchPosition + 1;
+    const batchContext = `
+=== BATCH GENERATION CONTEXT ===
+This is page ${batchPosition} of a 3-page narrative batch (Pages ${batchStart}-${batchStart + 2}).
+- Page 1 of batch: SETUP - Establish the scene, introduce the situation
+- Page 2 of batch: DEVELOPMENT - Build tension, advance the conflict, character interactions
+- Page 3 of batch: PAYOFF - Mini-climax, resolution of this beat, or cliffhanger for next batch
+MAINTAIN STRONG CONTINUITY with the other pages in this batch. The 3 pages should feel like a cohesive mini-chapter.`;
+
     // BASE INSTRUCTION: Strictly enforce language for output text.
     let baseInstruction = `You are the Lead Writer for a mature comic book. Write ONE single, vivid, narrative beat for the NEXT page. ALL OUTPUT TEXT (Captions, Dialogue, Choices) MUST BE IN ${langName.toUpperCase()}. ${coreDriver} ${guardrails}`;
     baseInstruction += `\nCONTEXT: ${storyInfo}\nCHARACTERS:\n${charContext}`;
+    baseInstruction += batchContext;
     if (richMode) {
         baseInstruction += " RICH/NOVEL MODE ENABLED. Prioritize deeper character thoughts, descriptive captions, and meaningful dialogue exchanges over short punchlines.";
     }
@@ -772,7 +845,8 @@ OUTPUT STRICT JSON ONLY (No markdown formatting):
 3. Pay close attention to distinguishing features (scars, tattoos, specific hair colors) mentioned in the profiles and ensure they are visible.
 4. [ART STYLE & GENRE ENFORCEMENT] The overall visual style of every panel MUST be: ${styleEra} comic book art${artStyleTag}. The GENRE is: ${selectedGenre}. Do NOT deviate from this art style or genre under any circumstances. THE ENVIRONMENT, LIGHTING, AND AESTHETIC MUST MATCH THE ${selectedGenre.toUpperCase()} GENRE. The line work, coloring technique, shading, and overall aesthetic must consistently match the specified style throughout.
 5. [EMBLEM/LOGO ENFORCEMENT] If a character has an EMBLEM/LOGO reference image provided, you MUST include that exact emblem design at the specified placement location on the character. The emblem must be clearly visible and match the reference exactly in shape, colors, and design. This is a signature visual element that must appear consistently.
-6. [CLOTHING & ARMOR ENFORCEMENT] Each character's costume, outfit, or armor MUST match their reference images EXACTLY. Do not simplify, modify, or redesign any clothing elements. Copy all details including: fabric patterns, armor segments, belt designs, gloves, boots, capes, and accessories. The outfit shown in the reference is the character's SIGNATURE LOOK and must remain consistent across all panels.\n`;
+6. [CLOTHING & ARMOR ENFORCEMENT] Each character's costume, outfit, or armor MUST match their reference images EXACTLY. Do not simplify, modify, or redesign any clothing elements. Copy all details including: fabric patterns, armor segments, belt designs, gloves, boots, capes, and accessories. The outfit shown in the reference is the character's SIGNATURE LOOK and must remain consistent across all panels.
+7. [BATCH VISUAL CONTINUITY] Pages are generated in batches of 3. This page is part of a mini-chapter. Maintain STRONG visual continuity with surrounding pages: consistent lighting, color palette, character positioning flow, and environmental details across the batch.\n`;
 
         // LAYER 2: Structured Identity Headers for each character
         if (characterProfilesRef.current.length > 0) {
@@ -2236,6 +2310,7 @@ OUTPUT: Structured text EXACTLY as shown above for each page.
           onExportDraft={exportDraft}
           onImportDraft={importDraft}
           onClearSetup={handleClearSetup}
+          onImproveText={improveTextWithAI}
       />
 
       {/* Mode Selection Screen */}
@@ -2309,6 +2384,7 @@ OUTPUT: Structured text EXACTLY as shown above for each page.
                       if (idx !== -1) characterProfilesRef.current[idx] = newProfile;
                   }
               }}
+              onImproveText={improveTextWithAI}
           />
       )}
 

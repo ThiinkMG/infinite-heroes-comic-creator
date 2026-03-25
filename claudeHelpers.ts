@@ -24,25 +24,56 @@ export interface ClaudeTextContent {
 export type ClaudeContentBlock = ClaudeImageContent | ClaudeTextContent;
 
 /**
- * Creates an image content block for Claude's vision capability
+ * Detects the actual image mime type from base64 data by checking magic bytes
  */
-export function createImageContent(base64Data: string, mimeType: string = 'image/jpeg'): ClaudeImageContent {
-    // Claude accepts: image/jpeg, image/png, image/gif, image/webp
-    const validMimeTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
-    const safeMimeType = validMimeTypes.includes(mimeType)
-        ? mimeType as ClaudeImageContent['source']['media_type']
-        : 'image/jpeg';
+export function detectImageMimeType(base64Data: string): 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp' {
+    // Remove data URL prefix if present
+    const cleanData = base64Data.includes(',') ? base64Data.split(',')[1] : base64Data;
 
+    // Check first few characters of base64 which represent magic bytes
+    // PNG: starts with iVBORw0KGgo (decodes to \x89PNG)
+    // JPEG: starts with /9j/ (decodes to \xFF\xD8)
+    // GIF: starts with R0lGOD (decodes to GIF)
+    // WebP: starts with UklGR (decodes to RIFF)
+
+    if (cleanData.startsWith('iVBORw0KGgo')) return 'image/png';
+    if (cleanData.startsWith('/9j/')) return 'image/jpeg';
+    if (cleanData.startsWith('R0lGOD')) return 'image/gif';
+    if (cleanData.startsWith('UklGR')) return 'image/webp';
+
+    // Default to jpeg if unknown
+    return 'image/jpeg';
+}
+
+/**
+ * Creates an image content block for Claude's vision capability
+ * Auto-detects mime type if 'auto' is specified or if provided type doesn't match actual image
+ */
+export function createImageContent(base64Data: string, mimeType: string = 'auto'): ClaudeImageContent {
     // Remove data URL prefix if present (e.g., "data:image/jpeg;base64,")
     const cleanData = base64Data.includes(',')
         ? base64Data.split(',')[1]
         : base64Data;
 
+    // Auto-detect the actual mime type from the image data
+    const detectedMimeType = detectImageMimeType(cleanData);
+
+    // Use detected type if 'auto' or if there's a mismatch (prevents Claude 400 errors)
+    const validMimeTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+    let finalMimeType: ClaudeImageContent['source']['media_type'];
+
+    if (mimeType === 'auto' || !validMimeTypes.includes(mimeType)) {
+        finalMimeType = detectedMimeType;
+    } else {
+        // Use detected type to prevent mime type mismatch errors
+        finalMimeType = detectedMimeType;
+    }
+
     return {
         type: 'image',
         source: {
             type: 'base64',
-            media_type: safeMimeType,
+            media_type: finalMimeType,
             data: cleanData
         }
     };

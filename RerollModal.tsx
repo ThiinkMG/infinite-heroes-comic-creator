@@ -47,6 +47,7 @@ interface RerollModalProps {
     onProfileUpdate?: (profileId: string, updates: Partial<CharacterProfile>) => void;
     onAnalyzeProfile?: (profileId: string) => Promise<void>;
     onAddNewCharacter?: () => void;
+    onImproveText?: (text: string, context?: string, purpose?: 'story_description' | 'regeneration_instruction' | 'backstory') => Promise<string>;
 }
 
 export const RerollModal: React.FC<RerollModalProps> = ({
@@ -62,7 +63,8 @@ export const RerollModal: React.FC<RerollModalProps> = ({
     onDeleteRef,
     onProfileUpdate,
     onAnalyzeProfile,
-    onAddNewCharacter
+    onAddNewCharacter,
+    onImproveText
 }) => {
     const [instruction, setInstruction] = useState('');
     const [negativePrompt, setNegativePrompt] = useState('');
@@ -72,6 +74,7 @@ export const RerollModal: React.FC<RerollModalProps> = ({
     const [regenerationMode, setRegenerationMode] = useState<RegenerationMode | null>('full');
     const [showOriginalPrompt, setShowOriginalPrompt] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
+    const [isImprovingInstruction, setIsImprovingInstruction] = useState(false);
 
     // Profile editor state
     const [expandedProfileId, setExpandedProfileId] = useState<string | null>(null);
@@ -175,6 +178,20 @@ export const RerollModal: React.FC<RerollModalProps> = ({
             await onAnalyzeProfile(profileId);
         } finally {
             setAnalyzingProfileId(null);
+        }
+    };
+
+    const handleImproveInstruction = async () => {
+        if (!onImproveText || !instruction.trim()) return;
+        setIsImprovingInstruction(true);
+        try {
+            const improved = await onImproveText(instruction, undefined, 'regeneration_instruction');
+            setInstruction(improved);
+        } catch (e) {
+            console.error('Failed to improve instruction:', e);
+            alert('Failed to improve text. Please try again.');
+        } finally {
+            setIsImprovingInstruction(false);
         }
     };
 
@@ -350,9 +367,21 @@ export const RerollModal: React.FC<RerollModalProps> = ({
 
                     {/* Instruction Text Input */}
                     <div className="border-[3px] border-black bg-green-50 p-4">
-                        <p className="font-comic text-sm font-bold uppercase text-green-900 mb-2">
-                            ✍️ Regeneration Instructions
-                        </p>
+                        <div className="flex items-center justify-between mb-2">
+                            <p className="font-comic text-sm font-bold uppercase text-green-900">
+                                ✍️ Regeneration Instructions
+                            </p>
+                            {onImproveText && (
+                                <button
+                                    onClick={handleImproveInstruction}
+                                    disabled={isImprovingInstruction || !instruction.trim()}
+                                    className="comic-btn bg-purple-600 text-white text-[10px] px-2 py-0.5 hover:bg-purple-500 border-2 border-black uppercase disabled:opacity-50 disabled:cursor-not-allowed"
+                                    title="Improve instruction with AI"
+                                >
+                                    {isImprovingInstruction ? '⏳ IMPROVING...' : '✨ AI IMPROVE'}
+                                </button>
+                            )}
+                        </div>
                         <textarea
                             value={instruction}
                             onChange={(e) => setInstruction(e.target.value)}

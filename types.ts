@@ -8,10 +8,10 @@ export const NOVEL_MODE_BATCH_SIZE = 3;
 
 // Core Configuration Factory
 export const getComicConfig = (storyLength: number, extraPages: number = 0, isNovelMode: boolean = false) => {
-    // Decision pages adjusted for new smaller page lengths (3, 5, 8)
+    // Decision pages adjusted for page lengths (3, 6, 9)
     const getDecisionPages = (pages: number): number[] => {
         if (pages <= 3) return [2];                    // Quick Shot: 1 decision
-        if (pages <= 5) return [2, 4];                 // Short Story: 2 decisions
+        if (pages <= 6) return [2, 4];                 // Short Story: 2 decisions
         return [3, 5, 7];                              // Standard Issue: 3 decisions
     };
 
@@ -37,8 +37,8 @@ export const ART_STYLES = [
 
 export const PAGE_LENGTHS = [
   { label: "Quick Shot (3 Pages)", value: 3 },
-  { label: "Short Story (5 Pages)", value: 5 },
-  { label: "Standard Issue (8 Pages)", value: 8 }
+  { label: "Short Story (6 Pages)", value: 6 },
+  { label: "Standard Issue (9 Pages)", value: 9 }
 ];
 export const GENRES = ["Classic Horror", "Superhero Action", "Dark Sci-Fi", "High Fantasy", "Neon Noir Detective", "Wasteland Apocalypse", "Lighthearted Comedy", "Teen Drama / Slice of Life", "Custom"];
 export const TONES = [
