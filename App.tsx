@@ -914,7 +914,14 @@ OUTPUT STRICT JSON ONLY (No markdown formatting):
 
         console.log(`[generateImage] Complete - API: ${apiDuration}ms, Total: ${totalDuration}ms, Success: ${imageUrl ? 'Yes' : 'No (empty)'}`);
         if (!imageUrl) {
-            console.warn(`[generateImage] Empty image response. Candidates:`, res.candidates?.length ?? 0);
+            const candidate = res.candidates?.[0];
+            console.warn(`[generateImage] Empty image response:`, {
+                candidateCount: res.candidates?.length ?? 0,
+                finishReason: candidate?.finishReason,
+                safetyRatings: candidate?.safetyRatings,
+                contentParts: candidate?.content?.parts?.map(p => p.text ? 'text' : p.inlineData ? 'image' : 'unknown'),
+                promptFeedback: (res as any).promptFeedback
+            });
         }
 
         return { imageUrl, originalPrompt: promptText };
