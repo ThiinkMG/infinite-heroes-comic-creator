@@ -13,26 +13,27 @@ Master index of all development sessions for the Infinite Heroes Comic Creator p
 
 ### Session 9 - 2026-03-25
 **File**: [2026-03-25_Session_9.md](./March%202026/2026-03-25_Session_9.md)
-**Title**: AI Text Improvement, Claude Mime Type Fix & Batch Reinforcement
+**Title**: AI Text Improvement, API Key Validation & Multiple Enhancements
 **Status**: ✅ Complete
-**Duration**: ~1.0 hours (60 minutes)
+**Duration**: ~1.5 hours (90 minutes)
 
-**Summary**: Added AI text improvement feature with Claude/Gemini fallback, fixed Claude API image mime type detection, updated page lengths, and reinforced batch-of-3 generation in prompts.
+**Summary**: Major session with 14 features including AI text improvement, Claude mime type fix, API key validation with visual feedback, multi-select regeneration modes, emblem/weapon update modes, and enhanced debugging.
 
 **Key Accomplishments**:
 - ✅ Created `improveTextWithAI()` function in App.tsx (Claude primary, Gemini fallback)
-- ✅ Added AI improve button to story description with character context dropdown
-- ✅ Added AI improve button to RerollModal instruction textarea
+- ✅ Added AI improve buttons to story description and RerollModal
 - ✅ Fixed Claude 400 error with `detectImageMimeType()` for base64 magic bytes
-- ✅ Updated page lengths: Short Story 5→6, Standard Issue 8→9
-- ✅ Added batch context to generateBeat() and directive #7 for visual continuity
-- ✅ Changed Help button icon back to book emoji
+- ✅ Added API key validation in SettingsDialog with format checks + API test
+- ✅ Added multi-select regeneration modes (checkbox UI)
+- ✅ Added Update Emblem and Update Weapon regeneration modes
+- ✅ Added Skip AI Pre-Analysis option with tooltip
+- ✅ Enhanced empty image debugging (finishReason, safetyRatings)
 
-**Files Modified**: `App.tsx` (+80), `Setup.tsx` (+191/-72), `RerollModal.tsx` (+37), `claudeHelpers.ts` (+47), `types.ts` (+8/-8)
+**Files Modified**: `App.tsx`, `Setup.tsx`, `RerollModal.tsx`, `claudeHelpers.ts`, `types.ts`, `SettingsDialog.tsx`
 
-**Git Commit**: 0a1c5b5
+**Git Commits**: 0a1c5b5, 4dff76a, 07f0ca0, 7940b30, 26bac6b, 4f0051c, 18a1cea
 
-**Next Steps**: Test AI improve with real API keys, verify batch context improves narrative flow
+**Next Steps**: Test API key validation, investigate content filtering with enhanced debugging
 
 ---
 
@@ -304,13 +305,13 @@ Progress on the 11-issue enhancement plan (Issues A-K).
 ## Session Statistics
 
 - **Total Sessions**: 9
-- **Total Duration**: ~10.3+ hours
-- **Files Modified**: 29+ unique files
-- **Lines Added**: ~3,100+
+- **Total Duration**: ~10.8+ hours
+- **Files Modified**: 30+ unique files
+- **Lines Added**: ~3,300+
 - **Batches Complete**: 4.5 of 6
-- **Progress**: 78%
+- **Progress**: 80%
 - **Quality Score Average**: 94%
-- **Git Commits**: 10 (7ae4b86, d810185, f433f71, adf3715, f0a9756, 7f4018d, ddd8b81, e91fd97, 1ab55da, 0a1c5b5)
+- **Git Commits**: 17 (7ae4b86...18a1cea)
 
 ---
 
