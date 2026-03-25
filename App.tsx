@@ -8,7 +8,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { GoogleGenAI } from '@google/genai';
 import Anthropic from '@anthropic-ai/sdk';
 import jsPDF from 'jspdf';
-import { getComicConfig, ART_STYLES, GENRES, TONES, LANGUAGES, ComicFace, Beat, Persona, StoryContext, StoryOutline, CharacterProfile, NOVEL_MODE_BATCH_SIZE, generateHardNegatives, formatIdentityHeader, formatReinforcedScene, formatConsistencyInstruction, IdentityHeader, RegenerationMode, PageCharacterPlan, TransitionType, ShotType, PanelLayout, EmotionalBeat, PacingIntent, BalloonShape, RerollOptions, getLayoutInstructions, getShotInstructions, getTransitionContext, getFlashbackInstructions } from './types';
+import { getComicConfig, ART_STYLES, GENRES, TONES, LANGUAGES, ComicFace, Beat, Persona, StoryContext, StoryOutline, CharacterProfile, NOVEL_MODE_BATCH_SIZE, generateHardNegatives, formatIdentityHeader, formatReinforcedScene, formatConsistencyInstruction, IdentityHeader, RegenerationMode, PageCharacterPlan, TransitionType, ShotType, PanelLayout, EmotionalBeat, PacingIntent, BalloonShape, RerollOptions, getLayoutInstructions, getShotInstructions, getTransitionContext, getFlashbackInstructions, NovelModeState } from './types';
 import { Setup } from './Setup';
 import { Book } from './Book';
 import { RerollModal } from './RerollModal';
@@ -173,6 +173,16 @@ const App: React.FC = () => {
   const [tempProfiles, setTempProfiles] = useState<CharacterProfile[]>([]);
   const [skipProfileAnalysis, setSkipProfileAnalysis] = useState(false);
   const [extraPages, setExtraPages] = useState(0);
+
+  // Novel Mode page-by-page interactive state
+  const [novelModeState, setNovelModeState] = useState<NovelModeState>({
+    isWrappingUp: false,
+    originalTargetPages: 6, // Will be set on story start
+    hasExceededTarget: false,
+    customActionHistory: [],
+    outlineDriftDetected: false
+  });
+  const cachedChoicesRef = useRef<Map<number, string[]>>(new Map());
 
   const [showGlobalReroll, setShowGlobalReroll] = useState(false);
   const [globalRerollPageInput, setGlobalRerollPageInput] = useState<string>('1');
@@ -1666,6 +1676,17 @@ OUTPUT: Structured text EXACTLY as shown above for each page.
         setIsStarted(true);
         setShowSetup(false);
         setIsTransitioning(false);
+        // Initialize Novel Mode state with target pages
+        setNovelModeState(prev => ({
+            ...prev,
+            originalTargetPages: storyContext.pageLength,
+            isWrappingUp: false,
+            hasExceededTarget: false,
+            customActionHistory: [],
+            outlineDriftDetected: false,
+            driftSummary: undefined
+        }));
+        cachedChoicesRef.current.clear();
         // Both modes now use batching to reduce hallucination/character drift
         // Outline mode just doesn't have decision pauses
         await generateBatch(1, config.INITIAL_PAGES);
@@ -1673,15 +1694,232 @@ OUTPUT: Structured text EXACTLY as shown above for each page.
     }, 1100);
   };
 
-  const handleChoice = async (pageIndex: number, choice: string) => {
+  // Detect if custom action diverges significantly from the story outline
+  const detectOutlineDrift = (customAction: string, currentPage: number): { isDrifting: boolean; summary?: string } => {
+      if (!storyOutline.content || !storyOutline.isReady) {
+          return { isDrifting: false };
+      }
+
+      // Extract relevant outline section for current page range
+      const outlineLines = storyOutline.content.split('\n');
+      const pagePattern = new RegExp(`PAGE\\s*${currentPage}|Page\\s*${currentPage}`, 'i');
+
+      let relevantSection = '';
+      let foundPage = false;
+      for (const line of outlineLines) {
+          if (pagePattern.test(line)) {
+              foundPage = true;
+          }
+          if (foundPage) {
+              relevantSection += line + '\n';
+              if (/PAGE\s*\d+/i.test(line) && !pagePattern.test(line)) {
+                  break;
+              }
+          }
+      }
+
+      if (!relevantSection) {
+          return { isDrifting: false };
+      }
+
+      // Extract keywords from both action and outline section
+      const extractKeywords = (text: string): string[] => {
+          const stopWords = ['the', 'a', 'an', 'is', 'are', 'was', 'were', 'to', 'of', 'and', 'or', 'in', 'on', 'at', 'for', 'with', 'by', 'this', 'that', 'it'];
+          return text.toLowerCase()
+              .replace(/[^\w\s]/g, '')
+              .split(/\s+/)
+              .filter(word => word.length > 3 && !stopWords.includes(word));
+      };
+
+      const outlineKeywords = extractKeywords(relevantSection);
+      const actionKeywords = extractKeywords(customAction);
+
+      // Check for significant divergence
+      const overlap = outlineKeywords.filter(k => actionKeywords.includes(k));
+      const overlapRatio = overlap.length / Math.max(outlineKeywords.length, 1);
+
+      // Check for location/character contradictions
+      const actionLower = customAction.toLowerCase();
+      const contradictions: string[] = [];
+
+      if ((actionLower.includes('leave') || actionLower.includes('go to') || actionLower.includes('travel')) &&
+          !relevantSection.toLowerCase().includes('leave') && !relevantSection.toLowerCase().includes('travel')) {
+          contradictions.push('Unexpected location change');
+      }
+
+      if (overlapRatio < 0.15 || contradictions.length > 0) {
+          return {
+              isDrifting: true,
+              summary: contradictions.length > 0
+                  ? `Your action "${customAction.substring(0, 40)}..." may diverge from the outline: ${contradictions.join(', ')}`
+                  : `Your action "${customAction.substring(0, 40)}..." diverges from the planned story direction.`
+          };
+      }
+
+      return { isDrifting: false };
+  };
+
+  const handleChoice = async (pageIndex: number, choice: string, isCustomAction: boolean = false) => {
       const isNovelMode = !generateFromOutline;
       const config = getComicConfig(storyContext.pageLength, extraPages, isNovelMode);
-      updateFaceState(`page-${pageIndex}`, { resolvedChoice: choice });
-      const maxPage = Math.max(...historyRef.current.map(f => f.pageIndex || 0));
-      if (maxPage + 1 <= config.TOTAL_PAGES) {
-          generateBatch(maxPage + 1, config.BATCH_SIZE);
+
+      // Mark the choice on the current page
+      updateFaceState(`page-${pageIndex}`, { resolvedChoice: choice, customActionUsed: isCustomAction ? choice : undefined });
+
+      if (isNovelMode) {
+          // Track custom actions for potential drift detection
+          if (isCustomAction) {
+              setNovelModeState(prev => ({
+                  ...prev,
+                  customActionHistory: [
+                      ...prev.customActionHistory,
+                      { pageIndex, action: choice, timestamp: Date.now() }
+                  ]
+              }));
+
+              // Check for outline drift if we have an outline
+              if (storyOutline.isReady && storyOutline.content) {
+                  const driftResult = detectOutlineDrift(choice, pageIndex);
+                  if (driftResult.isDrifting) {
+                      setNovelModeState(prev => ({
+                          ...prev,
+                          outlineDriftDetected: true,
+                          driftSummary: driftResult.summary
+                      }));
+                      // Don't block - just flag for user notification
+                  }
+              }
+          }
+
+          const currentPage = Math.max(...historyRef.current.map(f => f.pageIndex || 0));
+          const nextPage = currentPage + 1;
+
+          // Check if we've reached/exceeded target
+          if (nextPage > novelModeState.originalTargetPages && !novelModeState.hasExceededTarget) {
+              setNovelModeState(prev => ({ ...prev, hasExceededTarget: true }));
+          }
+
+          // Generate exactly 1 page in Novel Mode (page-by-page flow)
+          if (nextPage <= config.TOTAL_PAGES) {
+              // Create placeholder face
+              const faceId = `page-${nextPage}`;
+              const type: ComicFace['type'] = nextPage === config.BACK_COVER_PAGE ? 'back_cover' : 'story';
+              const isExtra = nextPage > novelModeState.originalTargetPages;
+
+              const newFace: ComicFace = {
+                  id: faceId,
+                  type,
+                  choices: [],
+                  isLoading: true,
+                  pageIndex: nextPage,
+                  isExtraPage: isExtra,
+                  isDecisionPage: type === 'story' // Every story page is a decision page in Novel Mode
+              };
+
+              setComicFaces(prev => {
+                  const existing = prev.find(f => f.id === faceId);
+                  if (existing) return prev;
+                  return [...prev, newFace];
+              });
+              historyRef.current.push(newFace);
+              generatingPages.current.add(nextPage);
+
+              // Generate single page with the user's choice as context
+              await generateSinglePage(faceId, nextPage, type, `User chose: "${choice}". Continue the story based on this choice.`);
+              generatingPages.current.delete(nextPage);
+
+              // Cache choices for reroll preservation after generation
+              const generatedFace = historyRef.current.find(f => f.pageIndex === nextPage);
+              if (generatedFace?.choices && generatedFace.choices.length > 0) {
+                  cachedChoicesRef.current.set(nextPage, [...generatedFace.choices]);
+                  // Also update face state with originalChoices for reroll
+                  updateFaceState(faceId, { originalChoices: [...generatedFace.choices] });
+              }
+          }
+      } else {
+          // Outline Mode: Use batch generation
+          const maxPage = Math.max(...historyRef.current.map(f => f.pageIndex || 0));
+          if (maxPage + 1 <= config.TOTAL_PAGES) {
+              generateBatch(maxPage + 1, config.BATCH_SIZE);
+          }
       }
   }
+
+  // Get wrap-up instruction for final story page
+  const getWrapUpInstruction = (): string => {
+      // Collect significant user choices for narrative closure
+      const significantChoices = novelModeState.customActionHistory
+          .slice(-3) // Last 3 custom actions
+          .map(c => c.action)
+          .join(', ');
+
+      return `
+[WRAP-UP PAGE - FINAL PAGE OF STORY]
+This is the FINAL PAGE. The user has chosen to end the story here.
+
+INSTRUCTIONS:
+1. Bring the current narrative thread to a SATISFYING CONCLUSION
+2. Reference the user's key choices: ${significantChoices || 'their journey throughout the story'}
+3. End with either:
+   - A clear resolution (if the story feels complete)
+   - A meaningful cliffhanger with "TO BE CONTINUED..." (if tension remains)
+4. Make the ending feel EARNED - don't rush, but don't drag
+5. The tone should match the story's established mood
+6. DO NOT generate any choices - this is the final page
+
+Create a powerful, memorable conclusion that honors the user's story path.
+      `.trim();
+  };
+
+  // Handle "Stop Here" - wrap up story with final page
+  const handleStopHere = async () => {
+      setNovelModeState(prev => ({ ...prev, isWrappingUp: true }));
+
+      const currentPage = Math.max(...historyRef.current.map(f => f.pageIndex || 0));
+      const wrapUpPage = currentPage + 1;
+      const config = getComicConfig(storyContext.pageLength, extraPages, true);
+
+      // Generate final wrap-up page (not a decision page)
+      const faceId = `page-${wrapUpPage}`;
+      const newFace: ComicFace = {
+          id: faceId,
+          type: 'story',
+          choices: [],
+          isLoading: true,
+          pageIndex: wrapUpPage,
+          isDecisionPage: false // Final page has no choices
+      };
+
+      setComicFaces(prev => [...prev.filter(f => f.id !== faceId), newFace]);
+      historyRef.current = historyRef.current.filter(f => f.id !== faceId);
+      historyRef.current.push(newFace);
+      generatingPages.current.add(wrapUpPage);
+
+      await generateSinglePage(faceId, wrapUpPage, 'story', getWrapUpInstruction());
+      generatingPages.current.delete(wrapUpPage);
+
+      // Generate back cover
+      const backCoverPage = wrapUpPage + 1;
+      const backCoverId = `page-${backCoverPage}`;
+      const backCoverFace: ComicFace = {
+          id: backCoverId,
+          type: 'back_cover',
+          choices: [],
+          isLoading: true,
+          pageIndex: backCoverPage,
+          isDecisionPage: false
+      };
+
+      setComicFaces(prev => [...prev.filter(f => f.id !== backCoverId), backCoverFace]);
+      historyRef.current.push(backCoverFace);
+      generatingPages.current.add(backCoverPage);
+
+      await generateSinglePage(backCoverId, backCoverPage, 'back_cover');
+      generatingPages.current.delete(backCoverPage);
+
+      // Update extra pages count
+      setExtraPages(wrapUpPage - storyContext.pageLength);
+  };
 
   const handleReroll = (pageIndex: number) => {
       setRerollTarget(pageIndex);
@@ -1821,7 +2059,23 @@ OUTPUT: Structured text EXACTLY as shown above for each page.
       const savedProfiles = characterProfilesRef.current;
       characterProfilesRef.current = savedProfiles.filter(p => selectedProfileIds.includes(p.id));
 
+      // In Novel Mode, preserve original choices instead of regenerating them
+      const isNovelMode = !generateFromOutline;
+      const preservedChoices = isNovelMode && currentFace?.isDecisionPage
+          ? (currentFace.originalChoices || cachedChoicesRef.current.get(pageIndex) || currentFace.choices)
+          : undefined;
+
       generateSinglePage(faceId, pageIndex, type, finalInstruction || undefined, selectedRefImages.length > 0 ? selectedRefImages : undefined, allPreviousChoices.length > 0 ? allPreviousChoices : undefined, comicOverrides)
+          .then(() => {
+              // Restore preserved choices in Novel Mode after image regeneration
+              if (preservedChoices && preservedChoices.length > 0 && isNovelMode) {
+                  updateFaceState(faceId, {
+                      choices: preservedChoices,
+                      originalChoices: preservedChoices,
+                      isDecisionPage: currentFace?.isDecisionPage
+                  });
+              }
+          })
           .finally(() => {
               characterProfilesRef.current = savedProfiles;
           });
@@ -2636,6 +2890,7 @@ OUTPUT: Structured text EXACTLY as shown above for each page.
           onQuickRetry={handleQuickRetry}
           onAddPage={handleAddPage}
           onStop={handleStop}
+          onStopHere={handleStopHere}
           onOpenBook={() => setCurrentSheetIndex(1)}
           onDownload={() => setShowExportDialog(true)}
                   onReset={resetApp}

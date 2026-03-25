@@ -12,17 +12,18 @@ interface PanelProps {
     allFaces: ComicFace[];
     storyContext: StoryContext;
     generateFromOutline: boolean;
-    onChoice: (pageIndex: number, choice: string) => void;
+    onChoice: (pageIndex: number, choice: string, isCustomAction?: boolean) => void;
     onReroll: (pageIndex: number) => void;
     onQuickRetry?: (pageIndex: number) => void;
     onAddPage?: (instruction?: string) => void;
     onStop?: () => void;
+    onStopHere?: () => void;
     onOpenBook: () => void;
     onDownload: () => void;
     onReset: () => void;
 }
 
-export const Panel: React.FC<PanelProps> = ({ face, allFaces, storyContext, generateFromOutline, onChoice, onReroll, onQuickRetry, onAddPage, onStop, onOpenBook, onDownload, onReset }) => {
+export const Panel: React.FC<PanelProps> = ({ face, allFaces, storyContext, generateFromOutline, onChoice, onReroll, onQuickRetry, onAddPage, onStop, onStopHere, onOpenBook, onDownload, onReset }) => {
     const [showCustomChoice, setShowCustomChoice] = useState(false);
     const [customChoiceText, setCustomChoiceText] = useState('');
 
@@ -79,15 +80,40 @@ export const Panel: React.FC<PanelProps> = ({ face, allFaces, storyContext, gene
                 </button>
             )}
             
+            {/* Target Reached Indicator - Novel Mode only */}
+            {face.isDecisionPage && face.isExtraPage && !face.resolvedChoice && !generateFromOutline && (
+                <div className="absolute top-4 left-4 right-4 bg-purple-600/95 text-white px-4 py-3 rounded-lg z-30 flex flex-col sm:flex-row items-center justify-between gap-2 border-2 border-purple-400 shadow-lg">
+                    <span className="font-comic text-sm text-center sm:text-left">
+                        🎯 Target length reached! Continue your adventure or wrap up?
+                    </span>
+                    <div className="flex gap-2">
+                        <button
+                            onClick={(e) => { e.stopPropagation(); /* continue normally via choices below */ }}
+                            className="px-3 py-1.5 bg-green-500 rounded text-xs font-bold hover:bg-green-400 border border-white/30 transition-colors"
+                        >
+                            Keep Going
+                        </button>
+                        {onStopHere && (
+                            <button
+                                onClick={(e) => { e.stopPropagation(); onStopHere(); }}
+                                className="px-3 py-1.5 bg-red-500 rounded text-xs font-bold hover:bg-red-400 border border-white/30 transition-colors"
+                            >
+                                Wrap Up
+                            </button>
+                        )}
+                    </div>
+                </div>
+            )}
+
             {/* Decision Buttons */}
             {face.isDecisionPage && face.choices.length > 0 && (
                 <div className={`absolute bottom-0 inset-x-0 p-6 pb-12 flex flex-col gap-3 items-center justify-end transition-opacity duration-500 ${face.resolvedChoice ? 'opacity-0 pointer-events-none' : 'opacity-100'} bg-gradient-to-t from-black/90 via-black/50 to-transparent z-20`}>
                     <p className="text-white font-comic text-2xl uppercase tracking-widest animate-pulse">What drives you?</p>
-                    
+
                     {!showCustomChoice ? (
                         <>
                             {face.choices.map((choice, i) => (
-                                <button key={i} onClick={(e) => { e.stopPropagation(); if(face.pageIndex) onChoice(face.pageIndex, choice); }}
+                                <button key={i} onClick={(e) => { e.stopPropagation(); if(face.pageIndex) onChoice(face.pageIndex, choice, false); }}
                                   className={`comic-btn w-full py-3 text-lg leading-tight font-bold tracking-wider ${i===0?'bg-yellow-400 hover:bg-yellow-300':'bg-blue-500 text-white hover:bg-blue-400'}`}>
                                     {choice}
                                 </button>
@@ -96,10 +122,19 @@ export const Panel: React.FC<PanelProps> = ({ face, allFaces, storyContext, gene
                               className="comic-btn w-full py-2 text-lg bg-green-600 text-white hover:bg-green-500 font-bold tracking-wider border-2 border-black">
                                 ✍️ Custom Action
                             </button>
+                            {/* Stop Here Button - Novel Mode only */}
+                            {onStopHere && !generateFromOutline && (
+                                <button
+                                    onClick={(e) => { e.stopPropagation(); onStopHere(); }}
+                                    className="comic-btn w-full py-2 text-sm bg-red-600 text-white hover:bg-red-500 font-bold tracking-wider border-2 border-black mt-1"
+                                >
+                                    🏁 Stop Here (Wrap Up Story)
+                                </button>
+                            )}
                         </>
                     ) : (
                         <div className="w-full flex gap-2" onClick={e => e.stopPropagation()}>
-                            <input 
+                            <input
                                 type="text"
                                 value={customChoiceText}
                                 onChange={e => setCustomChoiceText(e.target.value)}
@@ -108,19 +143,20 @@ export const Panel: React.FC<PanelProps> = ({ face, allFaces, storyContext, gene
                                 autoFocus
                                 onKeyDown={e => {
                                     if(e.key === 'Enter' && customChoiceText.trim() && face.pageIndex) {
-                                        onChoice(face.pageIndex, customChoiceText.trim());
+                                        onChoice(face.pageIndex, customChoiceText.trim(), true);
                                         setShowCustomChoice(false);
+                                        setCustomChoiceText('');
                                     }
                                 }}
                             />
-                            <button 
-                                onClick={(e) => { e.stopPropagation(); if(customChoiceText.trim() && face.pageIndex) onChoice(face.pageIndex, customChoiceText.trim()); setShowCustomChoice(false); }}
+                            <button
+                                onClick={(e) => { e.stopPropagation(); if(customChoiceText.trim() && face.pageIndex) { onChoice(face.pageIndex, customChoiceText.trim(), true); setShowCustomChoice(false); setCustomChoiceText(''); } }}
                                 className="comic-btn bg-green-600 text-white px-4 font-bold border-2 border-black hover:bg-green-500"
                             >
                                 GO
                             </button>
-                            <button 
-                                onClick={(e) => { e.stopPropagation(); setShowCustomChoice(false); }}
+                            <button
+                                onClick={(e) => { e.stopPropagation(); setShowCustomChoice(false); setCustomChoiceText(''); }}
                                 className="comic-btn bg-red-600 text-white px-4 font-bold border-2 border-black hover:bg-red-500"
                             >
                                 X

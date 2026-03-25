@@ -3,13 +3,19 @@
  * SPDX-License-Identifier: Apache-2.0
 */
 
-// Novel Mode batch size (generates in smaller batches with user review)
-export const NOVEL_MODE_BATCH_SIZE = 3;
+// Novel Mode batch size - now 1 for page-by-page interactive flow
+export const NOVEL_MODE_BATCH_SIZE = 1;
 
 // Core Configuration Factory
 export const getComicConfig = (storyLength: number, extraPages: number = 0, isNovelMode: boolean = false) => {
-    // Decision pages adjusted for page lengths (3, 6, 9)
-    const getDecisionPages = (pages: number): number[] => {
+    // Decision pages: In Novel Mode, EVERY story page is a decision page
+    // In Outline Mode, fixed intervals based on story length
+    const getDecisionPages = (pages: number, novelMode: boolean): number[] => {
+        if (novelMode) {
+            // Novel Mode: Every story page (1 to MAX_STORY_PAGES) is a decision page
+            return Array.from({ length: pages }, (_, i) => i + 1);
+        }
+        // Outline Mode: Fixed intervals
         if (pages <= 3) return [2];                    // Quick Shot: 1 decision
         if (pages <= 6) return [2, 4];                 // Short Story: 2 decisions
         return [3, 5, 7];                              // Standard Issue: 3 decisions
@@ -19,10 +25,10 @@ export const getComicConfig = (storyLength: number, extraPages: number = 0, isNo
         MAX_STORY_PAGES: storyLength + extraPages,
         BACK_COVER_PAGE: storyLength + extraPages + 1,
         TOTAL_PAGES: storyLength + extraPages + 1,
-        INITIAL_PAGES: Math.min(2, storyLength),
-        GATE_PAGE: Math.min(2, storyLength),
+        INITIAL_PAGES: 1, // Start with just 1 page in Novel Mode for immediate interactivity
+        GATE_PAGE: 1,
         BATCH_SIZE: isNovelMode ? NOVEL_MODE_BATCH_SIZE : 3,
-        DECISION_PAGES: getDecisionPages(storyLength + extraPages)
+        DECISION_PAGES: getDecisionPages(storyLength + extraPages, isNovelMode)
     };
 };
 
@@ -251,6 +257,28 @@ export interface ComicFace {
     originalPrompt?: string;
     /** Previous choices that were rejected (for reroll to generate different options) */
     previousChoices?: string[];
+    /** Original AI-generated choices preserved for reroll (Novel Mode) */
+    originalChoices?: string[];
+    /** Whether this page is beyond the original target length (Novel Mode) */
+    isExtraPage?: boolean;
+    /** Custom action that led to this page generation (for drift detection) */
+    customActionUsed?: string;
+}
+
+/** Novel Mode state for page-by-page interactive flow */
+export interface NovelModeState {
+    /** Whether user has requested to wrap up the story */
+    isWrappingUp: boolean;
+    /** Target page count when user started (for tracking "target reached") */
+    originalTargetPages: number;
+    /** Whether the story has exceeded original target */
+    hasExceededTarget: boolean;
+    /** History of custom actions for drift detection */
+    customActionHistory: { pageIndex: number; action: string; timestamp: number }[];
+    /** Whether outline drift has been detected and not yet resolved */
+    outlineDriftDetected: boolean;
+    /** Summary of detected drift for user prompt */
+    driftSummary?: string;
 }
 
 export interface Beat {
