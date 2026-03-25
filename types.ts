@@ -134,7 +134,9 @@ export type RegenerationMode =
   | 'full'              // Regenerate entire panel from scratch
   | 'characters_only'   // Keep scene/background, regenerate all characters
   | 'expression_only'   // Keep everything, only change facial expression
-  | 'outfit_only';      // Keep everything, only change clothing
+  | 'outfit_only'       // Keep everything, only change clothing
+  | 'emblem_only'       // Keep everything, update emblem/logo based on refs or instructions
+  | 'weapon_only';      // Keep everything, update weapon based on refs or instructions
 
 /**
  * Reroll options with comic fundamentals overrides

@@ -253,7 +253,9 @@ export const RerollModal: React.FC<RerollModalProps> = ({
                                 { mode: 'full' as RegenerationMode, label: '🎲 Full Reroll', desc: 'Regenerate entire panel from scratch', tooltip: 'Completely regenerates the panel with new composition, characters, and background' },
                                 { mode: 'characters_only' as RegenerationMode, label: '👥 Characters Only', desc: 'Keep scene/background, refresh characters', tooltip: 'Keeps the same scene and background, but regenerates how characters appear' },
                                 { mode: 'expression_only' as RegenerationMode, label: '😊 Expression Only', desc: 'Keep everything, change facial expression', tooltip: 'Minimal change - only adjusts character facial expressions' },
-                                { mode: 'outfit_only' as RegenerationMode, label: '👔 Outfit Only', desc: 'Keep everything, change clothing', tooltip: 'Keeps poses and scene, but changes what characters are wearing' }
+                                { mode: 'outfit_only' as RegenerationMode, label: '👔 Outfit Only', desc: 'Keep everything, change clothing', tooltip: 'Keeps poses and scene, but changes what characters are wearing' },
+                                { mode: 'emblem_only' as RegenerationMode, label: '⭐ Update Emblem', desc: 'Fix/update emblem or logo', tooltip: 'Updates the emblem/logo using your uploaded emblem reference or instructions. Can combine with other modes.' },
+                                { mode: 'weapon_only' as RegenerationMode, label: '⚔️ Update Weapon', desc: 'Fix/update signature weapon', tooltip: 'Updates the weapon using your uploaded weapon reference or instructions. Can combine with other modes.' }
                             ].map(opt => (
                                 <button
                                     key={opt.mode}

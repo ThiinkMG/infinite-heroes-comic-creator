@@ -1719,7 +1719,9 @@ OUTPUT: Structured text EXACTLY as shown above for each page.
           'full': '',
           'characters_only': '[CHARACTERS ONLY] Keep the exact same background, environment, and scene composition. ONLY regenerate the character(s) with improved consistency to their reference images.',
           'expression_only': '[EXPRESSION ONLY] Keep everything exactly the same (pose, clothing, background). ONLY change the facial expression of the character(s).',
-          'outfit_only': '[OUTFIT ONLY] Keep everything exactly the same (face, pose, background). ONLY change the clothing/outfit of the character(s).'
+          'outfit_only': '[OUTFIT ONLY] Keep everything exactly the same (face, pose, background). ONLY change the clothing/outfit of the character(s).',
+          'emblem_only': '[UPDATE EMBLEM/LOGO] Keep everything exactly the same EXCEPT the emblem/logo. Study the EMBLEM/LOGO reference image carefully and reproduce it EXACTLY - same shape, colors, proportions, and placement. If no emblem reference is uploaded, use the regeneration instructions to guide the emblem update.',
+          'weapon_only': '[UPDATE WEAPON] Keep everything exactly the same EXCEPT the weapon. Study the WEAPON reference image carefully and reproduce it EXACTLY - same design, shape, details, and style. If no weapon reference is uploaded, use the regeneration instructions to guide the weapon update.'
       };
 
       // Combine instructions from all selected modes (excluding 'full')
