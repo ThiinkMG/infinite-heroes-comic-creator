@@ -700,6 +700,45 @@ export const RerollModal: React.FC<RerollModalProps> = ({
                                                                 placeholder="Scars, tattoos, unique traits..."
                                                             />
                                                         </div>
+
+                                                        {/* Mask Description */}
+                                                        <div>
+                                                            <label className="font-comic text-xs font-bold text-purple-700 uppercase block mb-1">
+                                                                🎭 Mask Description <span className="text-[9px] text-gray-500 font-normal normal-case">(if worn)</span>
+                                                            </label>
+                                                            <textarea
+                                                                className="w-full p-2 border-2 border-purple-300 font-comic text-xs sm:text-sm h-16 resize-none focus:border-purple-500 focus:outline-none bg-purple-50"
+                                                                value={fullProfile.maskDescription || ''}
+                                                                onChange={e => onProfileUpdate?.(p.id, { maskDescription: e.target.value })}
+                                                                placeholder="Full face mask with white eye lenses..."
+                                                            />
+                                                        </div>
+
+                                                        {/* Emblem/Logo Description */}
+                                                        <div>
+                                                            <label className="font-comic text-xs font-bold text-amber-700 uppercase block mb-1">
+                                                                ⭐ Emblem / Logo <span className="text-[9px] text-gray-500 font-normal normal-case">(chest symbol, etc.)</span>
+                                                            </label>
+                                                            <textarea
+                                                                className="w-full p-2 border-2 border-amber-300 font-comic text-xs sm:text-sm h-16 resize-none focus:border-amber-500 focus:outline-none bg-amber-50"
+                                                                value={fullProfile.emblemDescription || ''}
+                                                                onChange={e => onProfileUpdate?.(p.id, { emblemDescription: e.target.value })}
+                                                                placeholder="Red spider emblem on chest..."
+                                                            />
+                                                        </div>
+
+                                                        {/* Weapon Description */}
+                                                        <div className="sm:col-span-2">
+                                                            <label className="font-comic text-xs font-bold text-red-700 uppercase block mb-1">
+                                                                ⚔️ Signature Weapon <span className="text-[9px] text-gray-500 font-normal normal-case">(if any)</span>
+                                                            </label>
+                                                            <textarea
+                                                                className="w-full p-2 border-2 border-red-300 font-comic text-xs sm:text-sm h-16 resize-none focus:border-red-500 focus:outline-none bg-red-50"
+                                                                value={fullProfile.weaponDescription || ''}
+                                                                onChange={e => onProfileUpdate?.(p.id, { weaponDescription: e.target.value })}
+                                                                placeholder="Glowing green energy sword..."
+                                                            />
+                                                        </div>
                                                     </div>
 
                                                     {/* Profile Actions */}
