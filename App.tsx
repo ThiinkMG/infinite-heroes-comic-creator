@@ -1687,6 +1687,65 @@ OUTPUT: Structured text EXACTLY as shown above for each page.
       setRerollTarget(pageIndex);
   };
 
+  // Quick retry with enhanced context (emblem/weapon refs + outline)
+  const handleQuickRetry = async (pageIndex: number) => {
+      const config = getComicConfig(storyContext.pageLength, extraPages);
+      const faceId = pageIndex === 0 ? 'cover' : `page-${pageIndex}`;
+      const type: ComicFace['type'] = pageIndex === 0 ? 'cover' : (pageIndex === config.BACK_COVER_PAGE ? 'back_cover' : 'story');
+
+      // Collect all emblem and weapon reference images
+      const enhancedRefImages: string[] = [];
+      const collectRefs = (p: Persona | null) => {
+          if (!p) return;
+          if (p.emblemImage) enhancedRefImages.push(p.emblemImage);
+          if (p.weaponImage) enhancedRefImages.push(p.weaponImage);
+          // Also include portrait and character refs for better consistency
+          if (p.base64) enhancedRefImages.push(p.base64);
+          const refs = p.referenceImages || (p.referenceImage ? [p.referenceImage] : []);
+          refs.forEach(r => enhancedRefImages.push(r));
+      };
+      collectRefs(heroRef.current);
+      collectRefs(friendRef.current);
+      additionalCharsRef.current.forEach(c => collectRefs(c));
+
+      // Build enhanced instruction with page context
+      let enhancedInstruction = `[RETRY WITH ENHANCED CONTEXT] This is a retry for page ${pageIndex}.`;
+
+      // Add outline context if available
+      if (storyOutline.content && generateFromOutline) {
+          // Try to extract the relevant page section from outline
+          const outlineLines = storyOutline.content.split('\n');
+          const pagePattern = new RegExp(`(page\\s*${pageIndex}|panel\\s*${pageIndex})`, 'i');
+          let pageOutline = '';
+          let capturing = false;
+          for (const line of outlineLines) {
+              if (pagePattern.test(line)) {
+                  capturing = true;
+                  pageOutline = line + '\n';
+              } else if (capturing) {
+                  if (/^(page|panel)\s*\d+/i.test(line)) break;
+                  pageOutline += line + '\n';
+              }
+          }
+          if (pageOutline.trim()) {
+              enhancedInstruction += `\n\nOUTLINE FOR THIS PAGE:\n${pageOutline.trim()}`;
+          }
+      }
+
+      enhancedInstruction += `\n\nPay special attention to character emblems, logos, and weapons. Use the provided reference images to ensure accuracy.`;
+
+      // Set loading state
+      updateFaceState(faceId, { isLoading: true, hasFailed: false });
+
+      // Generate with enhanced context
+      try {
+          await generateSinglePage(faceId, pageIndex, type, enhancedInstruction, enhancedRefImages.length > 0 ? enhancedRefImages : undefined);
+      } catch (e) {
+          console.error('Quick retry failed:', e);
+          updateFaceState(faceId, { isLoading: false, hasFailed: true });
+      }
+  };
+
   const getRerollGallery = () => {
       const items: { id: string; base64: string; label: string; charId: string }[] = [];
       const addPersona = (p: Persona | null, label: string) => {
@@ -2569,6 +2628,7 @@ OUTPUT: Structured text EXACTLY as shown above for each page.
           onSheetClick={handleSheetClick}
           onChoice={handleChoice}
           onReroll={handleReroll}
+          onQuickRetry={handleQuickRetry}
           onAddPage={handleAddPage}
           onStop={handleStop}
           onOpenBook={() => setCurrentSheetIndex(1)}

@@ -18,6 +18,7 @@ interface BookProps {
     onSheetClick: (index: number) => void;
     onChoice: (pageIndex: number, choice: string) => void;
     onReroll: (pageIndex: number) => void;
+    onQuickRetry?: (pageIndex: number) => void;
     onAddPage: (instruction?: string) => void;
     onStop?: () => void;
     onOpenBook: () => void;
@@ -45,10 +46,10 @@ export const Book: React.FC<BookProps> = (props) => {
               <div key={i} className={`paper ${i < props.currentSheetIndex ? 'flipped' : ''}`} style={{ zIndex: i < props.currentSheetIndex ? i : sheetsToRender.length - i }}
                    onClick={() => props.onSheetClick(i)}>
                   <div className="front">
-                      <Panel face={sheet.front} allFaces={props.comicFaces} storyContext={props.storyContext} generateFromOutline={props.generateFromOutline} onChoice={props.onChoice} onReroll={props.onReroll} onAddPage={props.onAddPage} onStop={props.onStop} onOpenBook={props.onOpenBook} onDownload={props.onDownload} onReset={props.onReset} />
+                      <Panel face={sheet.front} allFaces={props.comicFaces} storyContext={props.storyContext} generateFromOutline={props.generateFromOutline} onChoice={props.onChoice} onReroll={props.onReroll} onQuickRetry={props.onQuickRetry} onAddPage={props.onAddPage} onStop={props.onStop} onOpenBook={props.onOpenBook} onDownload={props.onDownload} onReset={props.onReset} />
                   </div>
                   <div className="back">
-                      <Panel face={sheet.back} allFaces={props.comicFaces} storyContext={props.storyContext} generateFromOutline={props.generateFromOutline} onChoice={props.onChoice} onReroll={props.onReroll} onAddPage={props.onAddPage} onStop={props.onStop} onOpenBook={props.onOpenBook} onDownload={props.onDownload} onReset={props.onReset} />
+                      <Panel face={sheet.back} allFaces={props.comicFaces} storyContext={props.storyContext} generateFromOutline={props.generateFromOutline} onChoice={props.onChoice} onReroll={props.onReroll} onQuickRetry={props.onQuickRetry} onAddPage={props.onAddPage} onStop={props.onStop} onOpenBook={props.onOpenBook} onDownload={props.onDownload} onReset={props.onReset} />
                   </div>
               </div>
           ))}

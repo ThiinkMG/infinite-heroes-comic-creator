@@ -14,6 +14,7 @@ interface PanelProps {
     generateFromOutline: boolean;
     onChoice: (pageIndex: number, choice: string) => void;
     onReroll: (pageIndex: number) => void;
+    onQuickRetry?: (pageIndex: number) => void;
     onAddPage?: (instruction?: string) => void;
     onStop?: () => void;
     onOpenBook: () => void;
@@ -21,7 +22,7 @@ interface PanelProps {
     onReset: () => void;
 }
 
-export const Panel: React.FC<PanelProps> = ({ face, allFaces, storyContext, generateFromOutline, onChoice, onReroll, onAddPage, onStop, onOpenBook, onDownload, onReset }) => {
+export const Panel: React.FC<PanelProps> = ({ face, allFaces, storyContext, generateFromOutline, onChoice, onReroll, onQuickRetry, onAddPage, onStop, onOpenBook, onDownload, onReset }) => {
     const [showCustomChoice, setShowCustomChoice] = useState(false);
     const [customChoiceText, setCustomChoiceText] = useState('');
 
@@ -40,13 +41,27 @@ export const Panel: React.FC<PanelProps> = ({ face, allFaces, storyContext, gene
             {hasFailed && (
                 <div className="absolute inset-0 flex flex-col items-center justify-center bg-gray-900 text-white z-10">
                     <p className="font-comic text-2xl mb-2 text-red-400">⚠️ GENERATION FAILED</p>
-                    <p className="font-comic text-sm text-gray-400 mb-4">Panel couldn't be generated. Try rerolling.</p>
-                    <button 
-                        onClick={(e) => { e.stopPropagation(); onReroll(face.pageIndex as number); }}
-                        className="comic-btn bg-yellow-400 text-black px-6 py-3 text-xl font-bold border-[3px] border-black hover:scale-105 shadow-[4px_4px_0px_rgba(0,0,0,1)]"
-                    >
-                        🎲 Reroll Panel
-                    </button>
+                    <p className="font-comic text-sm text-gray-400 mb-4">Panel couldn't be generated.</p>
+                    <div className="flex flex-col gap-3 w-64">
+                        {onQuickRetry && (
+                            <button
+                                onClick={(e) => { e.stopPropagation(); onQuickRetry(face.pageIndex as number); }}
+                                className="comic-btn bg-green-500 text-white px-6 py-3 text-lg font-bold border-[3px] border-black hover:scale-105 shadow-[4px_4px_0px_rgba(0,0,0,1)] w-full"
+                                title="Quick retry with enhanced context (emblem, weapon, outline)"
+                            >
+                                🔄 Continue (Quick Retry)
+                            </button>
+                        )}
+                        <button
+                            onClick={(e) => { e.stopPropagation(); onReroll(face.pageIndex as number); }}
+                            className="comic-btn bg-yellow-400 text-black px-6 py-3 text-lg font-bold border-[3px] border-black hover:scale-105 shadow-[4px_4px_0px_rgba(0,0,0,1)] w-full"
+                        >
+                            🎲 Reroll (Full Options)
+                        </button>
+                    </div>
+                    <p className="font-comic text-[10px] text-gray-500 mt-3 max-w-xs text-center">
+                        Quick Retry uses outline + emblem/weapon refs automatically
+                    </p>
                 </div>
             )}
 
