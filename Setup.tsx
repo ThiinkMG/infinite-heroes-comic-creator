@@ -60,6 +60,8 @@ interface SetupProps {
     onImportDraft: (file: File) => void;
     onClearSetup: () => void;
     onImproveText?: (text: string, context?: string, purpose?: 'story_description' | 'regeneration_instruction' | 'backstory') => Promise<string>;
+    skipProfileAnalysis?: boolean;
+    onSkipProfileAnalysisChange?: (val: boolean) => void;
 }
 
 const Footer = () => {
@@ -755,12 +757,24 @@ export const Setup: React.FC<SetupProps> = (props) => {
                                 </div>
                             </div>
                             
-                            <div className="mt-auto pt-2 border-t-2 border-black">
+                            <div className="mt-auto pt-2 border-t-2 border-black space-y-1">
                                 <label className="flex items-center gap-1 font-comic text-sm cursor-pointer text-black p-1 hover:bg-yellow-100 rounded border-2 border-transparent hover:border-yellow-300 transition-colors">
                                     <input type="checkbox" checked={props.richMode} onChange={(e) => props.onRichModeChange(e.target.checked)} className="w-4 h-4 accent-black" />
                                     <span className="text-black">✨ Rich Dialogue Mode</span>
                                     <Tooltip text="Uses longer, descriptive captions and deep internal monologues vs standard punchy comic dialogue. Works with both Novel Mode and Outline Mode." />
                                 </label>
+                                {props.onSkipProfileAnalysisChange && (
+                                    <label className="flex items-center gap-1 font-comic text-sm cursor-pointer text-purple-800 p-1 hover:bg-purple-100 rounded border-2 border-transparent hover:border-purple-300 transition-colors">
+                                        <input
+                                            type="checkbox"
+                                            checked={props.skipProfileAnalysis || false}
+                                            onChange={(e: React.ChangeEvent<HTMLInputElement>) => props.onSkipProfileAnalysisChange?.(e.target.checked)}
+                                            className="w-4 h-4 accent-purple-600"
+                                        />
+                                        <span>🎯 Skip AI Pre-Analysis</span>
+                                        <Tooltip text="Skips the automatic AI portrait analysis. You'll get blank character profile boxes to fill in manually. Useful if you want full control over character descriptions or if the AI analysis isn't capturing details correctly." />
+                                    </label>
+                                )}
                                 <p className="font-comic text-[10px] text-gray-500 mt-1 pl-1">
                                     Story mode (Novel/Outline) is selected after clicking "Start Adventure"
                                 </p>

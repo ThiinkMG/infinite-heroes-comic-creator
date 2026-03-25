@@ -171,6 +171,7 @@ const App: React.FC = () => {
   const [dismissedKeyAlert, setDismissedKeyAlert] = useState(false);
   const [showProfilesStep, setShowProfilesStep] = useState(false);
   const [tempProfiles, setTempProfiles] = useState<CharacterProfile[]>([]);
+  const [skipProfileAnalysis, setSkipProfileAnalysis] = useState(false);
   const [extraPages, setExtraPages] = useState(0);
 
   const [showGlobalReroll, setShowGlobalReroll] = useState(false);
@@ -1144,6 +1145,30 @@ For hardNegatives, analyze the image and add negatives for:
       return profiles;
   };
 
+  // Generate blank profiles for manual entry (when skipProfileAnalysis is enabled)
+  const generateBlankProfiles = (): CharacterProfile[] => {
+      const personas: Persona[] = [];
+      if (heroRef.current) personas.push(heroRef.current);
+      if (friendRef.current) personas.push(friendRef.current);
+      personas.push(...additionalCharsRef.current.filter(c => c.base64 || c.backstoryText));
+
+      return personas.map(p => ({
+          id: p.id,
+          name: p.name || 'Unknown Character',
+          faceDescription: '',
+          bodyType: '',
+          clothing: '',
+          colorPalette: '',
+          distinguishingFeatures: '',
+          emblemDescription: '',
+          emblemPlacement: p.emblemPlacement === 'other'
+              ? p.emblemPlacementCustom || ''
+              : p.emblemPlacement?.replace(/-/g, ' ') || '',
+          maskDescription: '',
+          weaponDescription: '',
+      }));
+  };
+
   const handleAnalyzeProfile = async (index: number) => {
       const personas: Persona[] = [];
       if (heroRef.current) personas.push(heroRef.current);
@@ -1545,16 +1570,24 @@ OUTPUT: Structured text EXACTLY as shown above for each page.
     // Basic validation already done in handleStartAdventure
     if (!heroRef.current) return;
 
-    setIsGeneratingProfiles(true);
-    try {
-        const profiles = await generateAllProfiles();
+    if (skipProfileAnalysis) {
+        // Skip AI analysis - use blank profiles for manual entry
+        const profiles = generateBlankProfiles();
         setTempProfiles(profiles);
         setShowProfilesStep(true);
-    } catch (e) {
-        console.error("Profile generation failed before starting:", e);
-        alert("Failed to analyze character portraits. Check network or API key.");
-    } finally {
-        setIsGeneratingProfiles(false);
+    } else {
+        // Original flow - AI analysis
+        setIsGeneratingProfiles(true);
+        try {
+            const profiles = await generateAllProfiles();
+            setTempProfiles(profiles);
+            setShowProfilesStep(true);
+        } catch (e) {
+            console.error("Profile generation failed before starting:", e);
+            alert("Failed to analyze character portraits. Check network or API key.");
+        } finally {
+            setIsGeneratingProfiles(false);
+        }
     }
   };
 
@@ -2314,6 +2347,8 @@ OUTPUT: Structured text EXACTLY as shown above for each page.
           onImportDraft={importDraft}
           onClearSetup={handleClearSetup}
           onImproveText={improveTextWithAI}
+          skipProfileAnalysis={skipProfileAnalysis}
+          onSkipProfileAnalysisChange={setSkipProfileAnalysis}
       />
 
       {/* Mode Selection Screen */}
