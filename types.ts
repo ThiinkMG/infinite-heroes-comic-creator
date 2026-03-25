@@ -266,6 +266,8 @@ export interface CharacterProfile {
   distinguishingFeatures: string;
   /** Description of emblem/logo and its placement if provided */
   emblemDescription?: string;
+  /** User's selected emblem placement (from Persona) */
+  emblemPlacement?: string;
   /** Detailed mask description if character wears a mask */
   maskDescription?: string;
   /** Detailed hair information */
@@ -353,7 +355,8 @@ CHARACTER: ${profile.name}
 - Colors: ${profile.colorPalette}
 - Distinguishing: ${profile.distinguishingFeatures}`;
     if (profile.emblemDescription) {
-      result += `\n- EMBLEM/LOGO: ${profile.emblemDescription} [MUST BE VISIBLE]`;
+      const placementStr = profile.emblemPlacement ? ` at ${profile.emblemPlacement}` : '';
+      result += `\n- EMBLEM/LOGO: ${profile.emblemDescription}${placementStr} [MUST BE VISIBLE AND MATCH REFERENCE EXACTLY]`;
     }
     if (profile.maskDescription) {
       result += `\n- MASK: ${profile.maskDescription} [MUST ALWAYS WEAR THIS MASK]`;
@@ -367,9 +370,10 @@ CHARACTER: ${profile.name}
     return result.trim();
   }
 
-  const { identityHeader, hardNegatives, name, emblemDescription, maskDescription, hairDetails, weaponDescription } = profile;
+  const { identityHeader, hardNegatives, name, emblemDescription, emblemPlacement, maskDescription, hairDetails, weaponDescription } = profile;
   const negativesStr = hardNegatives?.length ? hardNegatives.join(', ') : 'none specified';
-  const emblemStr = emblemDescription ? `\n- EMBLEM/LOGO: ${emblemDescription} [MUST ALWAYS BE VISIBLE ON THIS CHARACTER]` : '';
+  const placementStr = emblemPlacement ? ` PLACEMENT: ${emblemPlacement}.` : '';
+  const emblemStr = emblemDescription ? `\n- EMBLEM/LOGO: ${emblemDescription}${placementStr} [MUST ALWAYS BE VISIBLE AND MATCH REFERENCE IMAGE EXACTLY]` : '';
   const maskStr = maskDescription ? `\n- MASK: ${maskDescription} [CHARACTER MUST ALWAYS WEAR THIS MASK]` : '';
   const hairStr = hairDetails ? `\n- HAIR DETAILS: ${hairDetails.length} ${hairDetails.color} ${hairDetails.type} hair, worn ${hairDetails.style}` : '';
   const weaponStr = weaponDescription ? `\n- SIGNATURE WEAPON: ${weaponDescription}` : '';
@@ -458,11 +462,25 @@ export function formatConsistencyInstruction(
     ? `The following MUST be visible: ${mustBeVisible.join(', ')}.`
     : '';
 
+  // Build emblem reinforcement
+  let emblemReinforcement = '';
+  if (profile.emblemDescription) {
+    const placement = profile.emblemPlacement ? ` at ${profile.emblemPlacement}` : '';
+    emblemReinforcement = `\nEMBLEM/LOGO REQUIREMENT: ${profile.name} MUST have their emblem (${profile.emblemDescription})${placement}. Copy the exact design from the reference image - same shape, colors, and proportions.`;
+  }
+
+  // Build clothing/armor reinforcement
+  let clothingReinforcement = '';
+  if (profile.clothing) {
+    const clothingStr = safeString(profile.clothing);
+    clothingReinforcement = `\nCLOTHING/ARMOR REQUIREMENT: ${profile.name} MUST wear their signature outfit as shown in reference: ${clothingStr}. Do not change, simplify, or modify the costume design.`;
+  }
+
   return `
 CONSISTENCY REQUIREMENT: Maintain ${profile.name}'s exact appearance from the reference image.
-${visibleText}
+${visibleText}${emblemReinforcement}${clothingReinforcement}
 Art style: ${artStyle} (maintain consistently throughout).
-Do not alter facial structure, eye color, hair style, or distinguishing features.
+Do not alter facial structure, eye color, hair style, clothing design, or distinguishing features.
 `.trim();
 }
 

@@ -344,7 +344,10 @@ const CharacterCard: React.FC<{
                 {/* Backstory with Expand Button */}
                 <div className="mb-3">
                     <div className="flex items-center justify-between mb-1">
-                        <p className="font-comic text-base font-bold text-gray-800 uppercase">Character Backstory</p>
+                        <p className="font-comic text-base font-bold text-gray-800 uppercase flex items-center">
+                            Description
+                            <Tooltip text="Add character details, backstory, powers, personality, appearance notes, or any information to help the AI understand this character better." />
+                        </p>
                         <button
                             onClick={() => setShowExpandedBackstory(true)}
                             className="comic-btn bg-blue-500 text-white text-[10px] px-2 py-0.5 hover:bg-blue-400 border-2 border-black uppercase"
@@ -356,7 +359,7 @@ const CharacterCard: React.FC<{
                     <textarea
                         value={persona?.backstoryText || ''}
                         onChange={(e) => onUpdate({ backstoryText: e.target.value })}
-                        placeholder="Origins, personality, notes..."
+                        placeholder="Details, backstory, powers, personality..."
                         className="w-full p-2 border-2 border-black font-comic text-sm h-20 resize-none shadow-[3px_3px_0px_rgba(0,0,0,0.1)] mb-2"
                     />
                     <div className="flex flex-wrap gap-2 items-center">
@@ -391,7 +394,7 @@ const CharacterCard: React.FC<{
                     <div className="max-w-[800px] w-full bg-white border-[4px] sm:border-[6px] border-black p-4 sm:p-6 shadow-[8px_8px_0px_rgba(0,0,0,0.5)] sm:shadow-[12px_12px_0px_rgba(0,0,0,0.5)] relative max-h-[95vh] sm:max-h-[90vh] flex flex-col" onClick={e => e.stopPropagation()}>
                         <div className="flex justify-between items-center mb-3 sm:mb-4 gap-2">
                             <h3 className="font-comic text-lg sm:text-2xl text-blue-600 uppercase tracking-tighter truncate">
-                                {persona?.name ? `${persona.name}'s Backstory` : 'Character Backstory'}
+                                {persona?.name ? `${persona.name}'s Description` : 'Character Description'}
                             </h3>
                             <button
                                 onClick={() => setShowExpandedBackstory(false)}
@@ -401,7 +404,7 @@ const CharacterCard: React.FC<{
                         <textarea
                             value={persona?.backstoryText || ''}
                             onChange={(e) => onUpdate({ backstoryText: e.target.value })}
-                            placeholder="Enter detailed character backstory: origins, personality traits, motivations, relationships, powers/abilities, weaknesses, key events in their history..."
+                            placeholder="Enter character details: appearance, powers/abilities, personality traits, backstory, motivations, relationships, weaknesses, key events in their history..."
                             className="flex-1 w-full p-3 sm:p-4 border-2 sm:border-4 border-black font-comic text-sm resize-none shadow-inner min-h-[250px] sm:min-h-[300px] leading-relaxed"
                             autoFocus
                         />

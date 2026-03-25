@@ -99,7 +99,7 @@ export const ProfilesDialog: React.FC<Props> = ({ profiles, onUpdate, onAnalyze,
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div>
                                     <label className="font-comic text-xs font-bold text-gray-700 uppercase">Face Description</label>
-                                    <textarea 
+                                    <textarea
                                         className="w-full p-2 border-2 border-black font-comic text-sm h-24 resize-none"
                                         value={p.faceDescription}
                                         onChange={e => onUpdate(idx, { ...p, faceDescription: e.target.value })}
@@ -107,7 +107,7 @@ export const ProfilesDialog: React.FC<Props> = ({ profiles, onUpdate, onAnalyze,
                                 </div>
                                 <div>
                                     <label className="font-comic text-xs font-bold text-gray-700 uppercase">Body Type</label>
-                                    <textarea 
+                                    <textarea
                                         className="w-full p-2 border-2 border-black font-comic text-sm h-24 resize-none"
                                         value={p.bodyType}
                                         onChange={e => onUpdate(idx, { ...p, bodyType: e.target.value })}
@@ -115,7 +115,7 @@ export const ProfilesDialog: React.FC<Props> = ({ profiles, onUpdate, onAnalyze,
                                 </div>
                                 <div>
                                     <label className="font-comic text-xs font-bold text-gray-700 uppercase">Clothing & Armor</label>
-                                    <textarea 
+                                    <textarea
                                         className="w-full p-2 border-2 border-black font-comic text-sm h-24 resize-none"
                                         value={p.clothing}
                                         onChange={e => onUpdate(idx, { ...p, clothing: e.target.value })}
@@ -123,7 +123,7 @@ export const ProfilesDialog: React.FC<Props> = ({ profiles, onUpdate, onAnalyze,
                                 </div>
                                 <div>
                                     <label className="font-comic text-xs font-bold text-gray-700 uppercase">Color Palette</label>
-                                    <textarea 
+                                    <textarea
                                         className="w-full p-2 border-2 border-black font-comic text-sm h-24 resize-none"
                                         value={p.colorPalette}
                                         onChange={e => onUpdate(idx, { ...p, colorPalette: e.target.value })}
@@ -131,10 +131,52 @@ export const ProfilesDialog: React.FC<Props> = ({ profiles, onUpdate, onAnalyze,
                                 </div>
                                 <div className="md:col-span-2">
                                     <label className="font-comic text-xs font-bold text-gray-700 uppercase">Distinguishing Features (Scars, Tattoos, Aura)</label>
-                                    <textarea 
+                                    <textarea
                                         className="w-full p-2 border-2 border-black font-comic text-sm h-16 resize-none"
                                         value={p.distinguishingFeatures}
                                         onChange={e => onUpdate(idx, { ...p, distinguishingFeatures: e.target.value })}
+                                    />
+                                </div>
+
+                                {/* Mask Description */}
+                                <div>
+                                    <label className="font-comic text-xs font-bold text-purple-700 uppercase flex items-center gap-1">
+                                        🎭 Mask Description
+                                        <span className="text-[9px] text-gray-500 font-normal normal-case">(if worn)</span>
+                                    </label>
+                                    <textarea
+                                        className="w-full p-2 border-2 border-purple-400 font-comic text-sm h-20 resize-none bg-purple-50"
+                                        value={p.maskDescription || ''}
+                                        onChange={e => onUpdate(idx, { ...p, maskDescription: e.target.value })}
+                                        placeholder="e.g., Full face mask with white eye lenses, black with web pattern..."
+                                    />
+                                </div>
+
+                                {/* Emblem/Logo Description */}
+                                <div>
+                                    <label className="font-comic text-xs font-bold text-amber-700 uppercase flex items-center gap-1">
+                                        ⭐ Emblem / Logo
+                                        <span className="text-[9px] text-gray-500 font-normal normal-case">(chest symbol, etc.)</span>
+                                    </label>
+                                    <textarea
+                                        className="w-full p-2 border-2 border-amber-400 font-comic text-sm h-20 resize-none bg-amber-50"
+                                        value={p.emblemDescription || ''}
+                                        onChange={e => onUpdate(idx, { ...p, emblemDescription: e.target.value })}
+                                        placeholder="e.g., Red spider emblem on chest, golden S-shield on center of chest..."
+                                    />
+                                </div>
+
+                                {/* Weapon Description */}
+                                <div className="md:col-span-2">
+                                    <label className="font-comic text-xs font-bold text-red-700 uppercase flex items-center gap-1">
+                                        ⚔️ Signature Weapon
+                                        <span className="text-[9px] text-gray-500 font-normal normal-case">(if any)</span>
+                                    </label>
+                                    <textarea
+                                        className="w-full p-2 border-2 border-red-400 font-comic text-sm h-16 resize-none bg-red-50"
+                                        value={p.weaponDescription || ''}
+                                        onChange={e => onUpdate(idx, { ...p, weaponDescription: e.target.value })}
+                                        placeholder="e.g., Glowing green energy sword, red and gold trident with ornate engravings..."
                                     />
                                 </div>
                             </div>

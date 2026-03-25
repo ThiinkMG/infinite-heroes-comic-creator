@@ -771,7 +771,8 @@ OUTPUT STRICT JSON ONLY (No markdown formatting):
 2. The characters in the output MUST be instantly recognizable as the characters in the references. Do not invent new character designs, outfits, or hairstyles unless explicitly asked.
 3. Pay close attention to distinguishing features (scars, tattoos, specific hair colors) mentioned in the profiles and ensure they are visible.
 4. [ART STYLE & GENRE ENFORCEMENT] The overall visual style of every panel MUST be: ${styleEra} comic book art${artStyleTag}. The GENRE is: ${selectedGenre}. Do NOT deviate from this art style or genre under any circumstances. THE ENVIRONMENT, LIGHTING, AND AESTHETIC MUST MATCH THE ${selectedGenre.toUpperCase()} GENRE. The line work, coloring technique, shading, and overall aesthetic must consistently match the specified style throughout.
-5. [EMBLEM/LOGO ENFORCEMENT] If a character has an EMBLEM/LOGO reference image provided, you MUST include that exact emblem design at the specified placement location on the character. The emblem must be clearly visible and match the reference exactly in shape, colors, and design. This is a signature visual element that must appear consistently.\n`;
+5. [EMBLEM/LOGO ENFORCEMENT] If a character has an EMBLEM/LOGO reference image provided, you MUST include that exact emblem design at the specified placement location on the character. The emblem must be clearly visible and match the reference exactly in shape, colors, and design. This is a signature visual element that must appear consistently.
+6. [CLOTHING & ARMOR ENFORCEMENT] Each character's costume, outfit, or armor MUST match their reference images EXACTLY. Do not simplify, modify, or redesign any clothing elements. Copy all details including: fabric patterns, armor segments, belt designs, gloves, boots, capes, and accessories. The outfit shown in the reference is the character's SIGNATURE LOOK and must remain consistent across all panels.\n`;
 
         // LAYER 2: Structured Identity Headers for each character
         if (characterProfilesRef.current.length > 0) {
@@ -981,6 +982,11 @@ For hardNegatives, analyze the image and add negatives for:
               style: ensureString(parsed.hairDetails.style),
           } : undefined;
 
+          // Get emblem placement from persona (user's selection)
+          const emblemPlacement = persona.emblemPlacement === 'other'
+              ? persona.emblemPlacementCustom || 'custom location'
+              : persona.emblemPlacement?.replace(/-/g, ' ') || undefined;
+
           return {
               id: persona.id,
               name: persona.name || 'Unknown',
@@ -990,6 +996,7 @@ For hardNegatives, analyze the image and add negatives for:
               colorPalette: ensureString(parsed.colorPalette),
               distinguishingFeatures: ensureString(parsed.distinguishingFeatures),
               emblemDescription: parsed.emblemDescription ? ensureString(parsed.emblemDescription) : undefined,
+              emblemPlacement, // User's selected placement from Persona
               maskDescription: parsed.maskDescription ? ensureString(parsed.maskDescription) : undefined,
               hairDetails,
               weaponDescription: parsed.weaponDescription ? ensureString(parsed.weaponDescription) : undefined,
