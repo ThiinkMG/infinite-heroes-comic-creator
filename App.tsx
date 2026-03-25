@@ -667,6 +667,9 @@ OUTPUT STRICT JSON ONLY (No markdown formatting):
   };
 
   const generateImage = async (beat: Beat, type: ComicFace['type'], instruction?: string, extraRefImages?: string[], prevImage?: string, prevBeat?: Beat, pageIndex?: number, comicOverrides?: { shotTypeOverride?: ShotType; balloonShapeOverride?: BalloonShape; applyFlashbackStyle?: boolean }): Promise<{ imageUrl: string; originalPrompt: string }> => {
+    const startTime = Date.now();
+    console.log(`[generateImage] Starting - Type: ${type}, Page: ${pageIndex ?? 'N/A'}, Instruction: ${instruction ? 'Yes' : 'No'}`);
+
     const contents: any[] = [];
     const getAllRefs = (p: Persona) => p.referenceImages || (p.referenceImage ? [p.referenceImage] : []);
     const getEmblemDesc = (p: Persona) => {
@@ -887,17 +890,43 @@ OUTPUT STRICT JSON ONLY (No markdown formatting):
         });
     }
 
+    // Debug: Log contents summary before API call
+    const imageCount = contents.filter(c => c.inlineData).length;
+    const textCount = contents.filter(c => c.text).length;
+    console.log(`[generateImage] Preparing API call - Images: ${imageCount}, Text blocks: ${textCount}, Prompt length: ${promptText.length} chars`);
+
     try {
         const ai = getAI();
+        console.log(`[generateImage] Calling Gemini API (model: ${MODEL_IMAGE_GEN_NAME})...`);
+        const apiStartTime = Date.now();
+
         const res = await ai.models.generateContent({
           model: MODEL_IMAGE_GEN_NAME,
           contents: contents,
           config: { imageConfig: { aspectRatio: '2:3' } }
         });
+
+        const apiDuration = Date.now() - apiStartTime;
+        const totalDuration = Date.now() - startTime;
+
         const part = res.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
         const imageUrl = part?.inlineData?.data ? `data:${part.inlineData.mimeType};base64,${part.inlineData.data}` : '';
+
+        console.log(`[generateImage] Complete - API: ${apiDuration}ms, Total: ${totalDuration}ms, Success: ${imageUrl ? 'Yes' : 'No (empty)'}`);
+        if (!imageUrl) {
+            console.warn(`[generateImage] Empty image response. Candidates:`, res.candidates?.length ?? 0);
+        }
+
         return { imageUrl, originalPrompt: promptText };
-    } catch (e) {
+    } catch (e: any) {
+        const totalDuration = Date.now() - startTime;
+        console.error(`[generateImage] FAILED after ${totalDuration}ms:`, e?.message || e);
+        console.error(`[generateImage] Error details:`, {
+            name: e?.name,
+            status: e?.status,
+            statusText: e?.statusText,
+            response: e?.response?.data || e?.response
+        });
         handleAPIError(e);
         return { imageUrl: '', originalPrompt: promptText };
     }
@@ -1667,7 +1696,7 @@ OUTPUT: Structured text EXACTLY as shown above for each page.
 
   const handleRerollSubmit = (options: RerollOptions) => {
       if (rerollTarget === null) return;
-      const { instruction, negativePrompt, selectedRefImages, selectedProfileIds, regenerationMode, shotTypeOverride, balloonShapeOverride, applyFlashbackStyle } = options;
+      const { instruction, negativePrompt, selectedRefImages, selectedProfileIds, regenerationModes, shotTypeOverride, balloonShapeOverride, applyFlashbackStyle } = options;
 
       const pageIndex = rerollTarget;
       setRerollTarget(null);
@@ -1684,17 +1713,22 @@ OUTPUT: Structured text EXACTLY as shown above for each page.
           ? [...existingPreviousChoices, ...previousChoices]
           : existingPreviousChoices;
 
-      // Build final instruction based on regeneration mode
+      // Build final instruction based on regeneration modes (supports multiple)
       let finalInstruction = instruction || '';
-      if (regenerationMode && regenerationMode !== 'full') {
-          const modeInstructions: Record<RegenerationMode, string> = {
-              'full': '',
-              'characters_only': '[CHARACTERS ONLY] Keep the exact same background, environment, and scene composition. ONLY regenerate the character(s) with improved consistency to their reference images.',
-              'expression_only': '[EXPRESSION ONLY] Keep everything exactly the same (pose, clothing, background). ONLY change the facial expression of the character(s).',
-              'outfit_only': '[OUTFIT ONLY] Keep everything exactly the same (face, pose, background). ONLY change the clothing/outfit of the character(s).'
-          };
-          const modePrefix = modeInstructions[regenerationMode];
-          finalInstruction = modePrefix + (instruction ? ` Additional: ${instruction}` : '');
+      const modeInstructions: Record<RegenerationMode, string> = {
+          'full': '',
+          'characters_only': '[CHARACTERS ONLY] Keep the exact same background, environment, and scene composition. ONLY regenerate the character(s) with improved consistency to their reference images.',
+          'expression_only': '[EXPRESSION ONLY] Keep everything exactly the same (pose, clothing, background). ONLY change the facial expression of the character(s).',
+          'outfit_only': '[OUTFIT ONLY] Keep everything exactly the same (face, pose, background). ONLY change the clothing/outfit of the character(s).'
+      };
+
+      // Combine instructions from all selected modes (excluding 'full')
+      if (regenerationModes && regenerationModes.length > 0) {
+          const nonFullModes = regenerationModes.filter(m => m !== 'full');
+          if (nonFullModes.length > 0) {
+              const combinedModeInstructions = nonFullModes.map(m => modeInstructions[m]).join(' ');
+              finalInstruction = combinedModeInstructions + (instruction ? ` Additional: ${instruction}` : '');
+          }
       }
 
       // Add negative prompt if provided - explicitly tell AI what NOT to include

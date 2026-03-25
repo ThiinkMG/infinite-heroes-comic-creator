@@ -71,7 +71,7 @@ export const RerollModal: React.FC<RerollModalProps> = ({
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set(allRefImages.map(r => r.id)));
     const [selectedProfileIds, setSelectedProfileIds] = useState<Set<string>>(new Set(availableProfiles.map(p => p.id)));
     const [deleteMode, setDeleteMode] = useState(false);
-    const [regenerationMode, setRegenerationMode] = useState<RegenerationMode | null>('full');
+    const [regenerationModes, setRegenerationModes] = useState<Set<RegenerationMode>>(new Set(['full']));
     const [showOriginalPrompt, setShowOriginalPrompt] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [isImprovingInstruction, setIsImprovingInstruction] = useState(false);
@@ -110,7 +110,7 @@ export const RerollModal: React.FC<RerollModalProps> = ({
             .map(r => r.base64);
 
         const options: RerollOptions = {
-            regenerationMode: regenerationMode || undefined,
+            regenerationModes: regenerationModes.size > 0 ? Array.from(regenerationModes) : undefined,
             instruction,
             negativePrompt: negativePrompt.trim() || undefined,
             selectedRefImages,
@@ -242,11 +242,11 @@ export const RerollModal: React.FC<RerollModalProps> = ({
                         </div>
                     )}
 
-                    {/* Regeneration Mode Selector */}
+                    {/* Regeneration Mode Selector - Multiple Selection */}
                     <div className="border-[3px] border-black bg-indigo-50 p-4">
                         <p className="font-comic text-sm font-bold uppercase text-indigo-900 mb-2">
                             🔄 Regeneration Mode
-                            <span className="font-normal text-[10px] text-indigo-600 ml-2">(Click selected to uncheck)</span>
+                            <span className="font-normal text-[10px] text-indigo-600 ml-2">(Select one or more options)</span>
                         </p>
                         <div className="grid grid-cols-2 gap-2">
                             {[
@@ -259,18 +259,28 @@ export const RerollModal: React.FC<RerollModalProps> = ({
                                     key={opt.mode}
                                     type="button"
                                     title={opt.tooltip}
-                                    onClick={() => setRegenerationMode(regenerationMode === opt.mode ? null : opt.mode)}
+                                    onClick={() => {
+                                        setRegenerationModes((prev: Set<RegenerationMode>) => {
+                                            const next = new Set(prev);
+                                            if (next.has(opt.mode)) {
+                                                next.delete(opt.mode);
+                                            } else {
+                                                next.add(opt.mode);
+                                            }
+                                            return next;
+                                        });
+                                    }}
                                     className={`flex flex-col p-2 sm:p-3 border-2 cursor-pointer transition-all text-left ${
-                                        regenerationMode === opt.mode
+                                        regenerationModes.has(opt.mode)
                                             ? 'border-indigo-500 bg-indigo-100 shadow-[2px_2px_0px_rgba(0,0,0,0.3)]'
                                             : 'border-gray-300 bg-white hover:border-indigo-300 hover:bg-indigo-50'
                                     }`}
                                 >
                                     <div className="flex items-center gap-2">
-                                        <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
-                                            regenerationMode === opt.mode ? 'border-indigo-600 bg-indigo-600' : 'border-gray-400 bg-white'
+                                        <div className={`w-5 h-5 rounded border-2 flex items-center justify-center ${
+                                            regenerationModes.has(opt.mode) ? 'border-indigo-600 bg-indigo-600' : 'border-gray-400 bg-white'
                                         }`}>
-                                            {regenerationMode === opt.mode && <span className="text-white text-xs">✓</span>}
+                                            {regenerationModes.has(opt.mode) && <span className="text-white text-xs">✓</span>}
                                         </div>
                                         <span className="font-comic text-xs sm:text-sm font-bold">{opt.label}</span>
                                     </div>
@@ -278,7 +288,7 @@ export const RerollModal: React.FC<RerollModalProps> = ({
                                 </button>
                             ))}
                         </div>
-                        {regenerationMode === null && (
+                        {regenerationModes.size === 0 && (
                             <p className="text-[10px] text-indigo-600 font-comic mt-2 italic">No mode selected - will use default behavior</p>
                         )}
                     </div>

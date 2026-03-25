@@ -141,8 +141,8 @@ export type RegenerationMode =
  * These allow users to override the default page plan settings during reroll
  */
 export interface RerollOptions {
-  /** Regeneration mode (full, characters_only, etc.) - undefined means default/auto */
-  regenerationMode?: RegenerationMode;
+  /** Regeneration modes (can select multiple: full, characters_only, etc.) - undefined means default/auto */
+  regenerationModes?: RegenerationMode[];
 
   /** User instruction text */
   instruction: string;
