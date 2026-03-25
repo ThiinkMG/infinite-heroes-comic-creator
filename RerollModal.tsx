@@ -200,10 +200,22 @@ export const RerollModal: React.FC<RerollModalProps> = ({
                         <div className="border-[3px] border-black bg-blue-50 p-4">
                             <div className="flex justify-between items-center mb-2">
                                 <p className="font-comic text-sm font-bold uppercase text-blue-900">📖 Story Outline</p>
-                                <button
-                                    onClick={handleDownloadOutline}
-                                    className="comic-btn bg-blue-600 text-white text-xs px-3 py-1 border-[2px] border-black hover:bg-blue-500 font-bold"
-                                >⬇ Download</button>
+                                <div className="flex gap-2">
+                                    <button
+                                        onClick={() => {
+                                            navigator.clipboard.writeText(outline);
+                                            const btn = document.activeElement as HTMLButtonElement;
+                                            const originalText = btn.textContent;
+                                            btn.textContent = '✓ Copied!';
+                                            setTimeout(() => { btn.textContent = originalText; }, 1500);
+                                        }}
+                                        className="comic-btn bg-blue-500 text-white text-xs px-3 py-1 border-[2px] border-black hover:bg-blue-400 font-bold"
+                                    >📋 Copy</button>
+                                    <button
+                                        onClick={handleDownloadOutline}
+                                        className="comic-btn bg-blue-600 text-white text-xs px-3 py-1 border-[2px] border-black hover:bg-blue-500 font-bold"
+                                    >⬇ Download</button>
+                                </div>
                             </div>
                             <pre className="text-xs font-mono bg-white border-2 border-gray-300 p-3 max-h-32 overflow-y-auto whitespace-pre-wrap text-gray-700">
                                 {outline}
@@ -361,32 +373,48 @@ export const RerollModal: React.FC<RerollModalProps> = ({
                         />
                     </div>
 
-                    {/* Original Prompt (Debug) */}
+                    {/* Original Prompt for This Page (Debug) */}
                     {originalPrompt && (
                         <div className="border-[3px] border-black bg-gray-50 p-4">
-                            <div className="flex items-center justify-between">
+                            <div className="flex items-center justify-between flex-wrap gap-2">
                                 <button
                                     onClick={() => setShowOriginalPrompt(!showOriginalPrompt)}
                                     className="flex items-center gap-2 font-comic text-sm font-bold uppercase text-gray-700 hover:text-gray-900"
                                 >
                                     <span>{showOriginalPrompt ? '▼' : '▶'}</span>
-                                    🔍 Original Prompt (Debug)
+                                    🔍 Original Prompt for Page {pageIndex} (Debug)
                                 </button>
                                 {showOriginalPrompt && (
-                                    <button
-                                        onClick={() => {
-                                            navigator.clipboard.writeText(originalPrompt);
-                                            // Visual feedback
-                                            const btn = document.activeElement as HTMLButtonElement;
-                                            const originalText = btn.textContent;
-                                            btn.textContent = '✓ Copied!';
-                                            setTimeout(() => { btn.textContent = originalText; }, 1500);
-                                        }}
-                                        className="comic-btn bg-blue-500 text-white text-xs px-3 py-1 border-2 border-black hover:bg-blue-400 font-bold"
-                                        title="Copy prompt to clipboard"
-                                    >
-                                        📋 Copy
-                                    </button>
+                                    <div className="flex gap-2">
+                                        <button
+                                            onClick={() => {
+                                                navigator.clipboard.writeText(originalPrompt);
+                                                const btn = document.activeElement as HTMLButtonElement;
+                                                const originalText = btn.textContent;
+                                                btn.textContent = '✓ Copied!';
+                                                setTimeout(() => { btn.textContent = originalText; }, 1500);
+                                            }}
+                                            className="comic-btn bg-blue-500 text-white text-xs px-3 py-1 border-2 border-black hover:bg-blue-400 font-bold"
+                                            title="Copy prompt to clipboard"
+                                        >
+                                            📋 Copy
+                                        </button>
+                                        <button
+                                            onClick={() => {
+                                                const blob = new Blob([originalPrompt], { type: 'text/plain' });
+                                                const url = URL.createObjectURL(blob);
+                                                const a = document.createElement('a');
+                                                a.href = url;
+                                                a.download = `page-${pageIndex}-original-prompt.txt`;
+                                                a.click();
+                                                URL.revokeObjectURL(url);
+                                            }}
+                                            className="comic-btn bg-gray-600 text-white text-xs px-3 py-1 border-2 border-black hover:bg-gray-500 font-bold"
+                                            title="Download prompt as text file"
+                                        >
+                                            ⬇ Download
+                                        </button>
+                                    </div>
                                 )}
                             </div>
                             {showOriginalPrompt && (
