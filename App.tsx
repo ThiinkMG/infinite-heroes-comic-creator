@@ -2376,6 +2376,13 @@ OUTPUT: Structured text EXACTLY as shown above for each page.
           faces={comicFaces}
           title={storyContext.title || 'Comic'}
           onClose={() => setShowGallery(false)}
+          onReplaceImage={(faceId, newImageUrl) => {
+            setComicFaces(prev => prev.map(face =>
+              face.id === faceId
+                ? { ...face, imageUrl: newImageUrl }
+                : face
+            ));
+          }}
         />
       )}
     </div>
