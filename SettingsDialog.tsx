@@ -2,45 +2,62 @@ import React, { useState, useEffect } from 'react';
 
 interface Props {
     serverKeyExists: boolean;
+    anthropicServerKeyExists: boolean;
     adminPasswordHash: string; // The compiled ADMIN_PASSWORD from .env
     onClose: () => void;
-    onKeyChange: (key: string | null, isAdmin: boolean) => void;
+    onKeyChange: (geminiKey: string | null, anthropicKey: string | null, isAdmin: boolean) => void;
 }
 
-export const SettingsDialog: React.FC<Props> = ({ serverKeyExists, adminPasswordHash, onClose, onKeyChange }) => {
+export const SettingsDialog: React.FC<Props> = ({ serverKeyExists, anthropicServerKeyExists, adminPasswordHash, onClose, onKeyChange }) => {
     const [userKey, setUserKey] = useState(localStorage.getItem('user_api_key') || '');
+    const [anthropicKey, setAnthropicKey] = useState(localStorage.getItem('user_anthropic_api_key') || '');
     const [adminPassword, setAdminPassword] = useState('');
     const [isAdmin, setIsAdmin] = useState(localStorage.getItem('is_admin') === 'true');
     const [showKey, setShowKey] = useState(false);
+    const [showAnthropicKey, setShowAnthropicKey] = useState(false);
     const [saveMsg, setSaveMsg] = useState('');
 
-    const handleSaveKey = () => {
+    const handleSaveGeminiKey = () => {
         const trimmed = userKey.trim();
         if (trimmed) {
             localStorage.setItem('user_api_key', trimmed);
-            onKeyChange(trimmed, false);
-            setSaveMsg('✅ API Key saved!');
+            onKeyChange(trimmed, anthropicKey.trim() || null, false);
+            setSaveMsg('Gemini key saved!');
         } else {
             localStorage.removeItem('user_api_key');
-            onKeyChange(null, false);
-            setSaveMsg('🗑️ API Key cleared.');
+            onKeyChange(null, anthropicKey.trim() || null, false);
+            setSaveMsg('Gemini key cleared.');
+        }
+        setTimeout(() => setSaveMsg(''), 2000);
+    };
+
+    const handleSaveAnthropicKey = () => {
+        const trimmed = anthropicKey.trim();
+        if (trimmed) {
+            localStorage.setItem('user_anthropic_api_key', trimmed);
+            onKeyChange(userKey.trim() || null, trimmed, false);
+            setSaveMsg('Claude key saved!');
+        } else {
+            localStorage.removeItem('user_anthropic_api_key');
+            onKeyChange(userKey.trim() || null, null, false);
+            setSaveMsg('Claude key cleared.');
         }
         setTimeout(() => setSaveMsg(''), 2000);
     };
 
     const handleAdminLogin = () => {
         if (!adminPasswordHash) {
-            setSaveMsg('⚠️ No admin password configured.');
+            setSaveMsg('No admin password configured.');
             setTimeout(() => setSaveMsg(''), 2000);
             return;
         }
         if (adminPassword === adminPasswordHash) {
             localStorage.setItem('is_admin', 'true');
             setIsAdmin(true);
-            onKeyChange(null, true);
-            setSaveMsg('🔓 Admin access granted!');
+            onKeyChange(null, null, true);
+            setSaveMsg('Admin access granted!');
         } else {
-            setSaveMsg('❌ Wrong password.');
+            setSaveMsg('Wrong password.');
         }
         setTimeout(() => setSaveMsg(''), 2000);
         setAdminPassword('');
@@ -49,8 +66,8 @@ export const SettingsDialog: React.FC<Props> = ({ serverKeyExists, adminPassword
     const handleAdminLogout = () => {
         localStorage.removeItem('is_admin');
         setIsAdmin(false);
-        onKeyChange(userKey.trim() || null, false);
-        setSaveMsg('🔒 Admin signed out.');
+        onKeyChange(userKey.trim() || null, anthropicKey.trim() || null, false);
+        setSaveMsg('Admin signed out.');
         setTimeout(() => setSaveMsg(''), 2000);
     };
 
@@ -102,11 +119,43 @@ export const SettingsDialog: React.FC<Props> = ({ serverKeyExists, adminPassword
                                     type="button"
                                 >{showKey ? '🙈' : '👁️'}</button>
                             </div>
-                            <button 
-                                onClick={handleSaveKey}
+                            <button
+                                onClick={handleSaveGeminiKey}
                                 className="comic-btn bg-blue-600 text-white px-4 py-2 font-bold text-sm border-[2px] border-black hover:bg-blue-500"
                             >SAVE</button>
                         </div>
+                    </div>
+
+                    {/* Anthropic/Claude API Key */}
+                    <div className="border-[3px] border-black bg-amber-50 p-4">
+                        <p className="font-comic text-sm font-bold uppercase text-amber-900 mb-2">🤖 Claude API Key (Anthropic)</p>
+                        <p className="font-comic text-xs text-gray-600 mb-3">
+                            Get a key at <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener noreferrer" className="text-amber-600 underline">Anthropic Console</a>
+                            {' '}<span className="text-gray-400">(Optional - used for text analysis)</span>
+                        </p>
+                        <div className="flex gap-2">
+                            <div className="relative flex-1">
+                                <input
+                                    type={showAnthropicKey ? 'text' : 'password'}
+                                    value={anthropicKey}
+                                    onChange={e => setAnthropicKey(e.target.value)}
+                                    placeholder="sk-ant-api03-..."
+                                    className="w-full px-3 py-2 border-2 border-black font-mono text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 pr-10"
+                                />
+                                <button
+                                    onClick={() => setShowAnthropicKey(!showAnthropicKey)}
+                                    className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 hover:text-black text-sm"
+                                    type="button"
+                                >{showAnthropicKey ? '🙈' : '👁️'}</button>
+                            </div>
+                            <button
+                                onClick={handleSaveAnthropicKey}
+                                className="comic-btn bg-amber-600 text-white px-4 py-2 font-bold text-sm border-[2px] border-black hover:bg-amber-500"
+                            >SAVE</button>
+                        </div>
+                        <p className="font-comic text-[10px] text-gray-500 mt-2">
+                            Claude handles: character profiles, outlines, story beats. Gemini handles: image generation.
+                        </p>
                     </div>
 
                     {/* Admin Sign-In */}

@@ -8,6 +8,13 @@ export const NOVEL_MODE_BATCH_SIZE = 3;
 
 // Core Configuration Factory
 export const getComicConfig = (storyLength: number, extraPages: number = 0, isNovelMode: boolean = false) => {
+    // Decision pages adjusted for new smaller page lengths (3, 5, 8)
+    const getDecisionPages = (pages: number): number[] => {
+        if (pages <= 3) return [2];                    // Quick Shot: 1 decision
+        if (pages <= 5) return [2, 4];                 // Short Story: 2 decisions
+        return [3, 5, 7];                              // Standard Issue: 3 decisions
+    };
+
     return {
         MAX_STORY_PAGES: storyLength + extraPages,
         BACK_COVER_PAGE: storyLength + extraPages + 1,
@@ -15,7 +22,7 @@ export const getComicConfig = (storyLength: number, extraPages: number = 0, isNo
         INITIAL_PAGES: Math.min(2, storyLength),
         GATE_PAGE: Math.min(2, storyLength),
         BATCH_SIZE: isNovelMode ? NOVEL_MODE_BATCH_SIZE : 3,
-        DECISION_PAGES: storyLength <= 5 ? [2, 4] : storyLength <= 10 ? [3, 6, 8] : [4, 8, 12, 16, 19]
+        DECISION_PAGES: getDecisionPages(storyLength + extraPages)
     };
 };
 
@@ -29,9 +36,9 @@ export const ART_STYLES = [
 ];
 
 export const PAGE_LENGTHS = [
+  { label: "Quick Shot (3 Pages)", value: 3 },
   { label: "Short Story (5 Pages)", value: 5 },
-  { label: "Standard Issue (10 Pages)", value: 10 },
-  { label: "Epic Saga (20 Pages)", value: 20 }
+  { label: "Standard Issue (8 Pages)", value: 8 }
 ];
 export const GENRES = ["Classic Horror", "Superhero Action", "Dark Sci-Fi", "High Fantasy", "Neon Noir Detective", "Wasteland Apocalypse", "Lighthearted Comedy", "Teen Drama / Slice of Life", "Custom"];
 export const TONES = [
@@ -317,6 +324,21 @@ HARD NEGATIVES (never include): ${negativesStr}
 }
 
 /**
+ * Safely convert a value to string before splitting
+ * Handles cases where AI returns objects instead of strings
+ */
+function safeString(val: unknown): string {
+  if (val === null || val === undefined) return '';
+  if (typeof val === 'string') return val;
+  if (typeof val === 'object') {
+    return Object.entries(val as Record<string, unknown>)
+      .map(([k, v]) => `${k}: ${v}`)
+      .join(', ');
+  }
+  return String(val);
+}
+
+/**
  * Generate scene description with character reinforcement (Layer 3)
  */
 export function formatReinforcedScene(
@@ -332,9 +354,11 @@ export function formatReinforcedScene(
     if (firstHairPart) keyFeatures.push(firstHairPart);
     if (profile.identityHeader.signature[0]) keyFeatures.push(profile.identityHeader.signature[0]);
   } else {
-    // Fallback to legacy fields
-    if (profile.colorPalette) keyFeatures.push(profile.colorPalette.split(',')[0]);
-    if (profile.distinguishingFeatures) keyFeatures.push(profile.distinguishingFeatures.split(',')[0]);
+    // Fallback to legacy fields - use safeString to handle object values
+    const colorStr = safeString(profile.colorPalette);
+    const featuresStr = safeString(profile.distinguishingFeatures);
+    if (colorStr) keyFeatures.push(colorStr.split(',')[0]);
+    if (featuresStr) keyFeatures.push(featuresStr.split(',')[0]);
   }
 
   const featuresText = keyFeatures.length > 0
@@ -357,7 +381,9 @@ export function formatConsistencyInstruction(
     mustBeVisible.push(...profile.identityHeader.signature.slice(0, 2));
   }
   if (profile.distinguishingFeatures) {
-    mustBeVisible.push(profile.distinguishingFeatures.split(',')[0].trim());
+    // Use safeString to handle object values from AI
+    const featuresStr = safeString(profile.distinguishingFeatures);
+    if (featuresStr) mustBeVisible.push(featuresStr.split(',')[0].trim());
   }
 
   const visibleText = mustBeVisible.length > 0

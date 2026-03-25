@@ -508,29 +508,32 @@ export const Setup: React.FC<SetupProps> = (props) => {
                     </div>
                 </div>
 
-                <div className="flex flex-col md:flex-row gap-2 w-full mt-2">
-                    <div className="flex gap-2 w-full md:w-auto overflow-x-auto pb-2 md:pb-0">
-                        <button onClick={() => setShowTutorial(true)} className="comic-btn flex-1 md:flex-none bg-blue-600 text-white text-xl px-4 py-3 hover:bg-blue-500 uppercase tracking-wider whitespace-nowrap border-[3px] border-black font-bold">
-                            HOW TO PLAY
+                {/* Action Buttons - Responsive Grid Layout */}
+                <div className="flex flex-col gap-2 w-full mt-2">
+                    {/* Utility Buttons: 2x2 grid on mobile, row on tablet+ */}
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 w-full">
+                        <button onClick={() => setShowTutorial(true)} className="comic-btn bg-blue-600 text-white text-base sm:text-lg lg:text-xl px-3 py-2.5 sm:py-3 hover:bg-blue-500 uppercase tracking-wider border-[3px] border-black font-bold">
+                            📖 PLAY
                         </button>
-                        <button onClick={props.onExportDraft} className="comic-btn flex-1 md:flex-none bg-indigo-600 text-white text-xl px-4 py-3 hover:bg-indigo-500 uppercase tracking-wider whitespace-nowrap border-[3px] border-black font-bold">
-                            SAVE
+                        <button onClick={props.onExportDraft} className="comic-btn bg-indigo-600 text-white text-base sm:text-lg lg:text-xl px-3 py-2.5 sm:py-3 hover:bg-indigo-500 uppercase tracking-wider border-[3px] border-black font-bold">
+                            💾 SAVE
                         </button>
-                        <label className="comic-btn flex-1 md:flex-none text-center bg-gray-600 text-white text-xl px-4 py-3 hover:bg-gray-500 uppercase tracking-wider whitespace-nowrap cursor-pointer border-[3px] border-black font-bold">
-                            LOAD
+                        <label className="comic-btn text-center bg-gray-600 text-white text-base sm:text-lg lg:text-xl px-3 py-2.5 sm:py-3 hover:bg-gray-500 uppercase tracking-wider cursor-pointer border-[3px] border-black font-bold">
+                            📂 LOAD
                             <input type="file" accept=".json" className="hidden" onChange={(e) => { if (e.target.files?.[0]) { props.onImportDraft(e.target.files[0]); e.target.value = ''; } }} />
                         </label>
-                        <button onClick={props.onClearSetup} className="comic-btn flex-1 md:flex-none bg-orange-500 text-white text-xl px-4 py-3 hover:bg-orange-400 uppercase tracking-wider whitespace-nowrap border-[3px] border-black font-bold">
-                            CLEAR ALL
+                        <button onClick={props.onClearSetup} className="comic-btn bg-orange-500 text-white text-base sm:text-lg lg:text-xl px-3 py-2.5 sm:py-3 hover:bg-orange-400 uppercase tracking-wider border-[3px] border-black font-bold">
+                            🗑️ CLEAR
                         </button>
                     </div>
-                    <button onClick={props.onLaunch} disabled={!props.hero || props.isTransitioning || props.isGeneratingProfiles} className="comic-btn bg-red-600 text-white text-3xl px-6 py-3 w-full hover:bg-red-500 disabled:bg-gray-400 disabled:cursor-not-allowed uppercase tracking-wider font-bold border-[3px] border-black flex items-center justify-center gap-3">
+                    {/* Start Adventure Button - Always Full Width */}
+                    <button onClick={props.onLaunch} disabled={!props.hero || props.isTransitioning || props.isGeneratingProfiles} className="comic-btn bg-red-600 text-white text-2xl sm:text-3xl px-6 py-3 w-full hover:bg-red-500 disabled:bg-gray-400 disabled:cursor-not-allowed uppercase tracking-wider font-bold border-[3px] border-black flex items-center justify-center gap-3">
                         {props.isGeneratingProfiles ? (
                             <>
                                 <div className="animate-spin w-8 h-8 border-[4px] border-white border-t-transparent rounded-full"></div>
-                                <span className="animate-pulse text-2xl">ANALYZING PORTRAITS...</span>
+                                <span className="animate-pulse text-xl sm:text-2xl">ANALYZING PORTRAITS...</span>
                             </>
-                        ) : props.isTransitioning ? 'LAUNCHING...' : 'START ADVENTURE!'}
+                        ) : props.isTransitioning ? 'LAUNCHING...' : '🚀 START ADVENTURE!'}
                     </button>
                 </div>
             </div>

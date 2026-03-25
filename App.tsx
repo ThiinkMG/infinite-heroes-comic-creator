@@ -6,6 +6,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { GoogleGenAI } from '@google/genai';
+import Anthropic from '@anthropic-ai/sdk';
 import jsPDF from 'jspdf';
 import { getComicConfig, ART_STYLES, GENRES, TONES, LANGUAGES, ComicFace, Beat, Persona, StoryContext, StoryOutline, CharacterProfile, NOVEL_MODE_BATCH_SIZE, generateHardNegatives, formatIdentityHeader, formatReinforcedScene, formatConsistencyInstruction, IdentityHeader, RegenerationMode, PageCharacterPlan, TransitionType, ShotType, PanelLayout, EmotionalBeat, PacingIntent, BalloonShape, RerollOptions, getLayoutInstructions, getShotInstructions, getTransitionContext, getFlashbackInstructions } from './types';
 import { Setup } from './Setup';
@@ -20,10 +21,12 @@ import { ProfilesDialog } from './ProfilesDialog';
 import { SettingsDialog } from './SettingsDialog';
 import { OutlineStepDialog } from './OutlineStepDialog';
 import { ModeSelectionScreen } from './ModeSelectionScreen';
+import { createImageContent, createTextContent, extractJsonFromResponse, getTextFromClaudeResponse, ClaudeContentBlock } from './claudeHelpers';
 
 // --- Constants ---
 const MODEL_IMAGE_GEN_NAME = "gemini-3-pro-image-preview";
-const MODEL_TEXT_NAME = "gemini-2.5-pro";
+const MODEL_TEXT_NAME = "gemini-2.5-pro"; // Gemini fallback
+const MODEL_TEXT_NAME_CLAUDE = "claude-sonnet-4-5-20250929";
 
 const App: React.FC = () => {
   // --- API Key Hook ---
@@ -164,6 +167,8 @@ const App: React.FC = () => {
   const [showSettings, setShowSettings] = useState(false);
   const [isAdmin, setIsAdmin] = useState(localStorage.getItem('is_admin') === 'true');
   const [userApiKey, setUserApiKey] = useState(localStorage.getItem('user_api_key') || '');
+  const [userAnthropicKey, setUserAnthropicKey] = useState(localStorage.getItem('user_anthropic_api_key') || '');
+  const [dismissedKeyAlert, setDismissedKeyAlert] = useState(false);
   const [showProfilesStep, setShowProfilesStep] = useState(false);
   const [tempProfiles, setTempProfiles] = useState<CharacterProfile[]>([]);
   const [extraPages, setExtraPages] = useState(0);
@@ -210,18 +215,51 @@ const App: React.FC = () => {
     return new GoogleGenAI({ apiKey: key });
   };
 
-  const handleSettingsKeyChange = (key: string | null, admin: boolean) => {
+  // --- Claude/Anthropic API Helpers ---
+  const getAnthropicApiKey = (): string => {
+    if (isAdmin && process.env.ANTHROPIC_API_KEY) return process.env.ANTHROPIC_API_KEY;
+    if (userAnthropicKey) return userAnthropicKey;
+    return process.env.ANTHROPIC_API_KEY || '';
+  };
+
+  const getClaude = (): Anthropic | null => {
+    const key = getAnthropicApiKey();
+    if (!key) return null; // Claude not available, will fallback to Gemini
+    return new Anthropic({
+      apiKey: key,
+      dangerouslyAllowBrowser: true // Required for browser usage
+    });
+  };
+
+  const hasClaudeAccess = (): boolean => !!getAnthropicApiKey();
+
+  const handleSettingsKeyChange = (geminiKey: string | null, anthropicKey: string | null, admin: boolean) => {
     setIsAdmin(admin);
-    setUserApiKey(key || '');
+    setUserApiKey(geminiKey || '');
+    setUserAnthropicKey(anthropicKey || '');
+    // Reset alert dismissal when admin logs in (they now have server keys)
+    if (admin) setDismissedKeyAlert(false);
   };
 
   const handleAPIError = (e: any) => {
     const msg = String(e);
     console.error("API Error:", msg);
     if (
-      msg.includes('Requested entity was not found') || 
-      msg.includes('API_KEY_INVALID') || 
+      msg.includes('Requested entity was not found') ||
+      msg.includes('API_KEY_INVALID') ||
       msg.toLowerCase().includes('permission denied')
+    ) {
+      setShowSettings(true);
+    }
+  };
+
+  const handleAnthropicError = (e: any) => {
+    const msg = String(e);
+    console.error("Anthropic API Error:", msg);
+    if (
+      msg.includes('invalid_api_key') ||
+      msg.includes('authentication_error') ||
+      msg.toLowerCase().includes('permission_denied')
     ) {
       setShowSettings(true);
     }
@@ -433,33 +471,105 @@ OUTPUT STRICT JSON ONLY (No markdown formatting):
         c.backstoryFiles?.forEach(f => parts.push({ inlineData: { mimeType: f.mimeType, data: f.base64 } }));
     });
 
-    try {
-        const ai = getAI();
-        const res = await ai.models.generateContent({ 
-            model: MODEL_TEXT_NAME, 
-            contents: { parts }, 
-            config: { responseMimeType: 'application/json' } 
-        });
-        let rawText = res.text || "{}";
-        rawText = rawText.replace(/```json/g, '').replace(/```/g, '').trim();
-        
-        const parsed = JSON.parse(rawText);
-        
+    // Helper to clean and validate the beat response
+    const cleanBeatResponse = (parsed: any): Beat => {
         if (parsed.dialogue) parsed.dialogue = String(Array.isArray(parsed.dialogue) ? parsed.dialogue.join(' ') : parsed.dialogue).replace(/^[\w\s\-]+:\s*/i, '').replace(/["']/g, '').trim();
         if (parsed.caption) parsed.caption = String(Array.isArray(parsed.caption) ? parsed.caption.join(' ') : parsed.caption).replace(/^[\w\s\-]+:\s*/i, '').trim();
         if (!isDecisionPage) parsed.choices = [];
         if (isDecisionPage && !isFinalPage && (!parsed.choices || parsed.choices.length < 2)) parsed.choices = ["Option A", "Option B"];
         if (!['hero', 'friend', 'other'].includes(parsed.focus_char)) parsed.focus_char = 'hero';
-
         return parsed as Beat;
+    };
+
+    // Try Claude first for text analysis
+    const claude = getClaude();
+    if (claude) {
+        try {
+            // Build Claude content blocks
+            const claudeContent: ClaudeContentBlock[] = [createTextContent(prompt)];
+
+            // Add Story Description Files (images/documents)
+            storyContext.descriptionFiles.forEach(f => {
+                if (f.mimeType.startsWith('image/')) {
+                    claudeContent.push(createImageContent(f.base64, f.mimeType));
+                }
+            });
+
+            // Add Character Backstory Files
+            if (heroRef.current?.backstoryFiles) {
+                heroRef.current.backstoryFiles.forEach(f => {
+                    if (f.mimeType.startsWith('image/')) {
+                        claudeContent.push(createImageContent(f.base64, f.mimeType));
+                    }
+                });
+            }
+            if (friendRef.current?.backstoryFiles) {
+                friendRef.current.backstoryFiles.forEach(f => {
+                    if (f.mimeType.startsWith('image/')) {
+                        claudeContent.push(createImageContent(f.base64, f.mimeType));
+                    }
+                });
+            }
+            additionalCharsRef.current.forEach(c => {
+                c.backstoryFiles?.forEach(f => {
+                    if (f.mimeType.startsWith('image/')) {
+                        claudeContent.push(createImageContent(f.base64, f.mimeType));
+                    }
+                });
+            });
+
+            const response = await claude.messages.create({
+                model: MODEL_TEXT_NAME_CLAUDE,
+                max_tokens: 1024,
+                messages: [{ role: 'user', content: claudeContent }]
+            });
+
+            const responseText = getTextFromClaudeResponse(response.content);
+            const rawText = extractJsonFromResponse(responseText);
+            const parsed = JSON.parse(rawText);
+
+            return cleanBeatResponse(parsed);
+        } catch (e) {
+            console.error("Claude beat generation failed, falling back to Gemini", e);
+            const errMsg = String(e).toLowerCase();
+            const isAuthError = errMsg.includes('invalid_api_key') ||
+                errMsg.includes('authentication_error') ||
+                errMsg.includes('permission_denied');
+            if (isAuthError) {
+                handleAnthropicError(e);
+                // Auth error - don't fallback, let user fix settings
+                return {
+                    caption: pageNum === 1 ? "It began..." : "...",
+                    scene: `Generic scene for page ${pageNum}.`,
+                    focus_char: 'hero',
+                    choices: []
+                };
+            }
+            // Other errors - continue to Gemini fallback
+        }
+    }
+
+    // Gemini fallback (or primary if no Claude key)
+    try {
+        const ai = getAI();
+        const res = await ai.models.generateContent({
+            model: MODEL_TEXT_NAME,
+            contents: { parts },
+            config: { responseMimeType: 'application/json' }
+        });
+        let rawText = res.text || "{}";
+        rawText = rawText.replace(/```json/g, '').replace(/```/g, '').trim();
+
+        const parsed = JSON.parse(rawText);
+        return cleanBeatResponse(parsed);
     } catch (e) {
         console.error("Beat generation failed", e);
         handleAPIError(e);
-        return { 
-            caption: pageNum === 1 ? "It began..." : "...", 
-            scene: `Generic scene for page ${pageNum}.`, 
-            focus_char: 'hero', 
-            choices: [] 
+        return {
+            caption: pageNum === 1 ? "It began..." : "...",
+            scene: `Generic scene for page ${pageNum}.`,
+            focus_char: 'hero',
+            choices: []
         };
     }
   };
@@ -674,24 +784,31 @@ OUTPUT STRICT JSON ONLY (No markdown formatting):
   };
 
   const generateCharacterProfile = async (persona: Persona, forceAnalysis = false): Promise<CharacterProfile> => {
-      const contents: any[] = [];
+      // Build content for both Claude and Gemini
+      const claudeContent: ClaudeContentBlock[] = [];
+      const geminiContent: any[] = [];
       let hasData = false;
 
       if (persona.base64) {
-          contents.push({ text: `Analyze this character portrait for: ${persona.name || 'Unknown'}` });
-          contents.push({ inlineData: { mimeType: 'image/jpeg', data: persona.base64 } });
+          claudeContent.push(createTextContent(`Analyze this character portrait for: ${persona.name || 'Unknown'}`));
+          claudeContent.push(createImageContent(persona.base64, 'image/jpeg'));
+          geminiContent.push({ text: `Analyze this character portrait for: ${persona.name || 'Unknown'}` });
+          geminiContent.push({ inlineData: { mimeType: 'image/jpeg', data: persona.base64 } });
           hasData = true;
       }
-      
+
       const allRefs = persona.referenceImages || (persona.referenceImage ? [persona.referenceImage] : []);
       allRefs.forEach((ref, i) => {
-          contents.push({ text: `Additional reference ${i+1}:` });
-          contents.push({ inlineData: { mimeType: 'image/jpeg', data: ref } });
+          claudeContent.push(createTextContent(`Additional reference ${i+1}:`));
+          claudeContent.push(createImageContent(ref, 'image/jpeg'));
+          geminiContent.push({ text: `Additional reference ${i+1}:` });
+          geminiContent.push({ inlineData: { mimeType: 'image/jpeg', data: ref } });
           hasData = true;
       });
 
       if (persona.desc && persona.desc.trim().length > 0) {
-          contents.push({ text: `Character Description/Backstory: ${persona.desc}` });
+          claudeContent.push(createTextContent(`Character Description/Backstory: ${persona.desc}`));
+          geminiContent.push({ text: `Character Description/Backstory: ${persona.desc}` });
           hasData = true;
       }
 
@@ -700,11 +817,13 @@ OUTPUT STRICT JSON ONLY (No markdown formatting):
               if (file.mimeType.startsWith('text/')) {
                   try {
                       const text = atob(file.base64);
-                      contents.push({ text: `Additional Details (${file.name}): ${text}` });
+                      claudeContent.push(createTextContent(`Additional Details (${file.name}): ${text}`));
+                      geminiContent.push({ text: `Additional Details (${file.name}): ${text}` });
                       hasData = true;
                   } catch (err) {}
               } else if (file.mimeType.startsWith('image/')) {
-                  contents.push({ inlineData: { mimeType: file.mimeType, data: file.base64 } });
+                  claudeContent.push(createImageContent(file.base64, file.mimeType));
+                  geminiContent.push({ inlineData: { mimeType: file.mimeType, data: file.base64 } });
                   hasData = true;
               }
           });
@@ -719,7 +838,7 @@ OUTPUT STRICT JSON ONLY (No markdown formatting):
           };
       }
 
-      contents.push({ text: `
+      const analysisPrompt = `
 Analyze the character based on the images and text provided above. Produce a STRICT JSON visual profile.
 If only text is provided, infer the visual details based on the description.
 
@@ -747,45 +866,84 @@ For hardNegatives, analyze the image and add negatives for:
 - If specific eye color, add "no [other colors] eyes"
 - If clean-shaven, add "no beard", "no facial hair"
 - If no bangs, add "no bangs"
-` });
+`;
+      claudeContent.push(createTextContent(analysisPrompt));
+      geminiContent.push({ text: analysisPrompt });
 
-      try {
-          const ai = getAI();
-          const res = await ai.models.generateContent({
-              model: MODEL_TEXT_NAME,
-              contents: contents,
-          });
-          const text = res.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
-          const cleaned = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-          const parsed = JSON.parse(cleaned);
+      // Helper to ensure string fields are actually strings (AI sometimes returns objects)
+      const ensureString = (val: unknown): string => {
+          if (val === null || val === undefined) return '';
+          if (typeof val === 'string') return val;
+          if (typeof val === 'object') {
+              return Object.entries(val as Record<string, unknown>)
+                  .map(([k, v]) => `${k}: ${v}`)
+                  .join(', ');
+          }
+          return String(val);
+      };
 
-          // Build structured identity header if not provided
+      // Helper to process parsed JSON into CharacterProfile
+      const processProfileResponse = (parsed: any): CharacterProfile => {
           const identityHeader = parsed.identityHeader || {
               face: parsed.faceDescription || '',
               eyes: (parsed.faceDescription?.match(/eye[s]?[:\s]+([^,.]+)/i)?.[1] || '').trim(),
-              hair: (parsed.colorPalette?.match(/hair[:\s]+([^,.]+)/i)?.[1] || '').trim(),
-              skin: (parsed.colorPalette?.match(/skin[:\s]+([^,.]+)/i)?.[1] || '').trim(),
+              hair: (ensureString(parsed.colorPalette)?.match(/hair[:\s]+([^,.]+)/i)?.[1] || '').trim(),
+              skin: (ensureString(parsed.colorPalette)?.match(/skin[:\s]+([^,.]+)/i)?.[1] || '').trim(),
               build: parsed.bodyType || '',
-              signature: parsed.distinguishingFeatures?.split(',').map((s: string) => s.trim()).filter(Boolean) || [],
+              signature: ensureString(parsed.distinguishingFeatures)?.split(',').map((s: string) => s.trim()).filter(Boolean) || [],
           };
-
-          // Generate hard negatives if not provided
           const hardNegatives = parsed.hardNegatives || generateHardNegatives(identityHeader);
-
           return {
               id: persona.id,
               name: persona.name || 'Unknown',
-              faceDescription: parsed.faceDescription || '',
-              bodyType: parsed.bodyType || '',
-              clothing: parsed.clothing || '',
-              colorPalette: parsed.colorPalette || '',
-              distinguishingFeatures: parsed.distinguishingFeatures || '',
+              faceDescription: ensureString(parsed.faceDescription),
+              bodyType: ensureString(parsed.bodyType),
+              clothing: ensureString(parsed.clothing),
+              colorPalette: ensureString(parsed.colorPalette),
+              distinguishingFeatures: ensureString(parsed.distinguishingFeatures),
               identityHeader,
               hardNegatives,
               contrastFeatures: [],
           };
+      };
+
+      // Try Claude first
+      const claude = getClaude();
+      if (claude) {
+          try {
+              console.log(`[Claude] Generating profile for ${persona.name}...`);
+              const response = await claude.messages.create({
+                  model: MODEL_TEXT_NAME_CLAUDE,
+                  max_tokens: 2048,
+                  messages: [{ role: 'user', content: claudeContent }]
+              });
+              const text = response.content[0].type === 'text' ? response.content[0].text : '{}';
+              const cleaned = extractJsonFromResponse(text);
+              const parsed = JSON.parse(cleaned);
+              console.log(`[Claude] Profile generated for ${persona.name}`);
+              return processProfileResponse(parsed);
+          } catch (e) {
+              console.warn(`[Claude] Failed for ${persona.name}, falling back to Gemini:`, e);
+              handleAnthropicError(e);
+          }
+      }
+
+      // Gemini fallback
+      try {
+          console.log(`[Gemini] Generating profile for ${persona.name}...`);
+          const ai = getAI();
+          const res = await ai.models.generateContent({
+              model: MODEL_TEXT_NAME,
+              contents: geminiContent,
+          });
+          const text = res.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
+          const cleaned = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+          const parsed = JSON.parse(cleaned);
+          console.log(`[Gemini] Profile generated for ${persona.name}`);
+          return processProfileResponse(parsed);
       } catch (e) {
           console.warn('Failed to generate character profile for', persona.name, e);
+          handleAPIError(e);
           return {
               id: persona.id,
               name: persona.name || 'Unknown',
@@ -952,25 +1110,24 @@ For hardNegatives, analyze the image and add negatives for:
 
   const generateOutline = async (userNotes?: string) => {
     setStoryOutline(prev => ({ ...prev, isGenerating: true }));
-    try {
-      const ai = getAI();
-      const config = getComicConfig(storyContext.pageLength, extraPages);
-      const langName = LANGUAGES.find(l => l.code === selectedLanguage)?.name || "English";
 
-      // Build character names list for the prompt
-      const characterNames: string[] = [];
-      if (heroRef.current?.name) characterNames.push(heroRef.current.name);
-      if (friendRef.current?.name) characterNames.push(friendRef.current.name);
-      additionalCharsRef.current.forEach(c => { if (c.name) characterNames.push(c.name); });
+    const config = getComicConfig(storyContext.pageLength, extraPages);
+    const langName = LANGUAGES.find(l => l.code === selectedLanguage)?.name || "English";
 
-      const charContext = [
-          `HERO: ${heroRef.current?.name || 'Main Hero'}. Backstory: ${heroRef.current?.backstoryText || 'Unknown'}.`,
-          friendRef.current ? `CO-STAR: ${friendRef.current.name || 'Sidekick'}. Backstory: ${friendRef.current.backstoryText || 'Unknown'}.` : null,
-          ...additionalCharsRef.current.map(c => `${c.name}: ${c.backstoryText || 'Unknown'}.`)
-      ].filter(Boolean).join('\n');
+    // Build character names list for the prompt
+    const characterNames: string[] = [];
+    if (heroRef.current?.name) characterNames.push(heroRef.current.name);
+    if (friendRef.current?.name) characterNames.push(friendRef.current.name);
+    additionalCharsRef.current.forEach(c => { if (c.name) characterNames.push(c.name); });
 
-      // Enhanced outline prompt with comic fundamentals
-      const prompt = `
+    const charContext = [
+        `HERO: ${heroRef.current?.name || 'Main Hero'}. Backstory: ${heroRef.current?.backstoryText || 'Unknown'}.`,
+        friendRef.current ? `CO-STAR: ${friendRef.current.name || 'Sidekick'}. Backstory: ${friendRef.current.backstoryText || 'Unknown'}.` : null,
+        ...additionalCharsRef.current.map(c => `${c.name}: ${c.backstoryText || 'Unknown'}.`)
+    ].filter(Boolean).join('\n');
+
+    // Enhanced outline prompt with comic fundamentals
+    const prompt = `
 You are a professional comic book writer planning a ${config.MAX_STORY_PAGES}-page story.
 
 STORY TITLE: ${storyContext.title}
@@ -1034,16 +1191,9 @@ PAGE [N]:
 OUTPUT: Structured text EXACTLY as shown above for each page.
 `;
 
-      const res = await ai.models.generateContent({
-        model: MODEL_TEXT_NAME,
-        contents: { text: prompt }
-      });
-
-      const outlineText = res.text || "";
-
-      // Parse the enhanced outline into page breakdown
+    // Helper to process outline response
+    const processOutlineResponse = (outlineText: string) => {
       const pageBreakdown = parseEnhancedOutline(outlineText, config);
-
       setStoryOutline({
         content: outlineText,
         isReady: true,
@@ -1053,6 +1203,39 @@ OUTPUT: Structured text EXACTLY as shown above for each page.
         lastEditedAt: Date.now(),
         version: 1
       });
+    };
+
+    // Try Claude first
+    const claude = getClaude();
+    if (claude) {
+      try {
+        console.log('[Claude] Generating story outline...');
+        const response = await claude.messages.create({
+          model: MODEL_TEXT_NAME_CLAUDE,
+          max_tokens: 4096,
+          messages: [{ role: 'user', content: prompt }]
+        });
+        const outlineText = response.content[0].type === 'text' ? response.content[0].text : '';
+        console.log('[Claude] Outline generated');
+        processOutlineResponse(outlineText);
+        return;
+      } catch (e) {
+        console.warn('[Claude] Outline generation failed, falling back to Gemini:', e);
+        handleAnthropicError(e);
+      }
+    }
+
+    // Gemini fallback
+    try {
+      console.log('[Gemini] Generating story outline...');
+      const ai = getAI();
+      const res = await ai.models.generateContent({
+        model: MODEL_TEXT_NAME,
+        contents: { text: prompt }
+      });
+      const outlineText = res.text || "";
+      console.log('[Gemini] Outline generated');
+      processOutlineResponse(outlineText);
     } catch (e) {
       handleAPIError(e);
       setStoryOutline(prev => ({ ...prev, isGenerating: false }));
@@ -1238,12 +1421,10 @@ OUTPUT: Structured text EXACTLY as shown above for each page.
         setIsStarted(true);
         setShowSetup(false);
         setIsTransitioning(false);
-        if (generateFromOutline) {
-            generateBatch(1, config.TOTAL_PAGES);
-        } else {
-            await generateBatch(1, config.INITIAL_PAGES);
-            generateBatch(config.INITIAL_PAGES + 1, config.BATCH_SIZE);
-        }
+        // Both modes now use batching to reduce hallucination/character drift
+        // Outline mode just doesn't have decision pauses
+        await generateBatch(1, config.INITIAL_PAGES);
+        generateBatch(config.INITIAL_PAGES + 1, config.BATCH_SIZE);
     }, 1100);
   };
 
@@ -1806,10 +1987,61 @@ OUTPUT: Structured text EXACTLY as shown above for each page.
 
   const handleMouseUp = () => setIsDragging(false);
 
+  // Determine API key status for alert banner
+  const hasGeminiKey = !!(isAdmin && process.env.API_KEY) || !!userApiKey;
+  const hasClaudeKey = !!(isAdmin && process.env.ANTHROPIC_API_KEY) || !!userAnthropicKey;
+
+  // Show alert if missing keys and not dismissed
+  const showKeyAlert = !dismissedKeyAlert && (!hasGeminiKey || !hasClaudeKey);
+
   return (
     <div className="comic-scene">
       {showApiKeyDialog && <ApiKeyDialog onContinue={handleApiKeyDialogContinue} />}
-      
+
+      {/* API Key Alert Banner */}
+      {showKeyAlert && (
+        <div className={`fixed top-0 left-0 right-0 z-[400] ${!hasGeminiKey ? 'bg-red-600' : 'bg-amber-500'} border-b-4 border-black shadow-lg`}>
+          <div className="max-w-4xl mx-auto px-4 py-3 flex flex-col sm:flex-row items-center justify-between gap-2">
+            <div className="flex items-center gap-2 text-white">
+              <span className="text-2xl">{!hasGeminiKey ? '🔑' : '💡'}</span>
+              <div className="font-comic text-sm sm:text-base">
+                {!hasGeminiKey ? (
+                  <span><strong>API Key Required!</strong> Add your Gemini key to generate comics.</span>
+                ) : !hasClaudeKey ? (
+                  <span><strong>Tip:</strong> Add Claude key for better text analysis (optional - Gemini will work for everything)</span>
+                ) : null}
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setShowSettings(true)}
+                className="comic-btn bg-white text-black px-4 py-1.5 text-sm font-bold border-2 border-black hover:bg-gray-100 whitespace-nowrap"
+              >
+                ⚙️ Open Settings
+              </button>
+              {hasGeminiKey && !hasClaudeKey && (
+                <button
+                  onClick={() => setDismissedKeyAlert(true)}
+                  className="comic-btn bg-amber-700 text-white px-3 py-1.5 text-sm font-bold border-2 border-black hover:bg-amber-600 whitespace-nowrap"
+                >
+                  Use Gemini Only
+                </button>
+              )}
+              {!hasGeminiKey && (
+                <a
+                  href="https://aistudio.google.com/app/apikey"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="comic-btn bg-blue-500 text-white px-3 py-1.5 text-sm font-bold border-2 border-black hover:bg-blue-400 whitespace-nowrap"
+                >
+                  Get Free Key →
+                </a>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Settings Gear — always visible */}
       <button 
           onClick={() => setShowSettings(true)}
@@ -1823,6 +2055,7 @@ OUTPUT: Structured text EXACTLY as shown above for each page.
       {showSettings && (
           <SettingsDialog
               serverKeyExists={!!process.env.API_KEY}
+              anthropicServerKeyExists={!!process.env.ANTHROPIC_API_KEY}
               adminPasswordHash={process.env.ADMIN_PASSWORD || ''}
               onClose={() => setShowSettings(false)}
               onKeyChange={handleSettingsKeyChange}
