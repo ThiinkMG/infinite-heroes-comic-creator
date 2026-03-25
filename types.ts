@@ -80,6 +80,30 @@ export const CHARACTER_ROLES = [
 
 export type CharacterRole = typeof CHARACTER_ROLES[number];
 
+// Emblem/Logo Placement Options
+export type EmblemPlacement =
+  | 'chest-top-right'
+  | 'chest-top-left'
+  | 'chest-center'
+  | 'back'
+  | 'face'
+  | 'hair'
+  | 'shoulder'
+  | 'weapon'
+  | 'other';
+
+export const EMBLEM_PLACEMENTS: { value: EmblemPlacement; label: string }[] = [
+  { value: 'chest-top-right', label: 'Chest (Top Right)' },
+  { value: 'chest-top-left', label: 'Chest (Top Left)' },
+  { value: 'chest-center', label: 'Chest (Center)' },
+  { value: 'back', label: 'Back' },
+  { value: 'face', label: 'Face' },
+  { value: 'hair', label: 'Hair' },
+  { value: 'shoulder', label: 'Shoulder' },
+  { value: 'weapon', label: 'Weapon' },
+  { value: 'other', label: 'Other (Manual Entry)' }
+];
+
 // ============================================================================
 // 4-LAYER CONSISTENCY SYSTEM TYPES
 // ============================================================================
@@ -123,6 +147,9 @@ export interface RerollOptions {
   /** User instruction text */
   instruction: string;
 
+  /** Negative prompt - things to EXCLUDE from generation (e.g., "no mask, no cape, no helmet") */
+  negativePrompt?: string;
+
   /** Selected reference images (base64) */
   selectedRefImages: string[];
 
@@ -152,6 +179,18 @@ export interface Persona {
   customRole?: string; // Used when role is 'Family/Friend' or 'Custom'
   backstoryText?: string;
   backstoryFiles?: { base64: string; mimeType: string; name: string }[];
+  // === Emblem/Logo Support ===
+  /** Emblem/logo reference image (base64) */
+  emblemImage?: string;
+  /** Where the emblem should be placed on the character */
+  emblemPlacement?: EmblemPlacement;
+  /** Custom placement description when emblemPlacement is 'other' */
+  emblemPlacementCustom?: string;
+  // === Weapon Reference Support ===
+  /** Weapon reference image (base64) */
+  weaponImage?: string;
+  /** Description of the weapon for AI consistency */
+  weaponDescriptionText?: string;
   // === Mid-Project Addition Support ===
   /** Timestamp when character was added (for tracking mid-project additions) */
   addedAt?: number;
@@ -225,6 +264,19 @@ export interface CharacterProfile {
   clothing: string;
   colorPalette: string;
   distinguishingFeatures: string;
+  /** Description of emblem/logo and its placement if provided */
+  emblemDescription?: string;
+  /** Detailed mask description if character wears a mask */
+  maskDescription?: string;
+  /** Detailed hair information */
+  hairDetails?: {
+    length: string;
+    type: string;
+    color: string;
+    style: string;
+  };
+  /** Weapon description if character has a signature weapon */
+  weaponDescription?: string;
 
   // === 4-Layer Consistency System Fields ===
   /** Structured identity header for Layer 2 prompt injection */
@@ -293,18 +345,34 @@ export function generateHardNegatives(identity: IdentityHeader): string[] {
 export function formatIdentityHeader(profile: CharacterProfile): string {
   if (!profile.identityHeader) {
     // Fallback for profiles without structured identity header
-    return `
+    let result = `
 CHARACTER: ${profile.name}
 - Face: ${profile.faceDescription}
 - Build: ${profile.bodyType}
 - Clothing: ${profile.clothing}
 - Colors: ${profile.colorPalette}
-- Distinguishing: ${profile.distinguishingFeatures}
-`.trim();
+- Distinguishing: ${profile.distinguishingFeatures}`;
+    if (profile.emblemDescription) {
+      result += `\n- EMBLEM/LOGO: ${profile.emblemDescription} [MUST BE VISIBLE]`;
+    }
+    if (profile.maskDescription) {
+      result += `\n- MASK: ${profile.maskDescription} [MUST ALWAYS WEAR THIS MASK]`;
+    }
+    if (profile.hairDetails) {
+      result += `\n- HAIR: ${profile.hairDetails.length} ${profile.hairDetails.color} ${profile.hairDetails.type} hair, ${profile.hairDetails.style}`;
+    }
+    if (profile.weaponDescription) {
+      result += `\n- WEAPON: ${profile.weaponDescription} [SIGNATURE WEAPON]`;
+    }
+    return result.trim();
   }
 
-  const { identityHeader, hardNegatives, name } = profile;
+  const { identityHeader, hardNegatives, name, emblemDescription, maskDescription, hairDetails, weaponDescription } = profile;
   const negativesStr = hardNegatives?.length ? hardNegatives.join(', ') : 'none specified';
+  const emblemStr = emblemDescription ? `\n- EMBLEM/LOGO: ${emblemDescription} [MUST ALWAYS BE VISIBLE ON THIS CHARACTER]` : '';
+  const maskStr = maskDescription ? `\n- MASK: ${maskDescription} [CHARACTER MUST ALWAYS WEAR THIS MASK]` : '';
+  const hairStr = hairDetails ? `\n- HAIR DETAILS: ${hairDetails.length} ${hairDetails.color} ${hairDetails.type} hair, worn ${hairDetails.style}` : '';
+  const weaponStr = weaponDescription ? `\n- SIGNATURE WEAPON: ${weaponDescription}` : '';
 
   return `
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -316,7 +384,7 @@ MUST-MATCH VISUALS:
 - Hair: ${identityHeader.hair}
 - Skin: ${identityHeader.skin}
 - Build: ${identityHeader.build}
-- Signature elements: ${identityHeader.signature.join(', ')}
+- Signature elements: ${identityHeader.signature.join(', ')}${emblemStr}${maskStr}${hairStr}${weaponStr}
 
 HARD NEGATIVES (never include): ${negativesStr}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

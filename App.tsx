@@ -595,6 +595,18 @@ OUTPUT STRICT JSON ONLY (No markdown formatting):
   const generateImage = async (beat: Beat, type: ComicFace['type'], instruction?: string, extraRefImages?: string[], prevImage?: string, prevBeat?: Beat, pageIndex?: number, comicOverrides?: { shotTypeOverride?: ShotType; balloonShapeOverride?: BalloonShape; applyFlashbackStyle?: boolean }): Promise<{ imageUrl: string; originalPrompt: string }> => {
     const contents: any[] = [];
     const getAllRefs = (p: Persona) => p.referenceImages || (p.referenceImage ? [p.referenceImage] : []);
+    const getEmblemDesc = (p: Persona) => {
+        if (!p.emblemImage) return null;
+        const placement = p.emblemPlacement === 'other'
+            ? p.emblemPlacementCustom || 'custom location'
+            : p.emblemPlacement?.replace('-', ' ') || 'visible';
+        return { image: p.emblemImage, placement };
+    };
+    const getWeaponDesc = (p: Persona) => {
+        if (!p.weaponImage) return null;
+        return { image: p.weaponImage, description: p.weaponDescriptionText || 'signature weapon' };
+    };
+
     if (heroRef.current?.base64) {
         contents.push({ text: "REFERENCE 1 [HERO]:" });
         contents.push({ inlineData: { mimeType: 'image/jpeg', data: heroRef.current.base64 } });
@@ -602,6 +614,16 @@ OUTPUT STRICT JSON ONLY (No markdown formatting):
             contents.push({ text: `HERO REF SHEET ${i+1}:` });
             contents.push({ inlineData: { mimeType: 'image/jpeg', data: ref } });
         });
+        const heroEmblem = getEmblemDesc(heroRef.current);
+        if (heroEmblem) {
+            contents.push({ text: `HERO EMBLEM/LOGO (MUST appear on ${heroEmblem.placement}):` });
+            contents.push({ inlineData: { mimeType: 'image/jpeg', data: heroEmblem.image } });
+        }
+        const heroWeapon = getWeaponDesc(heroRef.current);
+        if (heroWeapon) {
+            contents.push({ text: `HERO SIGNATURE WEAPON (${heroWeapon.description}):` });
+            contents.push({ inlineData: { mimeType: 'image/jpeg', data: heroWeapon.image } });
+        }
     }
     if (friendRef.current?.base64) {
         contents.push({ text: "REFERENCE 2 [CO-STAR]:" });
@@ -610,6 +632,16 @@ OUTPUT STRICT JSON ONLY (No markdown formatting):
             contents.push({ text: `CO-STAR REF SHEET ${i+1}:` });
             contents.push({ inlineData: { mimeType: 'image/jpeg', data: ref } });
         });
+        const friendEmblem = getEmblemDesc(friendRef.current);
+        if (friendEmblem) {
+            contents.push({ text: `CO-STAR EMBLEM/LOGO (MUST appear on ${friendEmblem.placement}):` });
+            contents.push({ inlineData: { mimeType: 'image/jpeg', data: friendEmblem.image } });
+        }
+        const friendWeapon = getWeaponDesc(friendRef.current);
+        if (friendWeapon) {
+            contents.push({ text: `CO-STAR SIGNATURE WEAPON (${friendWeapon.description}):` });
+            contents.push({ inlineData: { mimeType: 'image/jpeg', data: friendWeapon.image } });
+        }
     }
     additionalCharsRef.current.forEach((c, i) => {
         if (c.base64) {
@@ -620,6 +652,16 @@ OUTPUT STRICT JSON ONLY (No markdown formatting):
             contents.push({ text: `${c.name} REF SHEET ${ri+1}:` });
             contents.push({ inlineData: { mimeType: 'image/jpeg', data: ref } });
         });
+        const charEmblem = getEmblemDesc(c);
+        if (charEmblem) {
+            contents.push({ text: `${c.name} EMBLEM/LOGO (MUST appear on ${charEmblem.placement}):` });
+            contents.push({ inlineData: { mimeType: 'image/jpeg', data: charEmblem.image } });
+        }
+        const charWeapon = getWeaponDesc(c);
+        if (charWeapon) {
+            contents.push({ text: `${c.name} SIGNATURE WEAPON (${charWeapon.description}):` });
+            contents.push({ inlineData: { mimeType: 'image/jpeg', data: charWeapon.image } });
+        }
     });
 
     const styleEra = selectedGenre === 'Custom' ? "Modern American" : selectedGenre;
@@ -728,7 +770,8 @@ OUTPUT STRICT JSON ONLY (No markdown formatting):
 1. You MUST strictly copy the exact physical appearance, facial features, hairstyle, body type, and clothing from the provided REFERENCE images AND the CHARACTER VISUAL PROFILES below.
 2. The characters in the output MUST be instantly recognizable as the characters in the references. Do not invent new character designs, outfits, or hairstyles unless explicitly asked.
 3. Pay close attention to distinguishing features (scars, tattoos, specific hair colors) mentioned in the profiles and ensure they are visible.
-4. [ART STYLE & GENRE ENFORCEMENT] The overall visual style of every panel MUST be: ${styleEra} comic book art${artStyleTag}. The GENRE is: ${selectedGenre}. Do NOT deviate from this art style or genre under any circumstances. THE ENVIRONMENT, LIGHTING, AND AESTHETIC MUST MATCH THE ${selectedGenre.toUpperCase()} GENRE. The line work, coloring technique, shading, and overall aesthetic must consistently match the specified style throughout.\n`;
+4. [ART STYLE & GENRE ENFORCEMENT] The overall visual style of every panel MUST be: ${styleEra} comic book art${artStyleTag}. The GENRE is: ${selectedGenre}. Do NOT deviate from this art style or genre under any circumstances. THE ENVIRONMENT, LIGHTING, AND AESTHETIC MUST MATCH THE ${selectedGenre.toUpperCase()} GENRE. The line work, coloring technique, shading, and overall aesthetic must consistently match the specified style throughout.
+5. [EMBLEM/LOGO ENFORCEMENT] If a character has an EMBLEM/LOGO reference image provided, you MUST include that exact emblem design at the specified placement location on the character. The emblem must be clearly visible and match the reference exactly in shape, colors, and design. This is a signature visual element that must appear consistently.\n`;
 
         // LAYER 2: Structured Identity Headers for each character
         if (characterProfilesRef.current.length > 0) {
@@ -806,6 +849,28 @@ OUTPUT STRICT JSON ONLY (No markdown formatting):
           hasData = true;
       });
 
+      // Include emblem/logo if provided
+      if (persona.emblemImage) {
+          const placementDesc = persona.emblemPlacement === 'other'
+              ? persona.emblemPlacementCustom || 'custom location'
+              : persona.emblemPlacement?.replace('-', ' ') || 'unspecified location';
+          claudeContent.push(createTextContent(`EMBLEM/LOGO (placed on ${placementDesc}):`));
+          claudeContent.push(createImageContent(persona.emblemImage, 'image/jpeg'));
+          geminiContent.push({ text: `EMBLEM/LOGO (placed on ${placementDesc}):` });
+          geminiContent.push({ inlineData: { mimeType: 'image/jpeg', data: persona.emblemImage } });
+          hasData = true;
+      }
+
+      // Include weapon reference if provided
+      if (persona.weaponImage) {
+          const weaponDesc = persona.weaponDescriptionText || 'signature weapon';
+          claudeContent.push(createTextContent(`SIGNATURE WEAPON (${weaponDesc}):`));
+          claudeContent.push(createImageContent(persona.weaponImage, 'image/jpeg'));
+          geminiContent.push({ text: `SIGNATURE WEAPON (${weaponDesc}):` });
+          geminiContent.push({ inlineData: { mimeType: 'image/jpeg', data: persona.weaponImage } });
+          hasData = true;
+      }
+
       if (persona.desc && persona.desc.trim().length > 0) {
           claudeContent.push(createTextContent(`Character Description/Backstory: ${persona.desc}`));
           geminiContent.push({ text: `Character Description/Backstory: ${persona.desc}` });
@@ -841,6 +906,7 @@ OUTPUT STRICT JSON ONLY (No markdown formatting):
       const analysisPrompt = `
 Analyze the character based on the images and text provided above. Produce a STRICT JSON visual profile.
 If only text is provided, infer the visual details based on the description.
+If an EMBLEM/LOGO image is provided, describe it accurately and note its placement.
 
 OUTPUT JSON ONLY (no markdown):
 {
@@ -849,23 +915,37 @@ OUTPUT JSON ONLY (no markdown):
   "clothing": "Exact outfit description with all details, armor, accessories",
   "colorPalette": "Primary and secondary colors of skin, hair, eyes, outfit",
   "distinguishingFeatures": "Unique traits: tattoos, glowing eyes, tail, pointed ears, scars, etc.",
+  "emblemDescription": "If emblem/logo provided: describe the emblem design, colors, and its placement on the character. Include this in EVERY panel featuring this character.",
+  "maskDescription": "If character wears a mask: describe the mask type (full face, half face, domino, bandana, etc.), material, colors, patterns, and any distinctive features. If NO MASK, leave empty string.",
+  "hairDetails": {
+    "length": "Describe length (bald, buzz cut, short, medium, long, very long, floor-length)",
+    "type": "Straight, wavy, curly, coily, braided, dreadlocks, etc.",
+    "color": "Exact color(s) including highlights, ombre, tips, roots if different",
+    "style": "How it's worn (loose, ponytail, bun, pigtails, mohawk, spikes, slicked back, parted, messy, neat)"
+  },
+  "weaponDescription": "If character has a signature weapon: describe weapon type (sword, gun, staff, etc.), size, material, colors, engravings, glowing effects, and any unique features. If no weapon, leave empty string.",
   "identityHeader": {
     "face": "Face shape, cheekbones, chin, distinctive facial features",
     "eyes": "Eye color, shape, spacing, typical expression",
-    "hair": "Hair color, style, length, texture",
+    "hair": "DETAILED: [length] [color] [type] hair worn [style] - e.g., 'long crimson wavy hair worn loose with side-swept bangs'",
     "skin": "Skin tone, any visible marks (scars, tattoos, moles)",
     "build": "Body type, height impression, posture",
-    "signature": ["item1 always worn/visible", "item2 if any"]
+    "signature": ["item1 always worn/visible", "emblem/logo if provided", "mask if worn", "item3 if any"]
   },
   "hardNegatives": ["feature to never include based on what you see - e.g. if no glasses, add 'no glasses'"]
 }
 
 For hardNegatives, analyze the image and add negatives for:
 - If they have a specific hairstyle, add "no [opposite style]" (e.g., curly hair -> "no straight hair")
+- If specific hair length, add "no [opposite length] hair" (e.g., long hair -> "no short hair")
+- If specific hair color, add "no [other colors] hair"
 - If they don't wear glasses, add "no glasses"
 - If specific eye color, add "no [other colors] eyes"
 - If clean-shaven, add "no beard", "no facial hair"
 - If no bangs, add "no bangs"
+- If NO MASK in reference, add "no mask", "no face covering"
+- If character HAS a mask, add "must always wear [mask type]"
+- If no helmet in reference, add "no helmet"
 `;
       claudeContent.push(createTextContent(analysisPrompt));
       geminiContent.push({ text: analysisPrompt });
@@ -893,6 +973,14 @@ For hardNegatives, analyze the image and add negatives for:
               signature: ensureString(parsed.distinguishingFeatures)?.split(',').map((s: string) => s.trim()).filter(Boolean) || [],
           };
           const hardNegatives = parsed.hardNegatives || generateHardNegatives(identityHeader);
+          // Parse hair details if present
+          const hairDetails = parsed.hairDetails ? {
+              length: ensureString(parsed.hairDetails.length),
+              type: ensureString(parsed.hairDetails.type),
+              color: ensureString(parsed.hairDetails.color),
+              style: ensureString(parsed.hairDetails.style),
+          } : undefined;
+
           return {
               id: persona.id,
               name: persona.name || 'Unknown',
@@ -901,6 +989,10 @@ For hardNegatives, analyze the image and add negatives for:
               clothing: ensureString(parsed.clothing),
               colorPalette: ensureString(parsed.colorPalette),
               distinguishingFeatures: ensureString(parsed.distinguishingFeatures),
+              emblemDescription: parsed.emblemDescription ? ensureString(parsed.emblemDescription) : undefined,
+              maskDescription: parsed.maskDescription ? ensureString(parsed.maskDescription) : undefined,
+              hairDetails,
+              weaponDescription: parsed.weaponDescription ? ensureString(parsed.weaponDescription) : undefined,
               identityHeader,
               hardNegatives,
               contrastFeatures: [],
@@ -1458,7 +1550,7 @@ OUTPUT: Structured text EXACTLY as shown above for each page.
 
   const handleRerollSubmit = (options: RerollOptions) => {
       if (rerollTarget === null) return;
-      const { instruction, selectedRefImages, selectedProfileIds, regenerationMode, shotTypeOverride, balloonShapeOverride, applyFlashbackStyle } = options;
+      const { instruction, negativePrompt, selectedRefImages, selectedProfileIds, regenerationMode, shotTypeOverride, balloonShapeOverride, applyFlashbackStyle } = options;
 
       const pageIndex = rerollTarget;
       setRerollTarget(null);
@@ -1486,6 +1578,11 @@ OUTPUT: Structured text EXACTLY as shown above for each page.
           };
           const modePrefix = modeInstructions[regenerationMode];
           finalInstruction = modePrefix + (instruction ? ` Additional: ${instruction}` : '');
+      }
+
+      // Add negative prompt if provided - explicitly tell AI what NOT to include
+      if (negativePrompt) {
+          finalInstruction += ` [IMPORTANT - DO NOT INCLUDE THE FOLLOWING: ${negativePrompt}. These elements must NOT appear in the generated image.]`;
       }
 
       // Build comic fundamentals overrides object
@@ -1815,6 +1912,36 @@ OUTPUT: Structured text EXACTLY as shown above for each page.
     }
   };
 
+  const handleEmblemUpload = async (id: string, file: File) => {
+    try {
+      const base64 = await fileToBase64(file);
+      if (id === 'hero') handleHeroUpdate({ emblemImage: base64 });
+      else if (id === 'friend') handleFriendUpdate({ emblemImage: base64 });
+      else handleUpdateCharacter(id, { emblemImage: base64 });
+    } catch (e) { alert("Emblem upload failed"); }
+  };
+
+  const handleEmblemRemove = (id: string) => {
+    if (id === 'hero') handleHeroUpdate({ emblemImage: undefined, emblemPlacement: undefined, emblemPlacementCustom: undefined });
+    else if (id === 'friend') handleFriendUpdate({ emblemImage: undefined, emblemPlacement: undefined, emblemPlacementCustom: undefined });
+    else handleUpdateCharacter(id, { emblemImage: undefined, emblemPlacement: undefined, emblemPlacementCustom: undefined });
+  };
+
+  const handleWeaponUpload = async (id: string, file: File) => {
+    try {
+      const base64 = await fileToBase64(file);
+      if (id === 'hero') handleHeroUpdate({ weaponImage: base64 });
+      else if (id === 'friend') handleFriendUpdate({ weaponImage: base64 });
+      else handleUpdateCharacter(id, { weaponImage: base64 });
+    } catch (e) { alert("Weapon image upload failed"); }
+  };
+
+  const handleWeaponRemove = (id: string) => {
+    if (id === 'hero') handleHeroUpdate({ weaponImage: undefined, weaponDescriptionText: undefined });
+    else if (id === 'friend') handleFriendUpdate({ weaponImage: undefined, weaponDescriptionText: undefined });
+    else handleUpdateCharacter(id, { weaponImage: undefined, weaponDescriptionText: undefined });
+  };
+
   const handleBackstoryFileUpload = async (id: string, files: FileList) => {
     try {
       const processed = await processFiles(files);
@@ -2085,6 +2212,10 @@ OUTPUT: Structured text EXACTLY as shown above for each page.
           onPortraitUpload={handlePortraitUpload}
           onRefUpload={handleRefUpload}
           onRefRemove={handleRefRemove}
+          onEmblemUpload={handleEmblemUpload}
+          onEmblemRemove={handleEmblemRemove}
+          onWeaponUpload={handleWeaponUpload}
+          onWeaponRemove={handleWeaponRemove}
           onBackstoryFileUpload={handleBackstoryFileUpload}
           onBackstoryFileRemove={handleBackstoryFileRemove}
           onStoryFileUpload={handleStoryFileUpload}

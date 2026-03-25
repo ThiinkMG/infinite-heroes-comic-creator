@@ -65,6 +65,7 @@ export const RerollModal: React.FC<RerollModalProps> = ({
     onAddNewCharacter
 }) => {
     const [instruction, setInstruction] = useState('');
+    const [negativePrompt, setNegativePrompt] = useState('');
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set(allRefImages.map(r => r.id)));
     const [selectedProfileIds, setSelectedProfileIds] = useState<Set<string>>(new Set(availableProfiles.map(p => p.id)));
     const [deleteMode, setDeleteMode] = useState(false);
@@ -108,6 +109,7 @@ export const RerollModal: React.FC<RerollModalProps> = ({
         const options: RerollOptions = {
             regenerationMode: regenerationMode || undefined,
             instruction,
+            negativePrompt: negativePrompt.trim() || undefined,
             selectedRefImages,
             selectedProfileIds: Array.from(selectedProfileIds),
             shotTypeOverride,
@@ -268,76 +270,62 @@ export const RerollModal: React.FC<RerollModalProps> = ({
                     <div className="border-[3px] border-black bg-cyan-50 p-4">
                         <p className="font-comic text-sm font-bold uppercase text-cyan-900 mb-2">
                             📷 Camera Shot Override
+                            <span className="font-normal text-[10px] text-cyan-600 ml-2">(Click selected to uncheck for None)</span>
                         </p>
                         <p className="font-comic text-[10px] text-cyan-700 mb-2">
                             Override the default camera framing for this panel
                         </p>
-                        <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
-                            <button
-                                onClick={() => setShotTypeOverride(undefined)}
-                                className={`flex flex-col items-center p-2 border-2 transition-colors ${
-                                    shotTypeOverride === undefined
-                                        ? 'border-cyan-500 bg-cyan-100'
-                                        : 'border-gray-300 bg-white hover:border-cyan-300'
-                                }`}
-                            >
-                                <span className="text-lg">🎯</span>
-                                <span className="font-comic text-[10px] font-bold">Auto</span>
-                            </button>
+                        <div className="grid grid-cols-4 sm:grid-cols-7 gap-2">
                             {SHOT_OPTIONS.map(opt => (
                                 <button
                                     key={opt.shot}
-                                    onClick={() => setShotTypeOverride(opt.shot)}
+                                    onClick={() => setShotTypeOverride(shotTypeOverride === opt.shot ? undefined : opt.shot)}
                                     className={`flex flex-col items-center p-2 border-2 transition-colors ${
                                         shotTypeOverride === opt.shot
-                                            ? 'border-cyan-500 bg-cyan-100'
+                                            ? 'border-cyan-500 bg-cyan-100 shadow-[2px_2px_0px_rgba(0,0,0,0.2)]'
                                             : 'border-gray-300 bg-white hover:border-cyan-300'
                                     }`}
-                                    title={opt.shot}
+                                    title={`${opt.shot} - Click again to deselect`}
                                 >
                                     <span className="text-lg">{opt.icon}</span>
                                     <span className="font-comic text-[10px] font-bold">{opt.label}</span>
                                 </button>
                             ))}
                         </div>
+                        {shotTypeOverride === undefined && (
+                            <p className="text-[10px] text-cyan-600 font-comic mt-2 italic">None selected - will use outline/auto</p>
+                        )}
                     </div>
 
                     {/* Balloon Shape Selector - Comic Fundamentals */}
                     <div className="border-[3px] border-black bg-pink-50 p-4">
                         <p className="font-comic text-sm font-bold uppercase text-pink-900 mb-2">
                             💬 Dialogue Style Override
+                            <span className="font-normal text-[10px] text-pink-600 ml-2">(Click selected to uncheck for None)</span>
                         </p>
                         <p className="font-comic text-[10px] text-pink-700 mb-2">
                             Change how speech bubbles appear in this panel
                         </p>
                         <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
-                            <button
-                                onClick={() => setBalloonShapeOverride(undefined)}
-                                className={`flex flex-col p-2 border-2 transition-colors ${
-                                    balloonShapeOverride === undefined
-                                        ? 'border-pink-500 bg-pink-100'
-                                        : 'border-gray-300 bg-white hover:border-pink-300'
-                                }`}
-                            >
-                                <span className="font-comic text-xs font-bold">Auto</span>
-                                <span className="font-comic text-[9px] text-gray-500">From context</span>
-                            </button>
                             {BALLOON_OPTIONS.map(opt => (
                                 <button
                                     key={opt.shape}
-                                    onClick={() => setBalloonShapeOverride(opt.shape)}
+                                    onClick={() => setBalloonShapeOverride(balloonShapeOverride === opt.shape ? undefined : opt.shape)}
                                     className={`flex flex-col p-2 border-2 transition-colors ${
                                         balloonShapeOverride === opt.shape
-                                            ? 'border-pink-500 bg-pink-100'
+                                            ? 'border-pink-500 bg-pink-100 shadow-[2px_2px_0px_rgba(0,0,0,0.2)]'
                                             : 'border-gray-300 bg-white hover:border-pink-300'
                                     }`}
-                                    title={opt.desc}
+                                    title={`${opt.desc} - Click again to deselect`}
                                 >
                                     <span className="font-comic text-xs font-bold">{opt.label}</span>
                                     <span className="font-comic text-[9px] text-gray-500">{opt.desc}</span>
                                 </button>
                             ))}
                         </div>
+                        {balloonShapeOverride === undefined && (
+                            <p className="text-[10px] text-pink-600 font-comic mt-2 italic">None selected - will use context/auto</p>
+                        )}
                     </div>
 
                     {/* Flashback Toggle - Comic Fundamentals */}
@@ -370,6 +358,22 @@ export const RerollModal: React.FC<RerollModalProps> = ({
                             onChange={(e) => setInstruction(e.target.value)}
                             placeholder="e.g. 'Make the hero look determined', 'Change background to a rooftop at sunset', 'Close-up on the villain's face'..."
                             className="w-full p-3 border-2 border-black font-comic text-sm resize-none h-24 focus:outline-none focus:ring-2 focus:ring-yellow-400"
+                        />
+                    </div>
+
+                    {/* Negative Prompt - Things to EXCLUDE */}
+                    <div className="border-[3px] border-black bg-red-50 p-4">
+                        <p className="font-comic text-sm font-bold uppercase text-red-900 mb-2">
+                            🚫 Exclude From Image (Negative Prompt)
+                        </p>
+                        <p className="font-comic text-[10px] text-red-700 mb-2">
+                            Specify what should NOT appear in the regenerated image. Helps with character consistency.
+                        </p>
+                        <textarea
+                            value={negativePrompt}
+                            onChange={(e) => setNegativePrompt(e.target.value)}
+                            placeholder="e.g. 'no mask, no helmet, no cape, no glowing eyes, no beard'..."
+                            className="w-full p-3 border-2 border-black font-comic text-sm resize-none h-16 focus:outline-none focus:ring-2 focus:ring-red-400 bg-white"
                         />
                     </div>
 

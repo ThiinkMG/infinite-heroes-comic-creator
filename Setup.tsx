@@ -5,7 +5,7 @@
 */
 
 import React, { useState, useEffect } from 'react';
-import { GENRES, LANGUAGES, ART_STYLES, PAGE_LENGTHS, CHARACTER_ROLES, CharacterRole, Persona, StoryContext } from './types';
+import { GENRES, LANGUAGES, ART_STYLES, PAGE_LENGTHS, CHARACTER_ROLES, CharacterRole, Persona, StoryContext, EMBLEM_PLACEMENTS, EmblemPlacement } from './types';
 // @ts-ignore
 import thiinkLogo from './assets/thiink_mg_logo.svg';
 
@@ -42,6 +42,10 @@ interface SetupProps {
     onPortraitUpload: (id: string, file: File) => void;
     onRefUpload: (id: string, files: FileList) => void;
     onRefRemove: (id: string, index: number) => void;
+    onEmblemUpload: (id: string, file: File) => void;
+    onEmblemRemove: (id: string) => void;
+    onWeaponUpload: (id: string, file: File) => void;
+    onWeaponRemove: (id: string) => void;
     onBackstoryFileUpload: (id: string, files: FileList) => void;
     onBackstoryFileRemove: (id: string, index: number) => void;
     onStoryFileUpload: (files: FileList) => void;
@@ -149,9 +153,16 @@ const CharacterCard: React.FC<{
     onPortraitUpload: (file: File) => void;
     onRefUpload: (files: FileList) => void;
     onRefRemove: (index: number) => void;
+    onEmblemUpload: (file: File) => void;
+    onEmblemRemove: () => void;
+    onWeaponUpload: (file: File) => void;
+    onWeaponRemove: () => void;
     onBackstoryFileUpload: (files: FileList) => void;
     onBackstoryFileRemove: (index: number) => void;
-}> = ({ title, persona, isFixed, onUpdate, onDelete, onReset, onPortraitUpload, onRefUpload, onRefRemove, onBackstoryFileUpload, onBackstoryFileRemove }) => (
+}> = ({ title, persona, isFixed, onUpdate, onDelete, onReset, onPortraitUpload, onRefUpload, onRefRemove, onEmblemUpload, onEmblemRemove, onWeaponUpload, onWeaponRemove, onBackstoryFileUpload, onBackstoryFileRemove }) => {
+    const [showExpandedBackstory, setShowExpandedBackstory] = useState(false);
+
+    return (
     <div className={`p-3 border-4 ${persona ? 'border-green-500 bg-green-50' : 'border-blue-300 bg-blue-50'} transition-colors relative mb-4`}>
         <div className="flex justify-between items-center mb-2">
             <p className="font-comic text-lg uppercase font-bold text-blue-900">{title}</p>
@@ -234,32 +245,184 @@ const CharacterCard: React.FC<{
                         <input type="file" accept="image/*" multiple className="hidden" onChange={(e) => e.target.files && e.target.files.length > 0 && onRefUpload(e.target.files)} />
                     </label>
                 </div>
+
+                {/* Emblem/Logo Section */}
+                <div className="mt-3">
+                    <div className="font-comic text-xs mb-1 font-bold text-gray-600 uppercase">
+                        Emblem / Logo (Optional)<Tooltip text="Upload an emblem or logo that should appear consistently on this character (e.g., superhero symbol, team badge, tattoo). Select placement for AI consistency." />
+                    </div>
+                    {persona?.emblemImage ? (
+                        <div className="flex gap-2 items-start mb-2">
+                            <img src={`data:image/jpeg;base64,${persona.emblemImage}`} alt="Emblem" className="w-16 h-16 object-contain border-2 border-black bg-white" />
+                            <div className="flex flex-col gap-1 flex-1">
+                                <label className="cursor-pointer comic-btn bg-yellow-400 text-black text-xs px-2 py-1 hover:bg-yellow-300 border-2 border-black uppercase text-center">
+                                    REPLACE
+                                    <input type="file" accept="image/*" className="hidden" onChange={(e) => e.target.files?.[0] && onEmblemUpload(e.target.files[0])} />
+                                </label>
+                                <button onClick={onEmblemRemove} className="comic-btn bg-red-500 text-white text-xs px-2 py-1 hover:bg-red-400 border-2 border-black uppercase">
+                                    CLEAR
+                                </button>
+                            </div>
+                        </div>
+                    ) : (
+                        <label className="comic-btn bg-purple-500 text-white text-sm px-3 py-2 block w-full hover:bg-purple-400 cursor-pointer text-center border-2 border-black mb-2">
+                            + ADD EMBLEM/LOGO
+                            <input type="file" accept="image/*" className="hidden" onChange={(e) => e.target.files?.[0] && onEmblemUpload(e.target.files[0])} />
+                        </label>
+                    )}
+                    {/* Placement dropdown - only show if emblem exists */}
+                    {persona?.emblemImage && (
+                        <div className="space-y-1">
+                            <select
+                                value={persona?.emblemPlacement || ''}
+                                onChange={(e) => onUpdate({ emblemPlacement: e.target.value as EmblemPlacement || undefined, emblemPlacementCustom: e.target.value === 'other' ? persona?.emblemPlacementCustom : undefined })}
+                                className="w-full p-1 border-2 border-black font-comic text-xs bg-white"
+                            >
+                                <option value="">Select Placement...</option>
+                                {EMBLEM_PLACEMENTS.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
+                            </select>
+                            {persona?.emblemPlacement === 'other' && (
+                                <input
+                                    type="text"
+                                    value={persona?.emblemPlacementCustom || ''}
+                                    onChange={(e) => onUpdate({ emblemPlacementCustom: e.target.value })}
+                                    placeholder="Describe placement (e.g., 'belt buckle', 'cape clasp')..."
+                                    className="w-full p-1 border-2 border-black font-comic text-xs"
+                                />
+                            )}
+                        </div>
+                    )}
+                </div>
+
+                {/* Weapon Reference Section */}
+                <div className="mt-3">
+                    <div className="font-comic text-xs mb-1 font-bold text-gray-600 uppercase">
+                        Signature Weapon (Optional)<Tooltip text="Upload a reference image of the character's signature weapon (sword, gun, staff, etc.) for AI consistency. Add a description for better results." />
+                    </div>
+                    {persona?.weaponImage ? (
+                        <div className="flex gap-2 items-start mb-2">
+                            <img src={`data:image/jpeg;base64,${persona.weaponImage}`} alt="Weapon" className="w-16 h-16 object-contain border-2 border-black bg-white" />
+                            <div className="flex flex-col gap-1 flex-1">
+                                <label className="cursor-pointer comic-btn bg-yellow-400 text-black text-xs px-2 py-1 hover:bg-yellow-300 border-2 border-black uppercase text-center">
+                                    REPLACE
+                                    <input type="file" accept="image/*" className="hidden" onChange={(e) => e.target.files?.[0] && onWeaponUpload(e.target.files[0])} />
+                                </label>
+                                <button onClick={onWeaponRemove} className="comic-btn bg-red-500 text-white text-xs px-2 py-1 hover:bg-red-400 border-2 border-black uppercase">
+                                    CLEAR
+                                </button>
+                            </div>
+                        </div>
+                    ) : (
+                        <label className="comic-btn bg-amber-600 text-white text-sm px-3 py-2 block w-full hover:bg-amber-500 cursor-pointer text-center border-2 border-black mb-2">
+                            + ADD WEAPON REF
+                            <input type="file" accept="image/*" className="hidden" onChange={(e) => e.target.files?.[0] && onWeaponUpload(e.target.files[0])} />
+                        </label>
+                    )}
+                    {/* Weapon description - only show if weapon image exists */}
+                    {persona?.weaponImage && (
+                        <textarea
+                            value={persona?.weaponDescriptionText || ''}
+                            onChange={(e) => onUpdate({ weaponDescriptionText: e.target.value })}
+                            placeholder="Describe the weapon: type, size, material, colors, engravings, glowing effects, unique features..."
+                            className="w-full p-1 border-2 border-black font-comic text-xs h-14 resize-none"
+                        />
+                    )}
+                </div>
             </div>
 
             <div>
                 <div className="mb-2">
                     <p className="font-comic text-xs mb-1 font-bold text-gray-600 uppercase">Name</p>
-                    <input 
-                        type="text" 
-                        value={persona?.name || ''} 
-                        onChange={(e) => onUpdate({ name: e.target.value })} 
+                    <input
+                        type="text"
+                        value={persona?.name || ''}
+                        onChange={(e) => onUpdate({ name: e.target.value })}
                         placeholder="Character Name"
                         className="w-full p-1 border-2 border-black font-comic text-sm"
                     />
                 </div>
-                <MultimodalInput 
-                    label="Character Backstory"
-                    textValue={persona?.backstoryText || ''}
-                    files={persona?.backstoryFiles || []}
-                    onTextChange={(val) => onUpdate({ backstoryText: val })}
-                    onFileUpload={onBackstoryFileUpload}
-                    onFileRemove={onBackstoryFileRemove}
-                    placeholder="Origins, personality, notes..."
-                />
+                {/* Backstory with Expand Button */}
+                <div className="mb-3">
+                    <div className="flex items-center justify-between mb-1">
+                        <p className="font-comic text-base font-bold text-gray-800 uppercase">Character Backstory</p>
+                        <button
+                            onClick={() => setShowExpandedBackstory(true)}
+                            className="comic-btn bg-blue-500 text-white text-[10px] px-2 py-0.5 hover:bg-blue-400 border-2 border-black uppercase"
+                            title="Expand backstory editor"
+                        >
+                            ⤢ EXPAND
+                        </button>
+                    </div>
+                    <textarea
+                        value={persona?.backstoryText || ''}
+                        onChange={(e) => onUpdate({ backstoryText: e.target.value })}
+                        placeholder="Origins, personality, notes..."
+                        className="w-full p-2 border-2 border-black font-comic text-sm h-20 resize-none shadow-[3px_3px_0px_rgba(0,0,0,0.1)] mb-2"
+                    />
+                    <div className="flex flex-wrap gap-2 items-center">
+                        <label className="comic-btn bg-gray-200 text-black text-xs px-2 py-1 hover:bg-gray-300 cursor-pointer border-2 border-black">
+                            UPLOAD FILES
+                            <input
+                                type="file"
+                                multiple
+                                accept=".txt,.md,image/*"
+                                className="hidden"
+                                onChange={(e) => e.target.files && onBackstoryFileUpload(e.target.files)}
+                            />
+                        </label>
+                        {(persona?.backstoryFiles || []).map((f, i) => (
+                            <div key={i} className="bg-yellow-100 border border-black p-1 text-[10px] flex items-center gap-2">
+                                {f.mimeType?.startsWith('image/') && f.base64 ? (
+                                    <img src={`data:${f.mimeType};base64,${f.base64}`} alt={f.name} className="w-8 h-8 object-cover border border-black" />
+                                ) : (
+                                    <div className="w-8 h-8 flex items-center justify-center bg-gray-200 border border-black text-gray-500 font-bold">DOC</div>
+                                )}
+                                <span className="truncate max-w-[80px]">{f.name}</span>
+                                <button onClick={() => onBackstoryFileRemove(i)} className="text-red-600 font-bold hover:scale-110 text-lg leading-none">×</button>
+                            </div>
+                        ))}
+                    </div>
+                </div>
             </div>
+
+            {/* Expanded Backstory Modal */}
+            {showExpandedBackstory && (
+                <div className="fixed inset-0 z-[700] bg-black/90 backdrop-blur-md flex items-center justify-center p-2 sm:p-4" onClick={() => setShowExpandedBackstory(false)}>
+                    <div className="max-w-[800px] w-full bg-white border-[4px] sm:border-[6px] border-black p-4 sm:p-6 shadow-[8px_8px_0px_rgba(0,0,0,0.5)] sm:shadow-[12px_12px_0px_rgba(0,0,0,0.5)] relative max-h-[95vh] sm:max-h-[90vh] flex flex-col" onClick={e => e.stopPropagation()}>
+                        <div className="flex justify-between items-center mb-3 sm:mb-4 gap-2">
+                            <h3 className="font-comic text-lg sm:text-2xl text-blue-600 uppercase tracking-tighter truncate">
+                                {persona?.name ? `${persona.name}'s Backstory` : 'Character Backstory'}
+                            </h3>
+                            <button
+                                onClick={() => setShowExpandedBackstory(false)}
+                                className="shrink-0 bg-red-600 text-white w-8 h-8 sm:w-10 sm:h-10 border-2 sm:border-4 border-black font-bold text-lg sm:text-xl flex items-center justify-center hover:scale-110 hover:bg-red-500"
+                            >×</button>
+                        </div>
+                        <textarea
+                            value={persona?.backstoryText || ''}
+                            onChange={(e) => onUpdate({ backstoryText: e.target.value })}
+                            placeholder="Enter detailed character backstory: origins, personality traits, motivations, relationships, powers/abilities, weaknesses, key events in their history..."
+                            className="flex-1 w-full p-3 sm:p-4 border-2 sm:border-4 border-black font-comic text-sm resize-none shadow-inner min-h-[250px] sm:min-h-[300px] leading-relaxed"
+                            autoFocus
+                        />
+                        <div className="mt-3 sm:mt-4 flex justify-between items-center gap-2">
+                            <p className="font-comic text-[10px] sm:text-xs text-gray-500">
+                                {(persona?.backstoryText || '').length} chars
+                            </p>
+                            <button
+                                onClick={() => setShowExpandedBackstory(false)}
+                                className="comic-btn bg-green-600 text-white px-4 sm:px-6 py-2 font-bold border-2 sm:border-[3px] border-black hover:bg-green-500 uppercase text-sm sm:text-base"
+                            >
+                                ✓ DONE
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     </div>
-);
+    );
+};
 
 export const Setup: React.FC<SetupProps> = (props) => {
     const [showTutorial, setShowTutorial] = useState(false);
@@ -314,44 +477,56 @@ export const Setup: React.FC<SetupProps> = (props) => {
                             <button onClick={props.onAddCharacter} className="bg-blue-600 text-white text-xs px-2 py-1 hover:bg-blue-500 border-2 border-black">ADD CHARACTER</button>
                         </div>
                         
-                        <div className="max-h-[500px] overflow-y-auto pr-2 custom-scrollbar">
-                            <CharacterCard 
-                                title="MAIN (REQUIRED)" 
-                                persona={props.hero} 
-                                isFixed 
+                        <div className="max-h-[700px] overflow-y-auto pr-2 custom-scrollbar">
+                            <CharacterCard
+                                title="MAIN (REQUIRED)"
+                                persona={props.hero}
+                                isFixed
                                 onUpdate={props.onHeroUpdate}
                                 onReset={props.onResetHero}
                                 onPortraitUpload={(file) => props.onPortraitUpload('hero', file)}
                                 onRefUpload={(files) => props.onRefUpload('hero', files)}
                                 onRefRemove={(i) => props.onRefRemove('hero', i)}
-                                onBackstoryFileUpload={(files) => props.onBackstoryFileUpload('hero', files)} 
+                                onEmblemUpload={(file) => props.onEmblemUpload('hero', file)}
+                                onEmblemRemove={() => props.onEmblemRemove('hero')}
+                                onWeaponUpload={(file) => props.onWeaponUpload('hero', file)}
+                                onWeaponRemove={() => props.onWeaponRemove('hero')}
+                                onBackstoryFileUpload={(files) => props.onBackstoryFileUpload('hero', files)}
                                 onBackstoryFileRemove={(i) => props.onBackstoryFileRemove('hero', i)}
                             />
 
-                            <CharacterCard 
-                                title="CO-STAR (OPTIONAL)" 
-                                persona={props.friend} 
-                                isFixed 
+                            <CharacterCard
+                                title="CO-STAR (OPTIONAL)"
+                                persona={props.friend}
+                                isFixed
                                 onUpdate={props.onFriendUpdate}
                                 onReset={props.onResetFriend}
                                 onPortraitUpload={(file) => props.onPortraitUpload('friend', file)}
                                 onRefUpload={(files) => props.onRefUpload('friend', files)}
                                 onRefRemove={(i) => props.onRefRemove('friend', i)}
-                                onBackstoryFileUpload={(files) => props.onBackstoryFileUpload('friend', files)} 
+                                onEmblemUpload={(file) => props.onEmblemUpload('friend', file)}
+                                onEmblemRemove={() => props.onEmblemRemove('friend')}
+                                onWeaponUpload={(file) => props.onWeaponUpload('friend', file)}
+                                onWeaponRemove={() => props.onWeaponRemove('friend')}
+                                onBackstoryFileUpload={(files) => props.onBackstoryFileUpload('friend', files)}
                                 onBackstoryFileRemove={(i) => props.onBackstoryFileRemove('friend', i)}
                             />
 
                             {props.additionalCharacters.map((char) => (
-                                <CharacterCard 
+                                <CharacterCard
                                     key={char.id}
-                                    title="ADDITIONAL CHARACTER" 
-                                    persona={char} 
+                                    title="ADDITIONAL CHARACTER"
+                                    persona={char}
                                     onUpdate={(updates) => props.onUpdateCharacter(char.id, updates)}
                                     onDelete={() => props.onDeleteCharacter(char.id)}
                                     onPortraitUpload={(file) => props.onPortraitUpload(char.id, file)}
                                     onRefUpload={(files) => props.onRefUpload(char.id, files)}
                                     onRefRemove={(i) => props.onRefRemove(char.id, i)}
-                                    onBackstoryFileUpload={(files) => props.onBackstoryFileUpload(char.id, files)} 
+                                    onEmblemUpload={(file) => props.onEmblemUpload(char.id, file)}
+                                    onEmblemRemove={() => props.onEmblemRemove(char.id)}
+                                    onWeaponUpload={(file) => props.onWeaponUpload(char.id, file)}
+                                    onWeaponRemove={() => props.onWeaponRemove(char.id)}
+                                    onBackstoryFileUpload={(files) => props.onBackstoryFileUpload(char.id, files)}
                                     onBackstoryFileRemove={(i) => props.onBackstoryFileRemove(char.id, i)}
                                 />
                             ))}
