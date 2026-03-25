@@ -52,7 +52,7 @@ const PACING_INDICATORS: Record<'slow' | 'medium' | 'fast', { icon: string; colo
     'fast': { icon: '🏃', color: 'text-red-600' },
 };
 
-// Page Card Component
+// Page Card Component - Enhanced for readability
 const PageCard: React.FC<{ plan: PageCharacterPlan }> = ({ plan }) => {
     const layout = LAYOUT_ICONS[plan.panelLayout] || LAYOUT_ICONS['grid-2x3'];
     const shot = SHOT_ICONS[plan.suggestedShot] || SHOT_ICONS['medium'];
@@ -60,43 +60,43 @@ const PageCard: React.FC<{ plan: PageCharacterPlan }> = ({ plan }) => {
     const pacing = PACING_INDICATORS[plan.pacingIntent] || PACING_INDICATORS['medium'];
 
     return (
-        <div className={`border-2 ${beatColor} p-2 rounded transition-all hover:shadow-md ${plan.isFlashback ? 'bg-amber-50' : ''}`}>
+        <div className={`border-3 ${beatColor} p-3 sm:p-4 rounded-lg transition-all hover:shadow-lg hover:scale-[1.02] ${plan.isFlashback ? 'bg-amber-50' : ''}`}>
             {/* Header */}
-            <div className="flex items-center justify-between mb-1">
-                <span className="font-comic font-bold text-sm">
+            <div className="flex items-center justify-between mb-2">
+                <span className="font-comic font-bold text-base sm:text-lg">
                     Page {plan.pageIndex}
-                    {plan.isDecisionPage && <span className="ml-1 text-purple-600">⚡</span>}
+                    {plan.isDecisionPage && <span className="ml-1 text-purple-600 text-xl">⚡</span>}
                 </span>
-                <div className="flex items-center gap-1">
-                    <span title={layout.label} className="text-lg cursor-help">{layout.icon}</span>
-                    <span title={shot.label} className="text-sm cursor-help">{shot.icon}</span>
-                    <span title={`Pacing: ${plan.pacingIntent}`} className={`text-sm ${pacing.color}`}>{pacing.icon}</span>
+                <div className="flex items-center gap-1.5 sm:gap-2">
+                    <span title={layout.label} className="text-xl sm:text-2xl cursor-help">{layout.icon}</span>
+                    <span title={shot.label} className="text-base sm:text-lg cursor-help">{shot.icon}</span>
+                    <span title={`Pacing: ${plan.pacingIntent}`} className={`text-base sm:text-lg ${pacing.color}`}>{pacing.icon}</span>
                 </div>
             </div>
 
             {/* Scene description */}
-            <p className="font-comic text-[10px] text-gray-700 line-clamp-2 mb-1" title={plan.sceneDescription}>
+            <p className="font-comic text-xs sm:text-sm text-gray-700 line-clamp-3 mb-2 leading-relaxed" title={plan.sceneDescription}>
                 {plan.sceneDescription || 'No description'}
             </p>
 
             {/* Footer badges */}
-            <div className="flex flex-wrap gap-1">
-                <span className="px-1 py-0.5 bg-white border border-gray-300 rounded text-[8px] font-comic font-bold uppercase">
+            <div className="flex flex-wrap gap-1.5">
+                <span className="px-2 py-1 bg-white border-2 border-gray-300 rounded text-[10px] sm:text-xs font-comic font-bold uppercase">
                     {plan.emotionalBeat}
                 </span>
                 {plan.isFlashback && (
-                    <span className="px-1 py-0.5 bg-amber-200 border border-amber-400 rounded text-[8px] font-comic font-bold">
-                        📜 Flashback
+                    <span className="px-2 py-1 bg-amber-200 border-2 border-amber-400 rounded text-[10px] sm:text-xs font-comic font-bold">
+                        📜 Moment
                     </span>
                 )}
-                <span className="px-1 py-0.5 bg-gray-200 border border-gray-400 rounded text-[8px] font-comic" title={plan.transitionType}>
+                <span className="px-2 py-1 bg-gray-200 border-2 border-gray-400 rounded text-[10px] sm:text-xs font-comic" title={plan.transitionType}>
                     → {plan.transitionType.split('-')[0]}
                 </span>
             </div>
 
             {/* Characters */}
-            <div className="mt-1 text-[9px] text-gray-500 font-comic truncate">
-                👥 {plan.primaryCharacters.join(', ')} | Focus: {plan.focusCharacter}
+            <div className="mt-2 text-[11px] sm:text-xs text-gray-600 font-comic">
+                👥 {plan.primaryCharacters.slice(0, 2).join(', ')}{plan.primaryCharacters.length > 2 ? '...' : ''} | Focus: {plan.focusCharacter}
             </div>
         </div>
     );
@@ -120,15 +120,15 @@ export const OutlineStepDialog: React.FC<Props> = ({
     const hasPageBreakdown = storyOutline.pageBreakdown && storyOutline.pageBreakdown.length > 0;
 
     return (
-        <div className="fixed inset-0 z-[600] bg-black/90 backdrop-blur-md flex items-center justify-center p-4">
-            <div className="max-w-[900px] w-full bg-white border-[6px] border-black p-6 shadow-[12px_12px_0px_rgba(0,0,0,0.5)] max-h-[90vh] overflow-hidden flex flex-col">
-                <div className="flex items-center justify-between mb-4">
-                    <h2 className="font-comic text-3xl text-red-600 uppercase tracking-tighter">Story Outline</h2>
+        <div className="fixed inset-0 z-[600] bg-black/90 backdrop-blur-md flex items-center justify-center p-2 sm:p-4">
+            <div className="max-w-[1400px] w-full bg-white border-[4px] sm:border-[6px] border-black p-4 sm:p-6 lg:p-8 shadow-[8px_8px_0px_rgba(0,0,0,0.5)] sm:shadow-[12px_12px_0px_rgba(0,0,0,0.5)] max-h-[95vh] overflow-hidden flex flex-col">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-4 sm:mb-6">
+                    <h2 className="font-comic text-2xl sm:text-3xl lg:text-4xl text-red-600 uppercase tracking-tighter">Story Outline</h2>
                     {hasPageBreakdown && !storyOutline.isGenerating && (
-                        <div className="flex gap-1 border-2 border-black">
+                        <div className="flex gap-1 border-2 border-black shrink-0">
                             <button
                                 onClick={() => setViewMode('visual')}
-                                className={`px-3 py-1 font-comic text-xs font-bold transition-colors ${
+                                className={`px-3 sm:px-4 py-1.5 sm:py-2 font-comic text-xs sm:text-sm font-bold transition-colors ${
                                     viewMode === 'visual' ? 'bg-yellow-400 text-black' : 'bg-gray-200 hover:bg-gray-300'
                                 }`}
                             >
@@ -136,7 +136,7 @@ export const OutlineStepDialog: React.FC<Props> = ({
                             </button>
                             <button
                                 onClick={() => setViewMode('text')}
-                                className={`px-3 py-1 font-comic text-xs font-bold transition-colors ${
+                                className={`px-3 sm:px-4 py-1.5 sm:py-2 font-comic text-xs sm:text-sm font-bold transition-colors ${
                                     viewMode === 'text' ? 'bg-yellow-400 text-black' : 'bg-gray-200 hover:bg-gray-300'
                                 }`}
                             >
@@ -156,11 +156,11 @@ export const OutlineStepDialog: React.FC<Props> = ({
                     <div className="flex-1 overflow-hidden flex flex-col">
                         {/* Visual View */}
                         {viewMode === 'visual' && hasPageBreakdown ? (
-                            <div className="flex-1 overflow-y-auto mb-4">
+                            <div className="flex-1 overflow-y-auto mb-4 pr-1">
                                 {/* Legend */}
-                                <div className="mb-3 p-2 bg-gray-50 border-2 border-gray-300 rounded">
-                                    <p className="font-comic text-xs font-bold mb-1">Legend:</p>
-                                    <div className="flex flex-wrap gap-2 text-[10px] font-comic">
+                                <div className="mb-4 p-3 sm:p-4 bg-gray-50 border-2 border-gray-300 rounded-lg">
+                                    <p className="font-comic text-sm sm:text-base font-bold mb-2">Legend:</p>
+                                    <div className="flex flex-wrap gap-x-3 gap-y-1.5 text-xs sm:text-sm font-comic">
                                         <span>▣ Splash</span>
                                         <span>⊟ 6-Panel</span>
                                         <span>▦ 9-Panel</span>
@@ -172,20 +172,20 @@ export const OutlineStepDialog: React.FC<Props> = ({
                                         <span>🐢 Slow</span>
                                         <span>🏃 Fast</span>
                                         <span className="text-gray-400">|</span>
-                                        <span>⚡ Decision Page</span>
+                                        <span className="text-purple-600 font-bold">⚡ Decision Page</span>
                                     </div>
                                 </div>
 
-                                {/* Page Grid */}
-                                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2">
+                                {/* Page Grid - Responsive: 1 col mobile, 2 sm, 3 md, 4 lg, 5 xl */}
+                                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 sm:gap-4">
                                     {storyOutline.pageBreakdown!.map((plan) => (
                                         <PageCard key={plan.pageIndex} plan={plan} />
                                     ))}
                                 </div>
 
                                 {/* Summary Stats */}
-                                <div className="mt-3 p-2 bg-blue-50 border-2 border-blue-300 rounded">
-                                    <p className="font-comic text-xs font-bold">
+                                <div className="mt-4 p-3 sm:p-4 bg-blue-50 border-2 border-blue-300 rounded-lg">
+                                    <p className="font-comic text-sm sm:text-base font-bold">
                                         📈 Summary: {storyOutline.pageBreakdown!.length} pages |
                                         {' '}{storyOutline.pageBreakdown!.filter(p => p.panelLayout === 'splash').length} splash pages |
                                         {' '}{storyOutline.pageBreakdown!.filter(p => p.isFlashback).length} flashbacks |
@@ -198,25 +198,25 @@ export const OutlineStepDialog: React.FC<Props> = ({
                             <textarea
                                 value={storyOutline.content}
                                 onChange={(e) => onOutlineUpdate(e.target.value)}
-                                className="flex-1 w-full p-4 border-4 border-black font-comic text-sm mb-4 resize-none bg-yellow-50 shadow-inner min-h-[250px]"
+                                className="flex-1 w-full p-4 sm:p-6 border-4 border-black font-comic text-sm sm:text-base mb-4 resize-none bg-yellow-50 shadow-inner min-h-[300px] leading-relaxed"
                                 placeholder="Generated outline will appear here..."
                             />
                         )}
 
                         {/* Regenerate controls */}
-                        <div className="mb-4 text-left">
-                            <p className="font-comic text-xs font-bold mb-1 uppercase">Regenerate with Context/Notes:</p>
-                            <div className="flex gap-2">
+                        <div className="mb-4 sm:mb-6 text-left">
+                            <p className="font-comic text-sm sm:text-base font-bold mb-2 uppercase">Regenerate with Context/Notes:</p>
+                            <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
                                 <input
                                     type="text"
                                     value={outlineNotes}
                                     onChange={(e) => onOutlineNotesChange(e.target.value)}
                                     placeholder="Add notes for regeneration... (e.g., 'more action scenes', 'add a flashback on page 5')"
-                                    className="flex-1 p-2 border-2 border-black font-comic text-sm"
+                                    className="flex-1 p-3 border-2 border-black font-comic text-sm sm:text-base"
                                 />
                                 <button
                                     onClick={() => onGenerateOutline(outlineNotes)}
-                                    className="comic-btn bg-blue-600 text-white px-4 py-2 text-sm font-bold border-2 border-black hover:bg-blue-500"
+                                    className="comic-btn bg-blue-600 text-white px-6 py-3 text-sm sm:text-base font-bold border-[3px] border-black hover:bg-blue-500 whitespace-nowrap"
                                 >
                                     REGENERATE
                                 </button>
@@ -224,14 +224,14 @@ export const OutlineStepDialog: React.FC<Props> = ({
                         </div>
 
                         {/* Action buttons */}
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-3">
                             <button
                                 onClick={onProceedWithOutline}
-                                className="comic-btn bg-green-600 text-white py-3 font-bold border-2 border-black hover:bg-green-500 text-xs"
+                                className="comic-btn bg-green-600 text-white py-3 sm:py-4 font-bold border-[3px] border-black hover:bg-green-500 text-sm sm:text-base lg:text-lg"
                             >
                                 ✅ APPROVE & PROCEED
                             </button>
-                            <label className="comic-btn bg-gray-200 text-black py-3 font-bold border-2 border-black hover:bg-gray-300 text-xs text-center cursor-pointer">
+                            <label className="comic-btn bg-gray-200 text-black py-3 sm:py-4 font-bold border-[3px] border-black hover:bg-gray-300 text-sm sm:text-base lg:text-lg text-center cursor-pointer flex items-center justify-center">
                                 📤 UPLOAD OUTLINE
                                 <input
                                     type="file"
@@ -242,7 +242,7 @@ export const OutlineStepDialog: React.FC<Props> = ({
                             </label>
                             <button
                                 onClick={onCancelOutline}
-                                className="comic-btn bg-red-600 text-white py-3 font-bold border-2 border-black hover:bg-red-500 text-xs"
+                                className="comic-btn bg-red-600 text-white py-3 sm:py-4 font-bold border-[3px] border-black hover:bg-red-500 text-sm sm:text-base lg:text-lg"
                             >
                                 ❌ CANCEL
                             </button>
