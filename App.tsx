@@ -1272,11 +1272,12 @@ For hardNegatives, analyze the image and add negatives for:
 
       updateFaceState(faceId, { narrative: beat, choices: beat.choices, isDecisionPage: isDecision });
 
-      // Retrieve previous context
+      // Retrieve previous context - use historyRef for synchronous access (important for Novel Mode page-by-page flow)
       let prevImage: string | undefined;
       let prevBeat: Beat | undefined;
       if (pageNum > 0) {
-          const prevFace = comicFaces.find(f => f.pageIndex === pageNum - 1);
+          // Use historyRef.current instead of comicFaces (React state) to avoid stale closure data
+          const prevFace = historyRef.current.find(f => f.pageIndex === pageNum - 1);
           if (prevFace?.imageUrl) {
               prevImage = prevFace.imageUrl;
               prevBeat = prevFace.narrative;
