@@ -11,6 +11,31 @@ Master index of all development sessions for the Infinite Heroes Comic Creator p
 
 ## March 2026
 
+### Session 9 - 2026-03-25
+**File**: [2026-03-25_Session_9.md](./March%202026/2026-03-25_Session_9.md)
+**Title**: AI Text Improvement, Claude Mime Type Fix & Batch Reinforcement
+**Status**: ✅ Complete
+**Duration**: ~1.0 hours (60 minutes)
+
+**Summary**: Added AI text improvement feature with Claude/Gemini fallback, fixed Claude API image mime type detection, updated page lengths, and reinforced batch-of-3 generation in prompts.
+
+**Key Accomplishments**:
+- ✅ Created `improveTextWithAI()` function in App.tsx (Claude primary, Gemini fallback)
+- ✅ Added AI improve button to story description with character context dropdown
+- ✅ Added AI improve button to RerollModal instruction textarea
+- ✅ Fixed Claude 400 error with `detectImageMimeType()` for base64 magic bytes
+- ✅ Updated page lengths: Short Story 5→6, Standard Issue 8→9
+- ✅ Added batch context to generateBeat() and directive #7 for visual continuity
+- ✅ Changed Help button icon back to book emoji
+
+**Files Modified**: `App.tsx` (+80), `Setup.tsx` (+191/-72), `RerollModal.tsx` (+37), `claudeHelpers.ts` (+47), `types.ts` (+8/-8)
+
+**Git Commit**: 0a1c5b5
+
+**Next Steps**: Test AI improve with real API keys, verify batch context improves narrative flow
+
+---
+
 ### Session 8 - 2026-03-25
 **File**: [2026-03-25_Session_8.md](./March%202026/2026-03-25_Session_8.md)
 **Title**: Emblem/Clothing Reinforcement, Help Modal & Visual Fix
@@ -177,6 +202,8 @@ Master index of all development sessions for the Infinite Heroes Comic Creator p
 ## Topic Index
 
 ### AI Model Integration
+- [Session 9 - AI Text Improvement Feature](./March%202026/2026-03-25_Session_9.md#1-ai-text-improvement-feature)
+- [Session 9 - Claude Mime Type Detection Fix](./March%202026/2026-03-25_Session_9.md#2-claude-api-image-mime-type-fix)
 - [Session 4 - Claude Integration](./March%202026/2026-03-25_Session_4.md#decision-hybrid-multi-model-architecture-claude--gemini)
 - [Session 4 - Multi-Model Fallback](./March%202026/2026-03-25_Session_4.md#decision-claude-as-primary-gemini-as-fallback)
 - [Session 4 - Type Safety for AI Responses](./March%202026/2026-03-25_Session_4.md#decision-type-safety-helpers-for-ai-responses)
@@ -200,6 +227,8 @@ Master index of all development sessions for the Infinite Heroes Comic Creator p
 - [Session 1 - Choice Reroll](./March%202026/2026-03-25_Session_1.md#issue-i-implemented-choice-reroll-system)
 
 ### Regeneration System
+- [Session 9 - AI Text Improvement for Reroll](./March%202026/2026-03-25_Session_9.md#rerollmodaltsx---ai-improve-button)
+- [Session 9 - Batch-of-3 Generation Reinforcement](./March%202026/2026-03-25_Session_9.md#4-batch-of-3-generation-reinforcement)
 - [Session 7 - Negative Prompts](./March%202026/2026-03-25_Session_7.md#decision-negative-prompt-in-rerollmodal)
 - [Session 5 - Debug UI Enhancements](./March%202026/2026-03-25_Session_5.md#session-5-story-outline--original-prompt-copydownload-enhancement)
 - [Session 1 - Mode Selection](./March%202026/2026-03-25_Session_1.md#issue-d-created-regeneration-mode-system-in-rerollmodaltsx)
@@ -274,14 +303,14 @@ Progress on the 11-issue enhancement plan (Issues A-K).
 
 ## Session Statistics
 
-- **Total Sessions**: 8
-- **Total Duration**: ~9.3+ hours
-- **Files Modified**: 24+ unique files
-- **Lines Added**: ~2,720+
+- **Total Sessions**: 9
+- **Total Duration**: ~10.3+ hours
+- **Files Modified**: 29+ unique files
+- **Lines Added**: ~3,100+
 - **Batches Complete**: 4.5 of 6
-- **Progress**: 75%
+- **Progress**: 78%
 - **Quality Score Average**: 94%
-- **Git Commits**: 9 (7ae4b86, d810185, f433f71, adf3715, f0a9756, 7f4018d, ddd8b81, e91fd97, 1ab55da)
+- **Git Commits**: 10 (7ae4b86, d810185, f433f71, adf3715, f0a9756, 7f4018d, ddd8b81, e91fd97, 1ab55da, 0a1c5b5)
 
 ---
 
