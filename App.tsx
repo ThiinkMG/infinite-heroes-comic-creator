@@ -2149,11 +2149,28 @@ OUTPUT: Structured text EXACTLY as shown above for each page.
               outline={storyOutline.content}
               allRefImages={getRerollGallery()}
               availableProfiles={characterProfilesRef.current.map(p => ({ id: p.id, name: p.name }))}
+              fullProfiles={characterProfilesRef.current}
               originalPrompt={comicFaces.find(f => f.pageIndex === rerollTarget)?.originalPrompt}
               onSubmit={handleRerollSubmit}
               onClose={() => setRerollTarget(null)}
               onUploadRef={handleRerollUploadRef}
               onDeleteRef={handleRerollDeleteRef}
+              onProfileUpdate={(profileId, updates) => {
+                  const idx = characterProfilesRef.current.findIndex(p => p.id === profileId);
+                  if (idx !== -1) {
+                      characterProfilesRef.current[idx] = { ...characterProfilesRef.current[idx], ...updates };
+                  }
+              }}
+              onAnalyzeProfile={async (profileId) => {
+                  // Find corresponding persona and regenerate profile
+                  const allPersonas = [heroRef.current, friendRef.current, ...additionalCharsRef.current].filter(Boolean) as Persona[];
+                  const persona = allPersonas.find(p => p.id === profileId);
+                  if (persona) {
+                      const newProfile = await generateCharacterProfile(persona, true);
+                      const idx = characterProfilesRef.current.findIndex(p => p.id === profileId);
+                      if (idx !== -1) characterProfilesRef.current[idx] = newProfile;
+                  }
+              }}
           />
       )}
 

@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useRef } from 'react';
-import { RegenerationMode, ShotType, BalloonShape, RerollOptions } from './types';
+import { RegenerationMode, ShotType, BalloonShape, RerollOptions, CharacterProfile } from './types';
 
 // Shot type options with icons
 const SHOT_OPTIONS: { shot: ShotType; icon: string; label: string }[] = [
@@ -38,11 +38,15 @@ interface RerollModalProps {
     outline: string;
     allRefImages: RefImage[];
     availableProfiles: { id: string, name: string }[];
+    fullProfiles: CharacterProfile[];  // Full profile data for editing
     originalPrompt?: string;  // For debugging/reference
     onSubmit: (options: RerollOptions) => void;
     onClose: () => void;
     onUploadRef: (files: FileList) => void;
     onDeleteRef: (charId: string, refIndex: number) => void;
+    onProfileUpdate?: (profileId: string, updates: Partial<CharacterProfile>) => void;
+    onAnalyzeProfile?: (profileId: string) => Promise<void>;
+    onAddNewCharacter?: () => void;
 }
 
 export const RerollModal: React.FC<RerollModalProps> = ({
@@ -50,19 +54,27 @@ export const RerollModal: React.FC<RerollModalProps> = ({
     outline,
     allRefImages,
     availableProfiles,
+    fullProfiles,
     originalPrompt,
     onSubmit,
     onClose,
     onUploadRef,
-    onDeleteRef
+    onDeleteRef,
+    onProfileUpdate,
+    onAnalyzeProfile,
+    onAddNewCharacter
 }) => {
     const [instruction, setInstruction] = useState('');
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set(allRefImages.map(r => r.id)));
     const [selectedProfileIds, setSelectedProfileIds] = useState<Set<string>>(new Set(availableProfiles.map(p => p.id)));
     const [deleteMode, setDeleteMode] = useState(false);
-    const [regenerationMode, setRegenerationMode] = useState<RegenerationMode>('full');
+    const [regenerationMode, setRegenerationMode] = useState<RegenerationMode | null>('full');
     const [showOriginalPrompt, setShowOriginalPrompt] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
+
+    // Profile editor state
+    const [expandedProfileId, setExpandedProfileId] = useState<string | null>(null);
+    const [analyzingProfileId, setAnalyzingProfileId] = useState<string | null>(null);
 
     // Comic fundamentals overrides
     const [shotTypeOverride, setShotTypeOverride] = useState<ShotType | undefined>(undefined);
@@ -94,7 +106,7 @@ export const RerollModal: React.FC<RerollModalProps> = ({
             .map(r => r.base64);
 
         const options: RerollOptions = {
-            regenerationMode,
+            regenerationMode: regenerationMode || undefined,
             instruction,
             selectedRefImages,
             selectedProfileIds: Array.from(selectedProfileIds),
@@ -118,6 +130,51 @@ export const RerollModal: React.FC<RerollModalProps> = ({
 
     const selectAll = () => setSelectedIds(new Set(allRefImages.map(r => r.id)));
     const selectNone = () => setSelectedIds(new Set());
+
+    // Profile editor helpers
+    const getFullProfile = (id: string) => fullProfiles.find(p => p.id === id);
+
+    const handleProfileClick = (id: string) => {
+        setExpandedProfileId(expandedProfileId === id ? null : id);
+    };
+
+    const handleDownloadProfile = (profile: CharacterProfile) => {
+        const data = JSON.stringify(profile, null, 2);
+        const blob = new Blob([data], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `Profile-${profile.name.replace(/\s+/g, '-')}.json`;
+        a.click();
+        URL.revokeObjectURL(url);
+    };
+
+    const handleUploadProfile = (profileId: string, file: File) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+            try {
+                const parsed = JSON.parse(reader.result as string);
+                if (parsed && typeof parsed === 'object' && onProfileUpdate) {
+                    // Keep original id and name, update the rest
+                    const { id, name, ...rest } = parsed;
+                    onProfileUpdate(profileId, rest);
+                }
+            } catch (err) {
+                alert('Failed to parse JSON file.');
+            }
+        };
+        reader.readAsText(file);
+    };
+
+    const handleAnalyze = async (profileId: string) => {
+        if (!onAnalyzeProfile) return;
+        setAnalyzingProfileId(profileId);
+        try {
+            await onAnalyzeProfile(profileId);
+        } finally {
+            setAnalyzingProfileId(null);
+        }
+    };
 
     return (
         <div className="fixed inset-0 z-[500] flex items-end md:items-center justify-center bg-black/80 backdrop-blur-sm" onClick={onClose}>
@@ -158,36 +215,41 @@ export const RerollModal: React.FC<RerollModalProps> = ({
                     <div className="border-[3px] border-black bg-indigo-50 p-4">
                         <p className="font-comic text-sm font-bold uppercase text-indigo-900 mb-2">
                             🔄 Regeneration Mode
+                            <span className="font-normal text-[10px] text-indigo-600 ml-2">(Click selected to uncheck)</span>
                         </p>
                         <div className="grid grid-cols-2 gap-2">
                             {[
-                                { mode: 'full' as RegenerationMode, label: '🎲 Full Reroll', desc: 'Regenerate entire panel from scratch' },
-                                { mode: 'characters_only' as RegenerationMode, label: '👥 Characters Only', desc: 'Keep scene/background, refresh characters' },
-                                { mode: 'expression_only' as RegenerationMode, label: '😊 Expression Only', desc: 'Keep everything, change facial expression' },
-                                { mode: 'outfit_only' as RegenerationMode, label: '👔 Outfit Only', desc: 'Keep everything, change clothing' }
+                                { mode: 'full' as RegenerationMode, label: '🎲 Full Reroll', desc: 'Regenerate entire panel from scratch', tooltip: 'Completely regenerates the panel with new composition, characters, and background' },
+                                { mode: 'characters_only' as RegenerationMode, label: '👥 Characters Only', desc: 'Keep scene/background, refresh characters', tooltip: 'Keeps the same scene and background, but regenerates how characters appear' },
+                                { mode: 'expression_only' as RegenerationMode, label: '😊 Expression Only', desc: 'Keep everything, change facial expression', tooltip: 'Minimal change - only adjusts character facial expressions' },
+                                { mode: 'outfit_only' as RegenerationMode, label: '👔 Outfit Only', desc: 'Keep everything, change clothing', tooltip: 'Keeps poses and scene, but changes what characters are wearing' }
                             ].map(opt => (
-                                <label
+                                <button
                                     key={opt.mode}
-                                    className={`flex flex-col p-2 border-2 cursor-pointer transition-colors ${
+                                    type="button"
+                                    title={opt.tooltip}
+                                    onClick={() => setRegenerationMode(regenerationMode === opt.mode ? null : opt.mode)}
+                                    className={`flex flex-col p-2 sm:p-3 border-2 cursor-pointer transition-all text-left ${
                                         regenerationMode === opt.mode
-                                            ? 'border-indigo-500 bg-indigo-100'
-                                            : 'border-gray-300 bg-white hover:border-indigo-300'
+                                            ? 'border-indigo-500 bg-indigo-100 shadow-[2px_2px_0px_rgba(0,0,0,0.3)]'
+                                            : 'border-gray-300 bg-white hover:border-indigo-300 hover:bg-indigo-50'
                                     }`}
                                 >
                                     <div className="flex items-center gap-2">
-                                        <input
-                                            type="radio"
-                                            name="regenerationMode"
-                                            checked={regenerationMode === opt.mode}
-                                            onChange={() => setRegenerationMode(opt.mode)}
-                                            className="w-4 h-4 accent-indigo-600"
-                                        />
-                                        <span className="font-comic text-xs font-bold">{opt.label}</span>
+                                        <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
+                                            regenerationMode === opt.mode ? 'border-indigo-600 bg-indigo-600' : 'border-gray-400 bg-white'
+                                        }`}>
+                                            {regenerationMode === opt.mode && <span className="text-white text-xs">✓</span>}
+                                        </div>
+                                        <span className="font-comic text-xs sm:text-sm font-bold">{opt.label}</span>
                                     </div>
-                                    <span className="font-comic text-[10px] text-gray-500 ml-6">{opt.desc}</span>
-                                </label>
+                                    <span className="font-comic text-[10px] sm:text-xs text-gray-500 ml-7 mt-1">{opt.desc}</span>
+                                </button>
                             ))}
                         </div>
+                        {regenerationMode === null && (
+                            <p className="text-[10px] text-indigo-600 font-comic mt-2 italic">No mode selected - will use default behavior</p>
+                        )}
                     </div>
 
                     {/* Shot Type Selector - Comic Fundamentals */}
@@ -405,37 +467,154 @@ export const RerollModal: React.FC<RerollModalProps> = ({
                         </div>
                     </div>
 
-                    {/* Character Profiles Toggle */}
-                    {availableProfiles.length > 0 && (
-                        <div className="border-[3px] border-black bg-orange-50 p-4">
-                            <div className="mb-2 border-b-2 border-orange-200 pb-2">
-                                <p className="font-comic font-bold text-sm uppercase text-orange-900">
-                                    🧬 Enforce AI Character Profiles
-                                </p>
-                                <p className="font-comic text-xs text-orange-700 mt-0.5">
-                                    Inject character face/clothing descriptions into the prompt for consistency.
-                                </p>
-                            </div>
-                            <div className="grid grid-cols-2 gap-2 mt-2">
-                                {availableProfiles.map(p => (
-                                    <label key={p.id} className={`flex items-center gap-2 p-2 border-2 cursor-pointer transition-colors ${selectedProfileIds.has(p.id) ? 'border-orange-500 bg-orange-100' : 'border-gray-300 bg-white opacity-70 hover:opacity-100'}`}>
-                                        <input 
-                                            type="checkbox" 
-                                            checked={selectedProfileIds.has(p.id)}
-                                            onChange={() => toggleProfile(p.id)}
-                                            className="w-4 h-4 accent-orange-600 cursor-pointer"
-                                        />
-                                        <span className="font-comic text-xs font-bold truncate" title={p.name}>{p.name}</span>
-                                    </label>
-                                ))}
-                            </div>
-                            <div className="flex gap-2 mt-2">
-                                <button onClick={() => setSelectedProfileIds(new Set(availableProfiles.map(p => p.id)))} className="text-[10px] font-comic font-bold text-orange-700 hover:text-orange-900 uppercase">Select All</button>
-                                <span className="text-[10px] text-orange-300">|</span>
-                                <button onClick={() => setSelectedProfileIds(new Set())} className="text-[10px] font-comic font-bold text-orange-700 hover:text-orange-900 uppercase">Select None</button>
-                            </div>
+                    {/* Character Profiles - Enhanced with Inline Editor */}
+                    <div className="border-[3px] border-black bg-orange-50 p-4">
+                        <div className="mb-3 border-b-2 border-orange-200 pb-2">
+                            <p className="font-comic font-bold text-sm sm:text-base uppercase text-orange-900">
+                                🧬 Enforce AI Character Profiles
+                            </p>
+                            <p className="font-comic text-xs sm:text-sm text-orange-700 mt-0.5">
+                                Click a character name to view/edit profile. Inject descriptions for consistency.
+                            </p>
                         </div>
-                    )}
+
+                        {availableProfiles.length > 0 ? (
+                            <div className="space-y-2">
+                                {availableProfiles.map(p => {
+                                    const fullProfile = getFullProfile(p.id);
+                                    const isExpanded = expandedProfileId === p.id;
+                                    const isAnalyzing = analyzingProfileId === p.id;
+
+                                    return (
+                                        <div key={p.id} className={`border-2 transition-all ${selectedProfileIds.has(p.id) ? 'border-orange-500 bg-orange-100' : 'border-gray-300 bg-white'}`}>
+                                            {/* Profile Header Row */}
+                                            <div className="flex items-center gap-2 p-2 sm:p-3">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={selectedProfileIds.has(p.id)}
+                                                    onChange={() => toggleProfile(p.id)}
+                                                    className="w-5 h-5 accent-orange-600 cursor-pointer shrink-0"
+                                                />
+                                                <button
+                                                    onClick={() => handleProfileClick(p.id)}
+                                                    className="flex-1 text-left font-comic text-sm sm:text-base font-bold text-orange-900 hover:text-orange-600 transition-colors truncate"
+                                                    title="Click to expand/edit profile"
+                                                >
+                                                    {p.name} {isExpanded ? '▼' : '▶'}
+                                                </button>
+                                                <span className="text-xs text-orange-500 hidden sm:inline">Click to edit</span>
+                                            </div>
+
+                                            {/* Expanded Profile Editor */}
+                                            {isExpanded && fullProfile && (
+                                                <div className="border-t-2 border-orange-200 p-3 sm:p-4 bg-white space-y-3">
+                                                    {/* Profile Fields */}
+                                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                                        <div>
+                                                            <label className="font-comic text-xs font-bold text-gray-700 uppercase block mb-1">Face Description</label>
+                                                            <textarea
+                                                                className="w-full p-2 border-2 border-gray-300 font-comic text-xs sm:text-sm h-20 resize-none focus:border-orange-400 focus:outline-none"
+                                                                value={fullProfile.faceDescription || ''}
+                                                                onChange={e => onProfileUpdate?.(p.id, { faceDescription: e.target.value })}
+                                                                placeholder="Eye color, face shape, expression..."
+                                                            />
+                                                        </div>
+                                                        <div>
+                                                            <label className="font-comic text-xs font-bold text-gray-700 uppercase block mb-1">Body Type</label>
+                                                            <textarea
+                                                                className="w-full p-2 border-2 border-gray-300 font-comic text-xs sm:text-sm h-20 resize-none focus:border-orange-400 focus:outline-none"
+                                                                value={fullProfile.bodyType || ''}
+                                                                onChange={e => onProfileUpdate?.(p.id, { bodyType: e.target.value })}
+                                                                placeholder="Height, build, posture..."
+                                                            />
+                                                        </div>
+                                                        <div>
+                                                            <label className="font-comic text-xs font-bold text-gray-700 uppercase block mb-1">Clothing & Armor</label>
+                                                            <textarea
+                                                                className="w-full p-2 border-2 border-gray-300 font-comic text-xs sm:text-sm h-20 resize-none focus:border-orange-400 focus:outline-none"
+                                                                value={fullProfile.clothing || ''}
+                                                                onChange={e => onProfileUpdate?.(p.id, { clothing: e.target.value })}
+                                                                placeholder="Outfit details, accessories..."
+                                                            />
+                                                        </div>
+                                                        <div>
+                                                            <label className="font-comic text-xs font-bold text-gray-700 uppercase block mb-1">Color Palette</label>
+                                                            <textarea
+                                                                className="w-full p-2 border-2 border-gray-300 font-comic text-xs sm:text-sm h-20 resize-none focus:border-orange-400 focus:outline-none"
+                                                                value={fullProfile.colorPalette || ''}
+                                                                onChange={e => onProfileUpdate?.(p.id, { colorPalette: e.target.value })}
+                                                                placeholder="Primary colors, skin tone, hair..."
+                                                            />
+                                                        </div>
+                                                        <div className="sm:col-span-2">
+                                                            <label className="font-comic text-xs font-bold text-gray-700 uppercase block mb-1">Distinguishing Features</label>
+                                                            <textarea
+                                                                className="w-full p-2 border-2 border-gray-300 font-comic text-xs sm:text-sm h-16 resize-none focus:border-orange-400 focus:outline-none"
+                                                                value={fullProfile.distinguishingFeatures || ''}
+                                                                onChange={e => onProfileUpdate?.(p.id, { distinguishingFeatures: e.target.value })}
+                                                                placeholder="Scars, tattoos, unique traits..."
+                                                            />
+                                                        </div>
+                                                    </div>
+
+                                                    {/* Profile Actions */}
+                                                    <div className="flex flex-wrap gap-2 pt-2 border-t border-gray-200">
+                                                        <button
+                                                            onClick={() => handleAnalyze(p.id)}
+                                                            disabled={isAnalyzing}
+                                                            className="comic-btn bg-blue-600 text-white text-xs px-3 py-1.5 border-2 border-black hover:bg-blue-500 disabled:opacity-50 font-bold"
+                                                        >
+                                                            {isAnalyzing ? '⏳ Analyzing...' : '🤖 Re-Analyze with AI'}
+                                                        </button>
+                                                        <button
+                                                            onClick={() => handleDownloadProfile(fullProfile)}
+                                                            className="comic-btn bg-yellow-500 text-black text-xs px-3 py-1.5 border-2 border-black hover:bg-yellow-400 font-bold"
+                                                        >
+                                                            ⬇️ Download JSON
+                                                        </button>
+                                                        <label className="comic-btn bg-gray-500 text-white text-xs px-3 py-1.5 border-2 border-black hover:bg-gray-400 font-bold cursor-pointer">
+                                                            ⬆️ Upload JSON
+                                                            <input
+                                                                type="file"
+                                                                accept=".json"
+                                                                className="hidden"
+                                                                onChange={(e) => {
+                                                                    if (e.target.files?.[0]) {
+                                                                        handleUploadProfile(p.id, e.target.files[0]);
+                                                                        e.target.value = '';
+                                                                    }
+                                                                }}
+                                                            />
+                                                        </label>
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        ) : (
+                            <p className="text-gray-500 font-comic text-sm text-center py-4">No character profiles available.</p>
+                        )}
+
+                        {/* Select All / None + Add New */}
+                        <div className="flex flex-wrap items-center gap-2 mt-3 pt-2 border-t border-orange-200">
+                            <button onClick={() => setSelectedProfileIds(new Set(availableProfiles.map(p => p.id)))} className="text-xs font-comic font-bold text-orange-700 hover:text-orange-900 uppercase">Select All</button>
+                            <span className="text-xs text-orange-300">|</span>
+                            <button onClick={() => setSelectedProfileIds(new Set())} className="text-xs font-comic font-bold text-orange-700 hover:text-orange-900 uppercase">Select None</button>
+                            {onAddNewCharacter && (
+                                <>
+                                    <span className="text-xs text-orange-300">|</span>
+                                    <button
+                                        onClick={onAddNewCharacter}
+                                        className="comic-btn bg-green-600 text-white text-xs px-3 py-1 border-2 border-black hover:bg-green-500 font-bold"
+                                    >
+                                        ➕ Add New Character
+                                    </button>
+                                </>
+                            )}
+                        </div>
+                    </div>
 
                     {/* Submit */}
                     <button
