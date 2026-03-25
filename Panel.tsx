@@ -122,6 +122,37 @@ export const Panel: React.FC<PanelProps> = ({ face, allFaces, storyContext, gene
                               className="comic-btn w-full py-2 text-lg bg-green-600 text-white hover:bg-green-500 font-bold tracking-wider border-2 border-black">
                                 ✍️ Custom Action
                             </button>
+                            {/* Choose for me - AI picks one of the options */}
+                            {!generateFromOutline && face.choices.length > 0 && (
+                                <button
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        if(face.pageIndex) {
+                                            // Pick a random choice from available options
+                                            const randomChoice = face.choices[Math.floor(Math.random() * face.choices.length)];
+                                            onChoice(face.pageIndex, randomChoice, false);
+                                        }
+                                    }}
+                                    className="comic-btn w-full py-2 text-sm bg-purple-600 text-white hover:bg-purple-500 font-bold tracking-wider border-2 border-black"
+                                    title="Let AI randomly pick one of the choices"
+                                >
+                                    🎲 Choose For Me
+                                </button>
+                            )}
+                            {/* Skip - Dismiss stale dialogue without action */}
+                            {!generateFromOutline && (
+                                <button
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        // Mark as resolved without generating - just dismiss the dialogue
+                                        if(face.pageIndex) onChoice(face.pageIndex, '[SKIPPED]', true);
+                                    }}
+                                    className="comic-btn w-full py-2 text-xs bg-gray-400 text-white hover:bg-gray-300 font-bold tracking-wider border-2 border-black"
+                                    title="Dismiss this dialogue (for stale/out-of-sync prompts)"
+                                >
+                                    ⏭️ Skip (Dismiss)
+                                </button>
+                            )}
                             {/* Stop Here Button - Novel Mode only */}
                             {onStopHere && !generateFromOutline && (
                                 <button

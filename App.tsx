@@ -1767,6 +1767,9 @@ OUTPUT: Structured text EXACTLY as shown above for each page.
       // Mark the choice on the current page
       updateFaceState(`page-${pageIndex}`, { resolvedChoice: choice, customActionUsed: isCustomAction ? choice : undefined });
 
+      // If skipped, just dismiss the dialogue - don't generate new pages
+      if (choice === '[SKIPPED]') return;
+
       if (isNovelMode) {
           // Track custom actions for potential drift detection
           if (isCustomAction) {
