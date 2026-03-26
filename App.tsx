@@ -1900,8 +1900,22 @@ Create a powerful, memorable conclusion that honors the user's story path.
       historyRef.current.push(newFace);
       generatingPages.current.add(wrapUpPage);
 
-      await generateSinglePage(faceId, wrapUpPage, 'story', getWrapUpInstruction());
-      generatingPages.current.delete(wrapUpPage);
+      try {
+          await generateSinglePage(faceId, wrapUpPage, 'story', getWrapUpInstruction());
+      } catch (e) {
+          console.error('[handleStopHere] Wrap-up page generation failed:', e);
+          updateFaceState(faceId, { isLoading: false, hasFailed: true });
+      } finally {
+          generatingPages.current.delete(wrapUpPage);
+      }
+
+      // Check if wrap-up page succeeded before generating back cover
+      const wrapUpResult = historyRef.current.find(f => f.id === faceId);
+      if (wrapUpResult?.hasFailed) {
+          console.warn('[handleStopHere] Wrap-up page failed, skipping back cover');
+          setNovelModeState(prev => ({ ...prev, isWrappingUp: false }));
+          return;
+      }
 
       // Generate back cover
       const backCoverPage = wrapUpPage + 1;
@@ -1919,11 +1933,18 @@ Create a powerful, memorable conclusion that honors the user's story path.
       historyRef.current.push(backCoverFace);
       generatingPages.current.add(backCoverPage);
 
-      await generateSinglePage(backCoverId, backCoverPage, 'back_cover');
-      generatingPages.current.delete(backCoverPage);
+      try {
+          await generateSinglePage(backCoverId, backCoverPage, 'back_cover');
+      } catch (e) {
+          console.error('[handleStopHere] Back cover generation failed:', e);
+          updateFaceState(backCoverId, { isLoading: false, hasFailed: true });
+      } finally {
+          generatingPages.current.delete(backCoverPage);
+      }
 
       // Update extra pages count
       setExtraPages(wrapUpPage - storyContext.pageLength);
+      setNovelModeState(prev => ({ ...prev, isWrappingUp: false }));
   };
 
   const handleReroll = (pageIndex: number) => {
