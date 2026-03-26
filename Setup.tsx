@@ -139,10 +139,10 @@ const CharacterCard: React.FC<{
     };
 
     return (
-    <div className={`p-3 border-4 ${persona ? 'border-green-500 bg-green-50' : 'border-blue-300 bg-blue-50'} transition-colors relative mb-4`}>
-        <div className="flex justify-between items-center mb-2">
-            <p className="font-comic text-lg uppercase font-bold text-blue-900">{title}</p>
-            <div className="flex gap-2">
+    <div className={`p-4 sm:p-5 lg:p-6 border-4 ${persona ? 'border-green-500 bg-green-50' : 'border-blue-300 bg-blue-50'} transition-colors relative mb-4`}>
+        <div className="flex justify-between items-center mb-4">
+            <p className="font-comic text-lg sm:text-xl uppercase font-bold text-blue-900">{title}</p>
+            <div className="flex gap-2 items-center">
                 {persona && <span className="text-green-600 font-bold font-comic text-sm animate-pulse">✓ READY</span>}
                 {isFixed && persona && onReset && (
                     <button onClick={onReset} className="bg-orange-500 text-white text-xs px-2 py-1 font-comic border-2 border-black hover:bg-orange-400">RESET</button>
@@ -154,12 +154,12 @@ const CharacterCard: React.FC<{
         </div>
 
         {/* Role Dropdown */}
-        <div className="mb-3">
-            <p className="font-comic text-xs mb-1 font-bold text-gray-600 uppercase">Character Role</p>
+        <div className="mb-4 sm:mb-5">
+            <p className="font-comic text-xs sm:text-sm mb-1.5 font-bold text-gray-600 uppercase">Character Role</p>
             <select
                 value={persona?.role || ''}
                 onChange={(e) => onUpdate({ role: e.target.value as CharacterRole, customRole: e.target.value === 'Custom' || e.target.value === 'Family/Friend' ? persona?.customRole || '' : undefined })}
-                className="w-full p-1 border-2 border-black font-comic text-sm bg-white"
+                className="w-full p-2 border-2 border-black font-comic text-sm bg-white"
             >
                 <option value="">Select Role...</option>
                 {CHARACTER_ROLES.map(r => <option key={r} value={r}>{r}</option>)}
@@ -170,89 +170,91 @@ const CharacterCard: React.FC<{
                     value={persona?.customRole || ''}
                     onChange={(e) => onUpdate({ customRole: e.target.value })}
                     placeholder={persona?.role === 'Family/Friend' ? 'e.g. Mom, Dad, Best Friend...' : 'e.g. Informant, Rival, Mentor...'}
-                    className="w-full p-1 border-2 border-black font-comic text-sm mt-1"
+                    className="w-full p-2 border-2 border-black font-comic text-sm mt-2"
                 />
             )}
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-                <p className="font-comic text-xs mb-1 font-bold text-gray-600 uppercase">Portrait (Required)</p>
-                {persona?.base64 ? (
-                    <div className="flex gap-3 items-center">
-                        <img src={`data:image/jpeg;base64,${persona.base64}`} alt="Portrait" className="w-20 h-20 object-cover border-2 border-black shadow-[2px_2px_0px_rgba(0,0,0,0.2)] bg-white" />
-                        <div className="flex flex-col gap-1">
-                            <label className="cursor-pointer comic-btn bg-yellow-400 text-black text-xs px-2 py-1 hover:bg-yellow-300 border-2 border-black uppercase">
-                                REPLACE
-                                <input type="file" accept="image/*" className="hidden" onChange={(e) => e.target.files?.[0] && onPortraitUpload(e.target.files[0])} />
-                            </label>
-                            <button onClick={() => onUpdate({ base64: '' })} className="comic-btn bg-red-500 text-white text-xs px-2 py-1 hover:bg-red-400 border-2 border-black uppercase">
-                                CLEAR
-                            </button>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 sm:gap-6 lg:gap-8">
+            <div className="space-y-4 sm:space-y-5">
+                {/* Portrait Section */}
+                <div>
+                    <p className="font-comic text-xs sm:text-sm mb-2 font-bold text-gray-600 uppercase">Portrait (Required)</p>
+                    {persona?.base64 ? (
+                        <div className="flex gap-4 items-center">
+                            <img src={`data:image/jpeg;base64,${persona.base64}`} alt="Portrait" className="w-24 h-24 sm:w-28 sm:h-28 object-cover border-2 border-black shadow-[3px_3px_0px_rgba(0,0,0,0.2)] bg-white" />
+                            <div className="flex flex-col gap-2">
+                                <label className="cursor-pointer comic-btn bg-yellow-400 text-black text-xs sm:text-sm px-3 py-1.5 hover:bg-yellow-300 border-2 border-black uppercase">
+                                    REPLACE
+                                    <input type="file" accept="image/*" className="hidden" onChange={(e) => e.target.files?.[0] && onPortraitUpload(e.target.files[0])} />
+                                </label>
+                                <button onClick={() => onUpdate({ base64: '' })} className="comic-btn bg-red-500 text-white text-xs sm:text-sm px-3 py-1.5 hover:bg-red-400 border-2 border-black uppercase">
+                                    CLEAR
+                                </button>
+                            </div>
                         </div>
-                    </div>
-                ) : (
-                    <label className="comic-btn bg-blue-500 text-white text-sm px-3 py-2 block w-full hover:bg-blue-400 cursor-pointer text-center border-2 border-black">
-                        UPLOAD PORTRAIT
-                        <input type="file" accept="image/*" className="hidden" onChange={(e) => e.target.files?.[0] && onPortraitUpload(e.target.files[0])} />
-                    </label>
-                )}
+                    ) : (
+                        <label className="comic-btn bg-blue-500 text-white text-sm px-4 py-3 block w-full hover:bg-blue-400 cursor-pointer text-center border-2 border-black font-bold">
+                            UPLOAD PORTRAIT
+                            <input type="file" accept="image/*" className="hidden" onChange={(e) => e.target.files?.[0] && onPortraitUpload(e.target.files[0])} />
+                        </label>
+                    )}
+                </div>
 
-                <div className="mt-3">
-                    <div className="font-comic text-xs mb-1 font-bold text-gray-600 uppercase">
+                {/* Reference Images Section */}
+                <div>
+                    <div className="font-comic text-xs sm:text-sm mb-2 font-bold text-gray-600 uppercase">
                         Reference Images (Optional)<Tooltip text="Upload multiple reference images to guide the AI (e.g. character sheets, style references, costume details). More refs = more consistency." />
                     </div>
-                    {/* Gallery of existing reference images */}
                     {(persona?.referenceImages && persona.referenceImages.length > 0) && (
-                        <div className="flex flex-wrap gap-2 mb-2">
+                        <div className="flex flex-wrap gap-2 mb-3">
                             {persona.referenceImages.map((img, i) => (
                                 <div key={i} className="relative group">
-                                    <img src={`data:image/jpeg;base64,${img}`} alt={`Ref ${i+1}`} className="w-16 h-16 object-cover border-2 border-black bg-white" />
+                                    <img src={`data:image/jpeg;base64,${img}`} alt={`Ref ${i+1}`} className="w-16 h-16 sm:w-18 sm:h-18 object-cover border-2 border-black bg-white" />
                                     <button
                                         onClick={() => onRefRemove(i)}
-                                        className="absolute -top-1 -right-1 bg-red-600 text-white rounded-full w-5 h-5 text-xs flex items-center justify-center border border-black opacity-0 group-hover:opacity-100 transition-opacity font-bold"
+                                        className="absolute -top-1.5 -right-1.5 bg-red-600 text-white rounded-full w-5 h-5 text-xs flex items-center justify-center border border-black opacity-0 group-hover:opacity-100 transition-opacity font-bold"
                                     >×</button>
                                 </div>
                             ))}
                         </div>
                     )}
-                    <label className="comic-btn bg-gray-400 text-white text-sm px-3 py-2 block w-full hover:bg-gray-500 cursor-pointer text-center border-2 border-black">
+                    <label className="comic-btn bg-gray-400 text-white text-sm px-4 py-2.5 block w-full hover:bg-gray-500 cursor-pointer text-center border-2 border-black">
                         + ADD REFERENCE{(persona?.referenceImages?.length || 0) > 0 ? ` (${persona!.referenceImages!.length})` : ''}
                         <input type="file" accept="image/*" multiple className="hidden" onChange={(e) => e.target.files && e.target.files.length > 0 && onRefUpload(e.target.files)} />
                     </label>
                 </div>
 
                 {/* Emblem/Logo Section */}
-                <div className="mt-3">
-                    <div className="font-comic text-xs mb-1 font-bold text-gray-600 uppercase">
+                <div>
+                    <div className="font-comic text-xs sm:text-sm mb-2 font-bold text-gray-600 uppercase">
                         Emblem / Logo (Optional)<Tooltip text="Upload an emblem or logo that should appear consistently on this character (e.g., superhero symbol, team badge, tattoo). Select placement for AI consistency." />
                     </div>
                     {persona?.emblemImage ? (
-                        <div className="flex gap-2 items-start mb-2">
-                            <img src={`data:image/jpeg;base64,${persona.emblemImage}`} alt="Emblem" className="w-16 h-16 object-contain border-2 border-black bg-white" />
-                            <div className="flex flex-col gap-1 flex-1">
-                                <label className="cursor-pointer comic-btn bg-yellow-400 text-black text-xs px-2 py-1 hover:bg-yellow-300 border-2 border-black uppercase text-center">
+                        <div className="flex gap-3 items-start mb-3">
+                            <img src={`data:image/jpeg;base64,${persona.emblemImage}`} alt="Emblem" className="w-16 h-16 sm:w-18 sm:h-18 object-contain border-2 border-black bg-white" />
+                            <div className="flex flex-col gap-2 flex-1">
+                                <label className="cursor-pointer comic-btn bg-yellow-400 text-black text-xs sm:text-sm px-3 py-1.5 hover:bg-yellow-300 border-2 border-black uppercase text-center">
                                     REPLACE
                                     <input type="file" accept="image/*" className="hidden" onChange={(e) => e.target.files?.[0] && onEmblemUpload(e.target.files[0])} />
                                 </label>
-                                <button onClick={onEmblemRemove} className="comic-btn bg-red-500 text-white text-xs px-2 py-1 hover:bg-red-400 border-2 border-black uppercase">
+                                <button onClick={onEmblemRemove} className="comic-btn bg-red-500 text-white text-xs sm:text-sm px-3 py-1.5 hover:bg-red-400 border-2 border-black uppercase">
                                     CLEAR
                                 </button>
                             </div>
                         </div>
                     ) : (
-                        <label className="comic-btn bg-purple-500 text-white text-sm px-3 py-2 block w-full hover:bg-purple-400 cursor-pointer text-center border-2 border-black mb-2">
+                        <label className="comic-btn bg-purple-500 text-white text-sm px-4 py-2.5 block w-full hover:bg-purple-400 cursor-pointer text-center border-2 border-black mb-3">
                             + ADD EMBLEM/LOGO
                             <input type="file" accept="image/*" className="hidden" onChange={(e) => e.target.files?.[0] && onEmblemUpload(e.target.files[0])} />
                         </label>
                     )}
-                    {/* Placement dropdown - only show if emblem exists */}
                     {persona?.emblemImage && (
-                        <div className="space-y-1">
+                        <div className="space-y-2">
                             <select
                                 value={persona?.emblemPlacement || ''}
                                 onChange={(e) => onUpdate({ emblemPlacement: e.target.value as EmblemPlacement || undefined, emblemPlacementCustom: e.target.value === 'other' ? persona?.emblemPlacementCustom : undefined })}
-                                className="w-full p-1 border-2 border-black font-comic text-xs bg-white"
+                                className="w-full p-2 border-2 border-black font-comic text-xs sm:text-sm bg-white"
                             >
                                 <option value="">Select Placement...</option>
                                 {EMBLEM_PLACEMENTS.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
@@ -263,7 +265,7 @@ const CharacterCard: React.FC<{
                                     value={persona?.emblemPlacementCustom || ''}
                                     onChange={(e) => onUpdate({ emblemPlacementCustom: e.target.value })}
                                     placeholder="Describe placement (e.g., 'belt buckle', 'cape clasp')..."
-                                    className="w-full p-1 border-2 border-black font-comic text-xs"
+                                    className="w-full p-2 border-2 border-black font-comic text-xs sm:text-sm"
                                 />
                             )}
                         </div>
@@ -271,65 +273,66 @@ const CharacterCard: React.FC<{
                 </div>
 
                 {/* Weapon Reference Section */}
-                <div className="mt-3">
-                    <div className="font-comic text-xs mb-1 font-bold text-gray-600 uppercase">
+                <div>
+                    <div className="font-comic text-xs sm:text-sm mb-2 font-bold text-gray-600 uppercase">
                         Signature Weapon (Optional)<Tooltip text="Upload a reference image of the character's signature weapon (sword, gun, staff, etc.) for AI consistency. Add a description for better results." />
                     </div>
                     {persona?.weaponImage ? (
-                        <div className="flex gap-2 items-start mb-2">
-                            <img src={`data:image/jpeg;base64,${persona.weaponImage}`} alt="Weapon" className="w-16 h-16 object-contain border-2 border-black bg-white" />
-                            <div className="flex flex-col gap-1 flex-1">
-                                <label className="cursor-pointer comic-btn bg-yellow-400 text-black text-xs px-2 py-1 hover:bg-yellow-300 border-2 border-black uppercase text-center">
+                        <div className="flex gap-3 items-start mb-3">
+                            <img src={`data:image/jpeg;base64,${persona.weaponImage}`} alt="Weapon" className="w-16 h-16 sm:w-18 sm:h-18 object-contain border-2 border-black bg-white" />
+                            <div className="flex flex-col gap-2 flex-1">
+                                <label className="cursor-pointer comic-btn bg-yellow-400 text-black text-xs sm:text-sm px-3 py-1.5 hover:bg-yellow-300 border-2 border-black uppercase text-center">
                                     REPLACE
                                     <input type="file" accept="image/*" className="hidden" onChange={(e) => e.target.files?.[0] && onWeaponUpload(e.target.files[0])} />
                                 </label>
-                                <button onClick={onWeaponRemove} className="comic-btn bg-red-500 text-white text-xs px-2 py-1 hover:bg-red-400 border-2 border-black uppercase">
+                                <button onClick={onWeaponRemove} className="comic-btn bg-red-500 text-white text-xs sm:text-sm px-3 py-1.5 hover:bg-red-400 border-2 border-black uppercase">
                                     CLEAR
                                 </button>
                             </div>
                         </div>
                     ) : (
-                        <label className="comic-btn bg-amber-600 text-white text-sm px-3 py-2 block w-full hover:bg-amber-500 cursor-pointer text-center border-2 border-black mb-2">
+                        <label className="comic-btn bg-amber-600 text-white text-sm px-4 py-2.5 block w-full hover:bg-amber-500 cursor-pointer text-center border-2 border-black mb-3">
                             + ADD WEAPON REF
                             <input type="file" accept="image/*" className="hidden" onChange={(e) => e.target.files?.[0] && onWeaponUpload(e.target.files[0])} />
                         </label>
                     )}
-                    {/* Weapon description - only show if weapon image exists */}
                     {persona?.weaponImage && (
                         <textarea
                             value={persona?.weaponDescriptionText || ''}
                             onChange={(e) => onUpdate({ weaponDescriptionText: e.target.value })}
                             placeholder="Describe the weapon: type, size, material, colors, engravings, glowing effects, unique features..."
-                            className="w-full p-1 border-2 border-black font-comic text-xs h-14 resize-none"
+                            className="w-full p-2 border-2 border-black font-comic text-xs sm:text-sm h-16 resize-none"
                         />
                     )}
                 </div>
             </div>
 
-            <div>
-                <div className="mb-2">
-                    <p className="font-comic text-xs mb-1 font-bold text-gray-600 uppercase">Name</p>
+            <div className="space-y-4 sm:space-y-5">
+                {/* Name Section */}
+                <div>
+                    <p className="font-comic text-xs sm:text-sm mb-2 font-bold text-gray-600 uppercase">Name</p>
                     <input
                         type="text"
                         value={persona?.name || ''}
                         onChange={(e) => onUpdate({ name: e.target.value })}
                         placeholder="Character Name"
-                        className="w-full p-1 border-2 border-black font-comic text-sm"
+                        className="w-full p-2 sm:p-2.5 border-2 border-black font-comic text-sm sm:text-base"
                     />
                 </div>
-                {/* Backstory with Expand Button */}
-                <div className="mb-3">
-                    <div className="flex items-center justify-between mb-1">
-                        <p className="font-comic text-base font-bold text-gray-800 uppercase flex items-center">
+
+                {/* Description with Expand Button */}
+                <div>
+                    <div className="flex items-center justify-between mb-2 gap-2">
+                        <p className="font-comic text-sm sm:text-base font-bold text-gray-800 uppercase flex items-center">
                             Description
                             <Tooltip text="Add character details, backstory, powers, personality, appearance notes, or any information to help the AI understand this character better." />
                         </p>
-                        <div className="flex gap-1">
+                        <div className="flex gap-1.5 shrink-0">
                             {onImproveText && (
                                 <button
                                     onClick={handleImproveBackstory}
                                     disabled={isImprovingBackstory || !persona?.backstoryText?.trim()}
-                                    className="comic-btn bg-purple-600 text-white text-[10px] px-2 py-0.5 hover:bg-purple-500 border-2 border-black uppercase disabled:opacity-50 disabled:cursor-not-allowed"
+                                    className="comic-btn bg-purple-600 text-white text-[10px] sm:text-xs px-2 sm:px-2.5 py-1 hover:bg-purple-500 border-2 border-black uppercase disabled:opacity-50 disabled:cursor-not-allowed"
                                     title="Improve description with AI"
                                 >
                                     {isImprovingBackstory ? '⏳...' : '✨ AI'}
@@ -337,7 +340,7 @@ const CharacterCard: React.FC<{
                             )}
                             <button
                                 onClick={() => setShowExpandedBackstory(true)}
-                                className="comic-btn bg-blue-500 text-white text-[10px] px-2 py-0.5 hover:bg-blue-400 border-2 border-black uppercase"
+                                className="comic-btn bg-blue-500 text-white text-[10px] sm:text-xs px-2 sm:px-2.5 py-1 hover:bg-blue-400 border-2 border-black uppercase"
                                 title="Expand backstory editor"
                             >
                                 ⤢ EXPAND
@@ -348,10 +351,10 @@ const CharacterCard: React.FC<{
                         value={persona?.backstoryText || ''}
                         onChange={(e) => onUpdate({ backstoryText: e.target.value })}
                         placeholder="Details, backstory, powers, personality..."
-                        className="w-full p-2 border-2 border-black font-comic text-sm h-20 resize-none shadow-[3px_3px_0px_rgba(0,0,0,0.1)] mb-2"
+                        className="w-full p-2.5 sm:p-3 border-2 border-black font-comic text-sm h-28 sm:h-32 resize-none shadow-[3px_3px_0px_rgba(0,0,0,0.1)] mb-3"
                     />
                     <div className="flex flex-wrap gap-2 items-center">
-                        <label className="comic-btn bg-gray-200 text-black text-xs px-2 py-1 hover:bg-gray-300 cursor-pointer border-2 border-black">
+                        <label className="comic-btn bg-gray-200 text-black text-xs sm:text-sm px-3 py-1.5 hover:bg-gray-300 cursor-pointer border-2 border-black">
                             UPLOAD FILES
                             <input
                                 type="file"
@@ -362,13 +365,13 @@ const CharacterCard: React.FC<{
                             />
                         </label>
                         {(persona?.backstoryFiles || []).map((f, i) => (
-                            <div key={i} className="bg-yellow-100 border border-black p-1 text-[10px] flex items-center gap-2">
+                            <div key={i} className="bg-yellow-100 border border-black p-1.5 text-[10px] sm:text-xs flex items-center gap-2">
                                 {f.mimeType?.startsWith('image/') && f.base64 ? (
-                                    <img src={`data:${f.mimeType};base64,${f.base64}`} alt={f.name} className="w-8 h-8 object-cover border border-black" />
+                                    <img src={`data:${f.mimeType};base64,${f.base64}`} alt={f.name} className="w-8 h-8 sm:w-10 sm:h-10 object-cover border border-black" />
                                 ) : (
-                                    <div className="w-8 h-8 flex items-center justify-center bg-gray-200 border border-black text-gray-500 font-bold">DOC</div>
+                                    <div className="w-8 h-8 sm:w-10 sm:h-10 flex items-center justify-center bg-gray-200 border border-black text-gray-500 font-bold">DOC</div>
                                 )}
-                                <span className="truncate max-w-[80px]">{f.name}</span>
+                                <span className="truncate max-w-[80px] sm:max-w-[100px]">{f.name}</span>
                                 <button onClick={() => onBackstoryFileRemove(i)} className="text-red-600 font-bold hover:scale-110 text-lg leading-none">×</button>
                             </div>
                         ))}
