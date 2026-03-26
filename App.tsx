@@ -1333,6 +1333,19 @@ For hardNegatives, analyze the image and add negatives for:
               setComicFaces(prev => prev.filter(f => !f.isLoading || !!f.imageUrl || f.id === 'cover'));
           }
           pagesToGen.forEach(p => generatingPages.current.delete(p));
+
+          // Auto-continue in Outline Mode: generate next batch if more pages remain
+          if (!isStoppedRef.current && generateFromOutline) {
+              const maxGenerated = Math.max(...pagesToGen, 0);
+              if (maxGenerated < config.TOTAL_PAGES) {
+                  // Schedule next batch after a small delay
+                  setTimeout(() => {
+                      if (!isStoppedRef.current) {
+                          generateBatch(maxGenerated + 1, config.BATCH_SIZE);
+                      }
+                  }, 100);
+              }
+          }
       }
   }
 
