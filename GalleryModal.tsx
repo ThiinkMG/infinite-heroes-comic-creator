@@ -102,7 +102,7 @@ export const GalleryModal: React.FC<GalleryModalProps> = ({ faces, title, onClos
                     // EXPANDED VIEW
                     <div className="relative w-full h-full flex flex-col items-center justify-center">
                         <div className="relative max-h-full max-w-full flex">
-                            <img src={validFaces[expandedIndex].imageUrl} alt="Expanded panel" className="max-h-[75vh] object-contain border-[6px] border-white shadow-[12px_12px_0_rgba(0,0,0,1)] bg-gray-900" />
+                            <img key={validFaces[expandedIndex].imageUrl?.slice(-20)} src={validFaces[expandedIndex].imageUrl} alt="Expanded panel" className="max-h-[75vh] object-contain border-[6px] border-white shadow-[12px_12px_0_rgba(0,0,0,1)] bg-gray-900" />
                         </div>
                         <div className="mt-8 flex flex-wrap gap-3 w-full max-w-2xl justify-center relative z-10">
                             <button
@@ -150,7 +150,7 @@ export const GalleryModal: React.FC<GalleryModalProps> = ({ faces, title, onClos
                                     className="relative cursor-pointer hover:scale-105 transition-transform duration-200 w-full aspect-[2/3] border-[4px] border-white shadow-[6px_6px_0_rgba(0,0,0,1)] overflow-hidden bg-gray-900"
                                     onClick={() => setExpandedFaceId(face.id)}
                                 >
-                                    <img src={face.imageUrl} className="w-full h-full object-cover" alt="Thumbnail" />
+                                    <img key={face.imageUrl?.slice(-20)} src={face.imageUrl} className="w-full h-full object-cover" alt="Thumbnail" />
                                     <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
                                         <span className="opacity-0 group-hover:opacity-100 bg-black/80 text-white font-bold px-4 py-2 rounded-full font-comic tracking-wider border-2 border-white scale-90 group-hover:scale-100 transition-all">
                                             🔍 VIEW

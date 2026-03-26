@@ -3018,16 +3018,27 @@ Create a powerful, memorable conclusion that honors the user's story path.
           title={storyContext.title || 'Comic'}
           onClose={() => setShowGallery(false)}
           onReplaceImage={(faceId, newImageUrl) => {
+            console.log('[GalleryReplace] Replacing image for face:', faceId, 'new URL length:', newImageUrl.length);
+
             // Update both state and historyRef to ensure persistence
-            setComicFaces(prev => prev.map(face =>
-              face.id === faceId
-                ? { ...face, imageUrl: newImageUrl }
-                : face
-            ));
+            setComicFaces(prev => {
+              const foundFace = prev.find(f => f.id === faceId);
+              console.log('[GalleryReplace] Found face in state:', !!foundFace, 'pageIndex:', foundFace?.pageIndex, 'type:', foundFace?.type);
+              const updated = prev.map(face =>
+                face.id === faceId
+                  ? { ...face, imageUrl: newImageUrl }
+                  : face
+              );
+              return updated;
+            });
+
             // Also update historyRef so exports and other operations use the new image
             const idx = historyRef.current.findIndex(f => f.id === faceId);
             if (idx !== -1) {
               historyRef.current[idx] = { ...historyRef.current[idx], imageUrl: newImageUrl };
+              console.log('[GalleryReplace] historyRef updated at index:', idx);
+            } else {
+              console.warn('[GalleryReplace] Face not found in historyRef:', faceId);
             }
           }}
         />

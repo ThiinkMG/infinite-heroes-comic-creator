@@ -43,7 +43,7 @@ export const Panel: React.FC<PanelProps> = ({ face, allFaces, storyContext, gene
     return (
         <div className={`panel-container relative group ${isFullBleed ? '!p-0 !bg-[#0a0a0a]' : ''}`}>
             <div className="gloss"></div>
-            {face.imageUrl && <img src={face.imageUrl} alt="Comic panel" className={`panel-image ${isFullBleed ? '!object-cover' : ''}`} />}
+            {face.imageUrl && <img key={face.imageUrl.slice(-20)} src={face.imageUrl} alt="Comic panel" className={`panel-image ${isFullBleed ? '!object-cover' : ''}`} />}
             
             {/* Failed Generation State */}
             {hasFailed && (
@@ -112,8 +112,8 @@ export const Panel: React.FC<PanelProps> = ({ face, allFaces, storyContext, gene
                 </div>
             )}
 
-            {/* Decision Buttons - Only show on the MOST RECENT unresolved decision page */}
-            {face.isDecisionPage && face.choices && face.choices.length > 0 && isLatestDecisionPage && (
+            {/* Decision Buttons - Only show in Novel Mode on the MOST RECENT unresolved decision page */}
+            {!generateFromOutline && face.isDecisionPage && face.choices && face.choices.length > 0 && isLatestDecisionPage && (
                 <div className={`absolute bottom-0 inset-x-0 p-6 pb-12 flex flex-col gap-3 items-center justify-end transition-opacity duration-500 ${face.resolvedChoice ? 'opacity-0 pointer-events-none' : 'opacity-100'} bg-gradient-to-t from-black/90 via-black/50 to-transparent z-20`}>
                     <p className="text-white font-comic text-2xl uppercase tracking-widest animate-pulse">What drives you?</p>
 
