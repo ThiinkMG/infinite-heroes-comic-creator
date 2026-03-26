@@ -119,8 +119,24 @@ const CharacterCard: React.FC<{
     onWeaponRemove: () => void;
     onBackstoryFileUpload: (files: FileList) => void;
     onBackstoryFileRemove: (index: number) => void;
-}> = ({ title, persona, isFixed, onUpdate, onDelete, onReset, onPortraitUpload, onRefUpload, onRefRemove, onEmblemUpload, onEmblemRemove, onWeaponUpload, onWeaponRemove, onBackstoryFileUpload, onBackstoryFileRemove }) => {
+    onImproveText?: (text: string, context?: string, purpose?: 'story_description' | 'regeneration_instruction' | 'backstory') => Promise<string>;
+}> = ({ title, persona, isFixed, onUpdate, onDelete, onReset, onPortraitUpload, onRefUpload, onRefRemove, onEmblemUpload, onEmblemRemove, onWeaponUpload, onWeaponRemove, onBackstoryFileUpload, onBackstoryFileRemove, onImproveText }) => {
     const [showExpandedBackstory, setShowExpandedBackstory] = useState(false);
+    const [isImprovingBackstory, setIsImprovingBackstory] = useState(false);
+
+    const handleImproveBackstory = async () => {
+        if (!onImproveText || !persona?.backstoryText?.trim()) return;
+        setIsImprovingBackstory(true);
+        try {
+            const improved = await onImproveText(persona.backstoryText, undefined, 'backstory');
+            onUpdate({ backstoryText: improved });
+        } catch (e) {
+            console.error('Failed to improve backstory:', e);
+            alert('Failed to improve text. Please try again.');
+        } finally {
+            setIsImprovingBackstory(false);
+        }
+    };
 
     return (
     <div className={`p-3 border-4 ${persona ? 'border-green-500 bg-green-50' : 'border-blue-300 bg-blue-50'} transition-colors relative mb-4`}>
@@ -308,13 +324,25 @@ const CharacterCard: React.FC<{
                             Description
                             <Tooltip text="Add character details, backstory, powers, personality, appearance notes, or any information to help the AI understand this character better." />
                         </p>
-                        <button
-                            onClick={() => setShowExpandedBackstory(true)}
-                            className="comic-btn bg-blue-500 text-white text-[10px] px-2 py-0.5 hover:bg-blue-400 border-2 border-black uppercase"
-                            title="Expand backstory editor"
-                        >
-                            ⤢ EXPAND
-                        </button>
+                        <div className="flex gap-1">
+                            {onImproveText && (
+                                <button
+                                    onClick={handleImproveBackstory}
+                                    disabled={isImprovingBackstory || !persona?.backstoryText?.trim()}
+                                    className="comic-btn bg-purple-600 text-white text-[10px] px-2 py-0.5 hover:bg-purple-500 border-2 border-black uppercase disabled:opacity-50 disabled:cursor-not-allowed"
+                                    title="Improve description with AI"
+                                >
+                                    {isImprovingBackstory ? '⏳...' : '✨ AI'}
+                                </button>
+                            )}
+                            <button
+                                onClick={() => setShowExpandedBackstory(true)}
+                                className="comic-btn bg-blue-500 text-white text-[10px] px-2 py-0.5 hover:bg-blue-400 border-2 border-black uppercase"
+                                title="Expand backstory editor"
+                            >
+                                ⤢ EXPAND
+                            </button>
+                        </div>
                     </div>
                     <textarea
                         value={persona?.backstoryText || ''}
@@ -372,12 +400,24 @@ const CharacterCard: React.FC<{
                             <p className="font-comic text-[10px] sm:text-xs text-gray-500">
                                 {(persona?.backstoryText || '').length} chars
                             </p>
-                            <button
-                                onClick={() => setShowExpandedBackstory(false)}
-                                className="comic-btn bg-green-600 text-white px-4 sm:px-6 py-2 font-bold border-2 sm:border-[3px] border-black hover:bg-green-500 uppercase text-sm sm:text-base"
-                            >
-                                ✓ DONE
-                            </button>
+                            <div className="flex gap-2">
+                                {onImproveText && (
+                                    <button
+                                        onClick={handleImproveBackstory}
+                                        disabled={isImprovingBackstory || !persona?.backstoryText?.trim()}
+                                        className="comic-btn bg-purple-600 text-white px-3 sm:px-4 py-2 font-bold border-2 sm:border-[3px] border-black hover:bg-purple-500 uppercase text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                                        title="Improve description with AI"
+                                    >
+                                        {isImprovingBackstory ? '⏳ IMPROVING...' : '✨ AI IMPROVE'}
+                                    </button>
+                                )}
+                                <button
+                                    onClick={() => setShowExpandedBackstory(false)}
+                                    className="comic-btn bg-green-600 text-white px-4 sm:px-6 py-2 font-bold border-2 sm:border-[3px] border-black hover:bg-green-500 uppercase text-sm sm:text-base"
+                                >
+                                    ✓ DONE
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -506,6 +546,7 @@ export const Setup: React.FC<SetupProps> = (props) => {
                                 onWeaponRemove={() => props.onWeaponRemove('hero')}
                                 onBackstoryFileUpload={(files) => props.onBackstoryFileUpload('hero', files)}
                                 onBackstoryFileRemove={(i) => props.onBackstoryFileRemove('hero', i)}
+                                onImproveText={props.onImproveText}
                             />
 
                             <CharacterCard
@@ -523,6 +564,7 @@ export const Setup: React.FC<SetupProps> = (props) => {
                                 onWeaponRemove={() => props.onWeaponRemove('friend')}
                                 onBackstoryFileUpload={(files) => props.onBackstoryFileUpload('friend', files)}
                                 onBackstoryFileRemove={(i) => props.onBackstoryFileRemove('friend', i)}
+                                onImproveText={props.onImproveText}
                             />
 
                             {props.additionalCharacters.map((char) => (
@@ -541,6 +583,7 @@ export const Setup: React.FC<SetupProps> = (props) => {
                                     onWeaponRemove={() => props.onWeaponRemove(char.id)}
                                     onBackstoryFileUpload={(files) => props.onBackstoryFileUpload(char.id, files)}
                                     onBackstoryFileRemove={(i) => props.onBackstoryFileRemove(char.id, i)}
+                                    onImproveText={props.onImproveText}
                                 />
                             ))}
                         </div>
