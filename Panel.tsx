@@ -33,6 +33,13 @@ export const Panel: React.FC<PanelProps> = ({ face, allFaces, storyContext, gene
     const isFullBleed = face.type === 'cover' || face.type === 'back_cover';
     const hasFailed = face.hasFailed === true;
 
+    // In Novel Mode, only show decision overlay on the MOST RECENT unresolved decision page
+    // This prevents multiple overlays from appearing on different pages simultaneously
+    const latestUnresolvedDecision = allFaces
+        .filter(f => f.isDecisionPage && !f.resolvedChoice && f.choices && f.choices.length > 0 && !f.isLoading)
+        .reduce((max, f) => Math.max(max, f.pageIndex || 0), 0);
+    const isLatestDecisionPage = face.pageIndex === latestUnresolvedDecision;
+
     return (
         <div className={`panel-container relative group ${isFullBleed ? '!p-0 !bg-[#0a0a0a]' : ''}`}>
             <div className="gloss"></div>
@@ -105,8 +112,8 @@ export const Panel: React.FC<PanelProps> = ({ face, allFaces, storyContext, gene
                 </div>
             )}
 
-            {/* Decision Buttons */}
-            {face.isDecisionPage && face.choices.length > 0 && (
+            {/* Decision Buttons - Only show on the MOST RECENT unresolved decision page */}
+            {face.isDecisionPage && face.choices.length > 0 && isLatestDecisionPage && (
                 <div className={`absolute bottom-0 inset-x-0 p-6 pb-12 flex flex-col gap-3 items-center justify-end transition-opacity duration-500 ${face.resolvedChoice ? 'opacity-0 pointer-events-none' : 'opacity-100'} bg-gradient-to-t from-black/90 via-black/50 to-transparent z-20`}>
                     <p className="text-white font-comic text-2xl uppercase tracking-widest animate-pulse">What drives you?</p>
 
