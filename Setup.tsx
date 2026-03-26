@@ -432,6 +432,7 @@ export const Setup: React.FC<SetupProps> = (props) => {
     const [isImprovingStory, setIsImprovingStory] = useState(false);
     const [selectedContextChars, setSelectedContextChars] = useState<Set<string>>(new Set());
     const [showContextDropdown, setShowContextDropdown] = useState(false);
+    const [showExpandedStory, setShowExpandedStory] = useState(false);
 
     // Get all characters for context dropdown
     const allCharacters = [
@@ -612,16 +613,17 @@ export const Setup: React.FC<SetupProps> = (props) => {
                             <div className="mb-3">
                                 <div className="flex items-center justify-between mb-1">
                                     <p className="font-comic text-base font-bold text-gray-800 uppercase">Describe Your Story</p>
-                                    {props.onImproveText && (
-                                        <div className="relative">
-                                            <button
-                                                onClick={() => setShowContextDropdown(!showContextDropdown)}
-                                                disabled={isImprovingStory || !props.storyContext.descriptionText.trim()}
-                                                className="comic-btn bg-purple-600 text-white text-[10px] px-2 py-0.5 hover:bg-purple-500 border-2 border-black uppercase disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
-                                                title="Improve story description with AI"
-                                            >
-                                                {isImprovingStory ? '⏳ IMPROVING...' : '✨ AI IMPROVE'}
-                                            </button>
+                                    <div className="flex gap-1">
+                                        {props.onImproveText && (
+                                            <div className="relative">
+                                                <button
+                                                    onClick={() => setShowContextDropdown(!showContextDropdown)}
+                                                    disabled={isImprovingStory || !props.storyContext.descriptionText.trim()}
+                                                    className="comic-btn bg-purple-600 text-white text-[10px] px-2 py-0.5 hover:bg-purple-500 border-2 border-black uppercase disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
+                                                    title="Improve story description with AI"
+                                                >
+                                                    {isImprovingStory ? '⏳ IMPROVING...' : '✨ AI IMPROVE'}
+                                                </button>
                                             {/* Character Context Dropdown */}
                                             {showContextDropdown && !isImprovingStory && (
                                                 <div className="absolute right-0 top-full mt-1 bg-white border-2 border-black shadow-[3px_3px_0px_rgba(0,0,0,0.3)] z-50 min-w-[200px]">
@@ -661,6 +663,14 @@ export const Setup: React.FC<SetupProps> = (props) => {
                                             )}
                                         </div>
                                     )}
+                                        <button
+                                            onClick={() => setShowExpandedStory(true)}
+                                            className="comic-btn bg-blue-500 text-white text-[10px] px-2 py-0.5 hover:bg-blue-400 border-2 border-black uppercase"
+                                            title="Expand story editor"
+                                        >
+                                            ⤢ EXPAND
+                                        </button>
+                                    </div>
                                 </div>
                                 <textarea
                                     value={props.storyContext.descriptionText}
@@ -692,6 +702,53 @@ export const Setup: React.FC<SetupProps> = (props) => {
                                     ))}
                                 </div>
                             </div>
+
+                            {/* Expanded Story Modal */}
+                            {showExpandedStory && (
+                                <div className="fixed inset-0 z-[700] bg-black/90 backdrop-blur-md flex items-center justify-center p-2 sm:p-4" onClick={() => setShowExpandedStory(false)}>
+                                    <div className="max-w-[800px] w-full bg-white border-[4px] sm:border-[6px] border-black p-4 sm:p-6 shadow-[8px_8px_0px_rgba(0,0,0,0.5)] sm:shadow-[12px_12px_0px_rgba(0,0,0,0.5)] relative max-h-[95vh] sm:max-h-[90vh] flex flex-col" onClick={e => e.stopPropagation()}>
+                                        <div className="flex justify-between items-center mb-3 sm:mb-4 gap-2">
+                                            <h3 className="font-comic text-lg sm:text-2xl text-blue-600 uppercase tracking-tighter truncate">
+                                                Story Description
+                                            </h3>
+                                            <button
+                                                onClick={() => setShowExpandedStory(false)}
+                                                className="shrink-0 bg-red-600 text-white w-8 h-8 sm:w-10 sm:h-10 border-2 sm:border-4 border-black font-bold text-lg sm:text-xl flex items-center justify-center hover:scale-110 hover:bg-red-500"
+                                            >×</button>
+                                        </div>
+                                        <textarea
+                                            value={props.storyContext.descriptionText}
+                                            onChange={(e) => props.onStoryContextUpdate({ descriptionText: e.target.value })}
+                                            placeholder="Type or paste a synopsis, script, or plot points. Include character motivations, key scenes, conflicts, settings, and any specific dialogue or narrative beats you want in your comic..."
+                                            className="flex-1 w-full p-3 sm:p-4 border-2 sm:border-4 border-black font-comic text-sm resize-none shadow-inner min-h-[250px] sm:min-h-[300px] leading-relaxed"
+                                            autoFocus
+                                        />
+                                        <div className="mt-3 sm:mt-4 flex justify-between items-center gap-2">
+                                            <p className="font-comic text-[10px] sm:text-xs text-gray-500">
+                                                {props.storyContext.descriptionText.length} chars
+                                            </p>
+                                            <div className="flex gap-2">
+                                                {props.onImproveText && (
+                                                    <button
+                                                        onClick={() => { handleImproveStory(); }}
+                                                        disabled={isImprovingStory || !props.storyContext.descriptionText.trim()}
+                                                        className="comic-btn bg-purple-600 text-white px-3 sm:px-4 py-2 font-bold border-2 sm:border-[3px] border-black hover:bg-purple-500 uppercase text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                                                        title="Improve description with AI"
+                                                    >
+                                                        {isImprovingStory ? '⏳ IMPROVING...' : '✨ AI IMPROVE'}
+                                                    </button>
+                                                )}
+                                                <button
+                                                    onClick={() => setShowExpandedStory(false)}
+                                                    className="comic-btn bg-green-600 text-white px-4 sm:px-6 py-2 font-bold border-2 sm:border-[3px] border-black hover:bg-green-500 uppercase text-sm sm:text-base"
+                                                >
+                                                    ✓ DONE
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
 
                             <div className="grid grid-cols-2 gap-2 mb-3">
                                 <div>
