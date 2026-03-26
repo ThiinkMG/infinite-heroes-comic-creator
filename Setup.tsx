@@ -322,18 +322,18 @@ const CharacterCard: React.FC<{
 
                 {/* Description with Expand Button */}
                 <div>
-                    <div className="flex items-center justify-between mb-2 gap-2">
+                    <div className="flex items-start justify-between mb-2 gap-2">
                         <p className="font-comic text-sm sm:text-base font-bold text-gray-800 uppercase flex items-center">
                             Description
                             <Tooltip text="Add character details, backstory, powers, personality, appearance notes, or any information to help the AI understand this character better." />
                         </p>
-                        <div className="flex gap-1.5 shrink-0">
+                        <div className="flex flex-col gap-1 shrink-0">
                             {onImproveText && (
                                 <button
                                     onClick={handleImproveBackstory}
-                                    disabled={isImprovingBackstory || !persona?.backstoryText?.trim()}
+                                    disabled={isImprovingBackstory || !(persona?.backstoryText?.trim())}
                                     className="comic-btn bg-purple-600 text-white text-[10px] sm:text-xs px-2 sm:px-2.5 py-1 hover:bg-purple-500 border-2 border-black uppercase disabled:opacity-50 disabled:cursor-not-allowed"
-                                    title="Improve description with AI"
+                                    title={persona?.backstoryText?.trim() ? "Improve description with AI" : "Enter description text first"}
                                 >
                                     {isImprovingBackstory ? '⏳...' : '✨ AI'}
                                 </button>
