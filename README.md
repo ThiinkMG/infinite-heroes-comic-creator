@@ -102,7 +102,6 @@ Check out what's possible with Infinite Heroes! Every image below was AI-generat
   <img src="assets/comic-book-examples/Comic-page-1.png" alt="Comic Page 1" width="220"/>
   <img src="assets/comic-book-examples/Comic-page-2.png" alt="Comic Page 2" width="220"/>
   <img src="assets/comic-book-examples/Comic-page-4 (2).png" alt="Comic Page 4" width="220"/>
-  <img src="assets/comic-book-examples/Comic-page-11 (1).png" alt="Comic Page 11" width="220"/>
 </p>
 
 ### 🎭 Character Consistency
