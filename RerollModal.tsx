@@ -79,6 +79,8 @@ export const RerollModal: React.FC<RerollModalProps> = ({
     const pageHistory = usePageHistory(pageIndex);
     // Ref for scrolling to submit button
     const submitRef = useRef<HTMLButtonElement>(null);
+    // Track initial mount to avoid calling onProfileSelectionChange on first render
+    const isInitialMount = useRef(true);
 
     // === INSTRUCTION STATE ===
     const [instruction, setInstruction] = useState('');
@@ -151,10 +153,23 @@ export const RerollModal: React.FC<RerollModalProps> = ({
             const next = new Set(prev);
             if (next.has(id)) next.delete(id);
             else next.add(id);
-            onProfileSelectionChange?.(Array.from(next));
             return next;
         });
     };
+
+    // Sync profile selection changes to parent (separate from setState to avoid update loop)
+    useEffect(() => {
+        // Skip initial mount to prevent triggering parent re-render loop
+        if (isInitialMount.current) {
+            isInitialMount.current = false;
+            return;
+        }
+        // Only notify parent when user actually changes selection
+        if (onProfileSelectionChange) {
+            onProfileSelectionChange(Array.from(selectedProfileIds));
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [selectedProfileIds]);
 
     const handleToggleMode = (mode: RegenerationMode) => {
         setRegenerationModes((prev: Set<RegenerationMode>) => {
