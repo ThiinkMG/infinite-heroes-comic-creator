@@ -17,11 +17,8 @@ import {
     TutorialModal,
     SavePresetModal,
     Footer,
-    CostEstimator,
-    CharacterAnalysisPanel,
-    PresetManager
+    CostEstimator
 } from './components';
-import { useCharacterStore } from './stores/useCharacterStore';
 import { HelpTooltip } from './components/HelpTooltip';
 
 /**
@@ -117,9 +114,6 @@ export const Setup: React.FC<SetupProps> = (props) => {
     const [showExpandedStory, setShowExpandedStory] = useState(false);
     const [showSavePresetModal, setShowSavePresetModal] = useState(false);
     const [customPresets, setCustomPresets] = useState<CustomPreset[]>(loadCustomPresets);
-
-    // Access character profiles from store
-    const characterProfiles = useCharacterStore((state) => state.characterProfiles);
 
     // Responsive collapsible sections for mobile
     const [castExpanded, setCastExpanded] = useState(true);
@@ -638,86 +632,76 @@ export const Setup: React.FC<SetupProps> = (props) => {
                                 onStoryContextUpdate={props.onStoryContextUpdate}
                             />
 
-                            <div className="mt-auto pt-2 border-t-2 border-black space-y-1.5 sm:space-y-1">
-                                <label className="flex items-center gap-1.5 sm:gap-1 font-comic text-xs sm:text-sm cursor-pointer text-black p-1.5 sm:p-1 hover:bg-yellow-100 rounded border-2 border-transparent hover:border-yellow-300 transition-colors touch-manipulation">
-                                    <input type="checkbox" checked={props.richMode} onChange={(e) => props.onRichModeChange(e.target.checked)} className="w-5 h-5 sm:w-4 sm:h-4 accent-black shrink-0" aria-label="Rich dialogue mode" />
-                                    <span className="text-black">✨ Rich Dialogue Mode</span>
-                                    <Tooltip text="Uses longer, descriptive captions and deep internal monologues vs standard punchy comic dialogue. Works with both Novel Mode and Outline Mode." />
-                                </label>
-                                {props.onUseSavedProfilesChange && (
-                                    <label className="flex items-center gap-1.5 sm:gap-1 font-comic text-xs sm:text-sm cursor-pointer text-green-800 p-1.5 sm:p-1 hover:bg-green-100 rounded border-2 border-transparent hover:border-green-300 transition-colors touch-manipulation">
-                                        <input
-                                            type="checkbox"
-                                            checked={props.useSavedProfiles ?? true}
-                                            onChange={(e: React.ChangeEvent<HTMLInputElement>) => props.onUseSavedProfilesChange?.(e.target.checked)}
-                                            className="w-5 h-5 sm:w-4 sm:h-4 accent-green-600 shrink-0"
-                                            aria-label="Use saved character profiles"
-                                            disabled={props.skipProfileAnalysis}
-                                        />
-                                        <span className={props.skipProfileAnalysis ? 'opacity-50' : ''}>💾 Use Saved Profiles</span>
-                                        <Tooltip text="Reuses previously generated character analysis if available. If a character doesn't have a saved profile, it will be auto-generated and saved for future use. Skips the profile review step for faster generation." />
-                                    </label>
-                                )}
-                                {props.onSkipProfileAnalysisChange && (
-                                    <label className="flex items-center gap-1.5 sm:gap-1 font-comic text-xs sm:text-sm cursor-pointer text-purple-800 p-1.5 sm:p-1 hover:bg-purple-100 rounded border-2 border-transparent hover:border-purple-300 transition-colors touch-manipulation">
-                                        <input
-                                            type="checkbox"
-                                            checked={props.skipProfileAnalysis || false}
-                                            onChange={(e: React.ChangeEvent<HTMLInputElement>) => props.onSkipProfileAnalysisChange?.(e.target.checked)}
-                                            className="w-5 h-5 sm:w-4 sm:h-4 accent-purple-600 shrink-0"
-                                            aria-label="Skip AI pre-analysis"
-                                        />
-                                        <span>🎯 Skip AI Pre-Analysis</span>
-                                        <Tooltip text="Skips the automatic AI portrait analysis. You'll get blank character profile boxes to fill in manually. Useful if you want full control over character descriptions or if the AI analysis isn't capturing details correctly." />
-                                    </label>
-                                )}
-                                <p className="font-comic text-[9px] sm:text-[10px] text-gray-500 mt-1 pl-1 flex items-center flex-wrap">
-                                    Story mode (Novel/Outline) is selected after clicking "Start Adventure"
-                                    <HelpTooltip
-                                        title="Novel vs Outline"
-                                        text="Novel Mode: Interactive with player choices at key moments. Outline Mode: AI generates the entire story automatically from your description."
-                                        position="top"
-                                    />
-                                </p>
-                            </div>
+                            <p className="font-comic text-[9px] sm:text-[10px] text-gray-500 mt-2 pl-1 flex items-center flex-wrap">
+                                Story mode (Novel/Outline) is selected after clicking "Start Adventure"
+                                <HelpTooltip
+                                    title="Novel vs Outline"
+                                    text="Novel Mode: Interactive with player choices at key moments. Outline Mode: AI generates the entire story automatically from your description."
+                                    position="top"
+                                />
+                            </p>
                         </div>
                     </div>
                 </div>
 
-                {/* Cost Estimator */}
-                <CostEstimator
-                    pageCount={props.storyContext.pageLength || 6}
-                    characterCount={
-                        (props.hero ? 1 : 0) +
-                        (props.friend ? 1 : 0) +
-                        props.additionalCharacters.length
-                    }
-                    isOutlineMode={true}
-                    showBreakdown={false}
-                    className="mt-3 sm:mt-4"
-                />
+                {/* === GENERATION OPTIONS SECTION === */}
+                <div className="mt-3 sm:mt-4 border-[3px] border-gray-300 bg-gradient-to-r from-gray-50 to-slate-50 p-3">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        {/* Left: Generation Options */}
+                        <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+                            <span className="font-comic text-xs font-bold text-gray-700 uppercase shrink-0">⚙️ Options:</span>
 
-                {/* Character Analysis & Presets Section */}
-                <div className="mt-3 sm:mt-4 grid grid-cols-1 md:grid-cols-2 gap-3">
-                    {/* Character Analysis Panel */}
-                    <CharacterAnalysisPanel
-                        characters={[
-                            ...(props.hero ? [props.hero] : []),
-                            ...(props.friend ? [props.friend] : []),
-                            ...props.additionalCharacters
-                        ]}
-                        profiles={characterProfiles}
-                    />
+                            <label className="flex items-center gap-1.5 font-comic text-xs cursor-pointer text-black hover:text-yellow-700 transition-colors touch-manipulation whitespace-nowrap">
+                                <input type="checkbox" checked={props.richMode} onChange={(e) => props.onRichModeChange(e.target.checked)} className="w-4 h-4 accent-yellow-600 shrink-0" aria-label="Rich dialogue mode" />
+                                <span>✨ Rich Dialogue</span>
+                                <Tooltip text="Uses longer, descriptive captions and deep internal monologues." />
+                            </label>
 
-                    {/* Preset Manager */}
-                    <PresetManager
-                        presets={customPresets}
-                        onSelectPreset={handleSelectCustomPreset}
-                        onDeletePreset={handleDeleteCustomPreset}
-                        onUpdatePreset={handleUpdateCustomPreset}
-                        onCreateNew={() => setShowSavePresetModal(true)}
-                    />
+                            {props.onUseSavedProfilesChange && (
+                                <label className={`flex items-center gap-1.5 font-comic text-xs cursor-pointer transition-colors touch-manipulation whitespace-nowrap ${props.skipProfileAnalysis ? 'opacity-40' : 'text-green-700 hover:text-green-900'}`}>
+                                    <input
+                                        type="checkbox"
+                                        checked={props.useSavedProfiles ?? true}
+                                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => props.onUseSavedProfilesChange?.(e.target.checked)}
+                                        className="w-4 h-4 accent-green-600 shrink-0"
+                                        aria-label="Use saved character profiles"
+                                        disabled={props.skipProfileAnalysis}
+                                    />
+                                    <span>💾 Use Saved Profiles</span>
+                                    <Tooltip text="Reuses saved character analysis. Auto-generates missing profiles." />
+                                </label>
+                            )}
+
+                            {props.onSkipProfileAnalysisChange && (
+                                <label className="flex items-center gap-1.5 font-comic text-xs cursor-pointer text-purple-700 hover:text-purple-900 transition-colors touch-manipulation whitespace-nowrap">
+                                    <input
+                                        type="checkbox"
+                                        checked={props.skipProfileAnalysis || false}
+                                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => props.onSkipProfileAnalysisChange?.(e.target.checked)}
+                                        className="w-4 h-4 accent-purple-600 shrink-0"
+                                        aria-label="Skip AI pre-analysis"
+                                    />
+                                    <span>🎯 Skip Analysis</span>
+                                    <Tooltip text="Skip AI portrait analysis. Fill in profiles manually." />
+                                </label>
+                            )}
+                        </div>
+
+                        {/* Right: Cost Estimate */}
+                        <CostEstimator
+                            pageCount={props.storyContext.pageLength || 6}
+                            characterCount={
+                                (props.hero ? 1 : 0) +
+                                (props.friend ? 1 : 0) +
+                                props.additionalCharacters.length
+                            }
+                            isOutlineMode={true}
+                            showBreakdown={false}
+                            className="shrink-0"
+                        />
+                    </div>
                 </div>
+
 
                 {/* Action Buttons */}
                 <ActionButtons
