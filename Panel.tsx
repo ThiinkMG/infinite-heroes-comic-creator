@@ -43,7 +43,7 @@ export const Panel: React.FC<PanelProps> = ({ face, allFaces, storyContext, gene
     return (
         <div className={`panel-container relative group ${isFullBleed ? '!p-0 !bg-[#0a0a0a]' : ''}`}>
             <div className="gloss"></div>
-            {face.imageUrl && <img key={face.imageUrl.slice(-20)} src={face.imageUrl} alt="Comic panel" className={`panel-image ${isFullBleed ? '!object-cover' : ''}`} />}
+            {face.imageUrl && <img key={face.imageUrl.slice(-20)} src={face.imageUrl} alt={`Comic panel ${face.pageIndex !== undefined ? `page ${face.pageIndex}` : ''}`} className={`panel-image ${isFullBleed ? '!object-cover' : ''}`} />}
             
             {/* Failed Generation State */}
             {hasFailed && (
@@ -56,6 +56,7 @@ export const Panel: React.FC<PanelProps> = ({ face, allFaces, storyContext, gene
                                 onClick={(e) => { e.stopPropagation(); onQuickRetry(face.pageIndex as number); }}
                                 className="comic-btn bg-green-500 text-white px-6 py-3 text-lg font-bold border-[3px] border-black hover:scale-105 shadow-[4px_4px_0px_rgba(0,0,0,1)] w-full"
                                 title="Quick retry with enhanced context (emblem, weapon, outline)"
+                                aria-label="Quick retry panel generation"
                             >
                                 🔄 Continue (Quick Retry)
                             </button>
@@ -63,6 +64,7 @@ export const Panel: React.FC<PanelProps> = ({ face, allFaces, storyContext, gene
                         <button
                             onClick={(e) => { e.stopPropagation(); onReroll(face.pageIndex as number); }}
                             className="comic-btn bg-yellow-400 text-black px-6 py-3 text-lg font-bold border-[3px] border-black hover:scale-105 shadow-[4px_4px_0px_rgba(0,0,0,1)] w-full"
+                            aria-label="Reroll panel with full options"
                         >
                             🎲 Reroll (Full Options)
                         </button>
@@ -75,13 +77,14 @@ export const Panel: React.FC<PanelProps> = ({ face, allFaces, storyContext, gene
 
             {/* Reroll Button — shows on any non-loading story/cover panel */}
             {!face.isLoading && (face.type === 'story' || face.type === 'cover') && face.pageIndex !== undefined && face.imageUrl && (
-                <button 
-                    onClick={(e) => { 
-                        e.stopPropagation(); 
+                <button
+                    onClick={(e) => {
+                        e.stopPropagation();
                         onReroll(face.pageIndex as number);
-                    }} 
-                    className="absolute top-4 right-4 bg-yellow-400 text-black border-[3px] border-black rounded-full w-10 h-10 flex items-center justify-center font-bold text-xl hover:scale-110 shadow-[2px_2px_0px_rgba(0,0,0,1)] z-30 opacity-0 group-hover:opacity-100 transition-opacity" 
+                    }}
+                    className="absolute top-4 right-4 bg-yellow-400 text-black border-[3px] border-black rounded-full w-10 h-10 flex items-center justify-center font-bold text-xl hover:scale-110 shadow-[2px_2px_0px_rgba(0,0,0,1)] z-30 opacity-0 group-hover:opacity-100 transition-opacity"
                     title="Re-roll Panel"
+                    aria-label="Reroll this panel"
                 >
                     🎲
                 </button>
@@ -97,6 +100,7 @@ export const Panel: React.FC<PanelProps> = ({ face, allFaces, storyContext, gene
                         <button
                             onClick={(e) => { e.stopPropagation(); /* continue normally via choices below */ }}
                             className="px-3 py-1.5 bg-green-500 rounded text-xs font-bold hover:bg-green-400 border border-white/30 transition-colors"
+                            aria-label="Continue story"
                         >
                             Keep Going
                         </button>
@@ -104,6 +108,7 @@ export const Panel: React.FC<PanelProps> = ({ face, allFaces, storyContext, gene
                             <button
                                 onClick={(e) => { e.stopPropagation(); onStopHere(); }}
                                 className="px-3 py-1.5 bg-red-500 rounded text-xs font-bold hover:bg-red-400 border border-white/30 transition-colors"
+                                aria-label="Wrap up story"
                             >
                                 Wrap Up
                             </button>
@@ -121,12 +126,14 @@ export const Panel: React.FC<PanelProps> = ({ face, allFaces, storyContext, gene
                         <>
                             {face.choices.map((choice, i) => (
                                 <button key={i} onClick={(e) => { e.stopPropagation(); if(face.pageIndex) onChoice(face.pageIndex, choice, false); }}
-                                  className={`comic-btn w-full py-3 text-lg leading-tight font-bold tracking-wider ${i===0?'bg-yellow-400 hover:bg-yellow-300':'bg-blue-500 text-white hover:bg-blue-400'}`}>
+                                  className={`comic-btn w-full py-3 text-lg leading-tight font-bold tracking-wider ${i===0?'bg-yellow-400 hover:bg-yellow-300':'bg-blue-500 text-white hover:bg-blue-400'}`}
+                                  aria-label={`Choose: ${choice}`}>
                                     {choice}
                                 </button>
                             ))}
                             <button onClick={(e) => { e.stopPropagation(); setShowCustomChoice(true); }}
-                              className="comic-btn w-full py-2 text-lg bg-green-600 text-white hover:bg-green-500 font-bold tracking-wider border-2 border-black">
+                              className="comic-btn w-full py-2 text-lg bg-green-600 text-white hover:bg-green-500 font-bold tracking-wider border-2 border-black"
+                              aria-label="Enter custom action">
                                 ✍️ Custom Action
                             </button>
                             {/* Choose for me - AI picks one of the options */}
@@ -142,6 +149,7 @@ export const Panel: React.FC<PanelProps> = ({ face, allFaces, storyContext, gene
                                     }}
                                     className="comic-btn w-full py-2 text-sm bg-purple-600 text-white hover:bg-purple-500 font-bold tracking-wider border-2 border-black"
                                     title="Let AI randomly pick one of the choices"
+                                    aria-label="Choose randomly"
                                 >
                                     🎲 Choose For Me
                                 </button>
@@ -156,6 +164,7 @@ export const Panel: React.FC<PanelProps> = ({ face, allFaces, storyContext, gene
                                     }}
                                     className="comic-btn w-full py-2 text-xs bg-gray-400 text-white hover:bg-gray-300 font-bold tracking-wider border-2 border-black"
                                     title="Dismiss this dialogue (for stale/out-of-sync prompts)"
+                                    aria-label="Skip and dismiss this dialogue"
                                 >
                                     ⏭️ Skip (Dismiss)
                                 </button>
@@ -165,6 +174,7 @@ export const Panel: React.FC<PanelProps> = ({ face, allFaces, storyContext, gene
                                 <button
                                     onClick={(e) => { e.stopPropagation(); onStopHere(); }}
                                     className="comic-btn w-full py-2 text-sm bg-red-600 text-white hover:bg-red-500 font-bold tracking-wider border-2 border-black mt-1"
+                                    aria-label="Stop here and wrap up story"
                                 >
                                     🏁 Stop Here (Wrap Up Story)
                                 </button>
@@ -179,6 +189,7 @@ export const Panel: React.FC<PanelProps> = ({ face, allFaces, storyContext, gene
                                 placeholder="Type your action..."
                                 className="flex-1 p-3 font-comic text-black border-2 border-black focus:outline-none"
                                 autoFocus
+                                aria-label="Custom action text"
                                 onKeyDown={e => {
                                     if(e.key === 'Enter' && customChoiceText.trim() && face.pageIndex) {
                                         onChoice(face.pageIndex, customChoiceText.trim(), true);
@@ -190,12 +201,14 @@ export const Panel: React.FC<PanelProps> = ({ face, allFaces, storyContext, gene
                             <button
                                 onClick={(e) => { e.stopPropagation(); if(customChoiceText.trim() && face.pageIndex) { onChoice(face.pageIndex, customChoiceText.trim(), true); setShowCustomChoice(false); setCustomChoiceText(''); } }}
                                 className="comic-btn bg-green-600 text-white px-4 font-bold border-2 border-black hover:bg-green-500"
+                                aria-label="Submit custom action"
                             >
                                 GO
                             </button>
                             <button
                                 onClick={(e) => { e.stopPropagation(); setShowCustomChoice(false); setCustomChoiceText(''); }}
                                 className="comic-btn bg-red-600 text-white px-4 font-bold border-2 border-black hover:bg-red-500"
+                                aria-label="Cancel custom action"
                             >
                                 X
                             </button>
@@ -280,7 +293,8 @@ export const Panel: React.FC<PanelProps> = ({ face, allFaces, storyContext, gene
                                  return (
                                      <div className="flex flex-col items-center gap-2">
                                          <button onClick={(e) => { e.stopPropagation(); onOpenBook(); }}
-                                          className="comic-btn bg-yellow-400 px-10 py-4 text-3xl font-bold hover:scale-105 animate-bounce border-[3px] border-black shadow-[4px_4px_0px_rgba(0,0,0,1)] text-black">
+                                          className="comic-btn bg-yellow-400 px-10 py-4 text-3xl font-bold hover:scale-105 animate-bounce border-[3px] border-black shadow-[4px_4px_0px_rgba(0,0,0,1)] text-black"
+                                          aria-label={`Read issue ${storyContext.issueNumber || '1'}`}>
                                              READ ISSUE #{storyContext.issueNumber || '1'}
                                          </button>
                                          {remainingGenerating > 0 && generateFromOutline && (
@@ -306,20 +320,20 @@ export const Panel: React.FC<PanelProps> = ({ face, allFaces, storyContext, gene
             {face.type === 'back_cover' && (
                 <div className="absolute bottom-12 inset-x-0 flex flex-col items-center gap-3 z-20 px-8">
                     <div className="flex flex-col gap-2 w-full max-w-sm">
-                        <button onClick={(e) => { e.stopPropagation(); if(onAddPage) onAddPage(); }} className="comic-btn bg-purple-600 text-white w-full py-3 text-lg font-bold hover:scale-105 shadow-[4px_4px_0px_rgba(0,0,0,1)] text-center border-[3px] border-black text-shadow-sm transition-transform">
+                        <button onClick={(e) => { e.stopPropagation(); if(onAddPage) onAddPage(); }} className="comic-btn bg-purple-600 text-white w-full py-3 text-lg font-bold hover:scale-105 shadow-[4px_4px_0px_rgba(0,0,0,1)] text-center border-[3px] border-black text-shadow-sm transition-transform" aria-label="Continue story automatically">
                             ➕ Continue Story (Auto)
                         </button>
-                        <button onClick={(e) => { 
-                            e.stopPropagation(); 
+                        <button onClick={(e) => {
+                            e.stopPropagation();
                             const p = window.prompt("What should happen on the next page?");
                             if(p && onAddPage) onAddPage(p);
-                        }} className="comic-btn bg-indigo-600 text-white w-full py-3 text-lg font-bold hover:scale-105 shadow-[4px_4px_0px_rgba(0,0,0,1)] text-center border-[3px] border-black text-shadow-sm transition-transform">
+                        }} className="comic-btn bg-indigo-600 text-white w-full py-3 text-lg font-bold hover:scale-105 shadow-[4px_4px_0px_rgba(0,0,0,1)] text-center border-[3px] border-black text-shadow-sm transition-transform" aria-label="Continue story with custom input">
                             ✍️ Continue (Custom Input)
                         </button>
                     </div>
                     <div className="flex gap-2 w-full max-w-sm mt-2">
-                        <button onClick={(e) => { e.stopPropagation(); onDownload(); }} className="comic-btn bg-blue-600 text-white flex-1 py-3 text-sm font-bold hover:scale-105 text-center border-[3px] border-black">DOWNLOAD</button>
-                        <button onClick={(e) => { e.stopPropagation(); onReset(); }} className="comic-btn bg-green-600 text-white flex-1 py-3 text-sm font-bold hover:scale-105 text-center border-[3px] border-black">NEW ISSUE</button>
+                        <button onClick={(e) => { e.stopPropagation(); onDownload(); }} className="comic-btn bg-blue-600 text-white flex-1 py-3 text-sm font-bold hover:scale-105 text-center border-[3px] border-black" aria-label="Download comic">DOWNLOAD</button>
+                        <button onClick={(e) => { e.stopPropagation(); onReset(); }} className="comic-btn bg-green-600 text-white flex-1 py-3 text-sm font-bold hover:scale-105 text-center border-[3px] border-black" aria-label="Start new issue">NEW ISSUE</button>
                     </div>
                 </div>
             )}

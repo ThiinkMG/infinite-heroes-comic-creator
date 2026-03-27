@@ -1,0 +1,105 @@
+/* ==================== FOCUS INDICATORS ==================== */
+/* Keyboard focus states for accessibility - visible ring on Tab key navigation */
+
+/* Global focus indicator for all interactive elements */
+:focus-visible {
+  outline: 2px solid #3b82f6;
+  outline-offset: 2px;
+}
+
+/* Buttons - primary focus indicator */
+button:focus-visible {
+  outline: 2px solid #3b82f6;
+  outline-offset: 2px;
+}
+
+/* Link elements */
+a:focus-visible {
+  outline: 2px solid #3b82f6;
+  outline-offset: 2px;
+}
+
+/* Form inputs */
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+  outline: 2px solid #3b82f6;
+  outline-offset: 2px;
+}
+
+/* Custom comicBtn class used throughout app */
+.comic-btn:focus-visible {
+  outline: 2px solid #3b82f6;
+  outline-offset: 2px;
+}
+
+/* Dialog/modal elements */
+dialog:focus-visible {
+  outline: 2px solid #3b82f6;
+  outline-offset: 2px;
+}
+
+/* Paper/card elements that might be interactive */
+.paper:focus-visible {
+  outline: 2px solid #3b82f6;
+  outline-offset: 2px;
+}
+
+/* Book/book-related interactive areas */
+.book:focus-visible,
+.book-nav:focus-visible {
+  outline: 2px solid #3b82f6;
+  outline-offset: 2px;
+}
+
+/* Panel containers if they're clickable */
+.panel-container:focus-visible {
+  outline: 2px solid #3b82f6;
+  outline-offset: 2px;
+}
+
+/* Adjust outline offset for elements that are embedded (negative offset for inside focus) */
+/* This is optional - use when you want the outline inside the element */
+/* Examples: small buttons, compact inputs */
+
+/* For Tailwind-generated buttons and interactive elements */
+[class*="rounded"]:focus-visible {
+  outline: 2px solid #3b82f6;
+  outline-offset: 2px;
+}
+
+/* Ensure focus indicators are visible on disabled elements too (for readability) */
+button:disabled:focus-visible,
+input:disabled:focus-visible,
+select:disabled:focus-visible,
+textarea:disabled:focus-visible {
+  outline: 2px solid #6b7280; /* Muted gray for disabled state */
+  outline-offset: 2px;
+}
+
+/* High contrast mode support - ensure focus indicators work in all color modes */
+@media (prefers-contrast: more) {
+  :focus-visible {
+    outline: 3px solid #0066ff;
+    outline-offset: 3px;
+  }
+
+  button:focus-visible,
+  a:focus-visible,
+  input:focus-visible,
+  textarea:focus-visible,
+  select:focus-visible,
+  .comic-btn:focus-visible {
+    outline: 3px solid #0066ff;
+    outline-offset: 3px;
+  }
+}
+
+/* Ensure focus indicators aren't visible on mouse click (only on keyboard Tab) */
+/* This is handled by :focus-visible pseudo-class, which only applies to keyboard focus */
+/* The browser automatically handles this - no additional CSS needed */
+
+/* Remove any default browser outlines that might conflict */
+*:focus {
+  /* Browser default - overridden by :focus-visible */
+}

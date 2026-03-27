@@ -1,0 +1,455 @@
+/**
+ * @license
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ * Custom hook for generating narrative beats for comic pages.
+ * Extracted from App.tsx as part of Batch 2.2 decomposition.
+ */
+
+import { GoogleGenAI } from '@google/genai';
+import Anthropic from '@anthropic-ai/sdk';
+import {
+  Beat,
+  ComicFace,
+  Persona,
+  StoryContext,
+  StoryOutline,
+  EmotionalBeat,
+  PacingIntent,
+  LANGUAGES,
+  getComicConfig,
+  getLayoutInstructions,
+  getShotInstructions,
+  getTransitionContext,
+} from '../types';
+import { createTextContent, createImageContent, extractJsonFromResponse, getTextFromClaudeResponse, ClaudeContentBlock } from '../claudeHelpers';
+import { useCharacterStore } from '../stores/useCharacterStore';
+import { useSettingsStore } from '../stores/useSettingsStore';
+
+// ============================================================================
+// TYPES
+// ============================================================================
+
+/** Configuration for the useGenerateBeat hook */
+export interface GenerateBeatConfig {
+  /** Get GoogleGenAI client */
+  getAI: () => GoogleGenAI;
+  /** Get Anthropic client (returns null if not configured) */
+  getClaude: () => Anthropic | null;
+  /** Handle Gemini API errors */
+  onAPIError: (e: unknown) => void;
+  /** Handle Anthropic API errors */
+  onAnthropicError: (e: unknown) => void;
+}
+
+/** Parameters for the generateBeat function */
+export interface GenerateBeatParams {
+  /** Previous comic pages for context */
+  history: ComicFace[];
+  /** Whether this is a right-side page (affects layout) */
+  isRightPage: boolean;
+  /** Current page number (1-indexed) */
+  pageNum: number;
+  /** Whether this page should present choices to the user */
+  isDecisionPage: boolean;
+  /** Optional user instruction for reroll */
+  instruction?: string;
+  /** Previous choices the user rejected (for variety) */
+  previousChoices?: string[];
+  /** Story context (title, description, files) */
+  storyContext: StoryContext;
+  /** Story outline state */
+  storyOutline: StoryOutline;
+  /** Story tone setting */
+  storyTone: string;
+  /** Whether rich/novel mode is enabled */
+  richMode: boolean;
+  /** Extra pages added to story */
+  extraPages: number;
+}
+
+// ============================================================================
+// CONSTANTS
+// ============================================================================
+
+const MODEL_TEXT_NAME = "gemini-2.5-pro";
+const MODEL_TEXT_NAME_CLAUDE = "claude-sonnet-4-5-20250929";
+
+// ============================================================================
+// HOOK
+// ============================================================================
+
+/**
+ * Hook that provides beat generation functionality.
+ * Reads character and settings data from Zustand stores.
+ */
+export const useGenerateBeat = (config: GenerateBeatConfig) => {
+  const { getAI, getClaude, onAPIError, onAnthropicError } = config;
+
+  // Store getters (for use in async callbacks)
+  const getHero = () => useCharacterStore.getState().hero;
+  const getFriend = () => useCharacterStore.getState().friend;
+  const getAdditionalChars = () => useCharacterStore.getState().additionalCharacters;
+
+  // Helper to get role label
+  const getRoleLabel = (p: Persona): string => {
+    if (!p.role) return '';
+    if (p.role === 'Family/Friend' || p.role === 'Custom') return p.customRole || p.role;
+    return p.role;
+  };
+
+  // Helper to clean and validate beat response
+  const cleanBeatResponse = (parsed: Record<string, unknown>, isDecisionPage: boolean, isFinalPage: boolean): Beat => {
+    // Build result with defaults for required fields
+    const result: Beat = {
+      caption: parsed.caption as string | undefined,
+      dialogue: parsed.dialogue as string | undefined,
+      scene: (parsed.scene as string) || '',
+      focus_char: (parsed.focus_char as 'hero' | 'friend' | 'other') || 'hero',
+      choices: (parsed.choices as string[]) || [],
+    };
+
+    if (result.dialogue) {
+      result.dialogue = String(
+        Array.isArray(result.dialogue) ? result.dialogue.join(' ') : result.dialogue
+      ).replace(/^[\w\s\-]+:\s*/i, '').replace(/["']/g, '').trim();
+    }
+
+    if (result.caption) {
+      result.caption = String(
+        Array.isArray(result.caption) ? result.caption.join(' ') : result.caption
+      ).replace(/^[\w\s\-]+:\s*/i, '').trim();
+    }
+
+    if (!isDecisionPage) {
+      result.choices = [];
+    }
+
+    if (isDecisionPage && !isFinalPage && (!result.choices || result.choices.length < 2)) {
+      result.choices = ["Option A", "Option B"];
+    }
+
+    if (!['hero', 'friend', 'other'].includes(result.focus_char)) {
+      result.focus_char = 'hero';
+    }
+
+    return result;
+  };
+
+  /**
+   * Generate a narrative beat for a comic page.
+   * Uses Claude as primary, falls back to Gemini.
+   */
+  const generateBeat = async (params: GenerateBeatParams): Promise<Beat> => {
+    const {
+      history,
+      pageNum,
+      isDecisionPage,
+      instruction,
+      previousChoices,
+      storyContext,
+      storyOutline,
+      storyTone,
+      richMode,
+      extraPages,
+    } = params;
+
+    // Read settings from store
+    const settingsState = useSettingsStore.getState();
+    const { selectedGenre, customPremise, selectedLanguage, selectedPageLength } = settingsState;
+
+    const hero = getHero();
+    if (!hero) throw new Error("No Hero");
+
+    const friend = getFriend();
+    const additionalChars = getAdditionalChars();
+
+    const comicConfig = getComicConfig(selectedPageLength, extraPages);
+    const isFinalPage = pageNum === comicConfig.MAX_STORY_PAGES;
+    const langName = LANGUAGES.find(l => l.code === selectedLanguage)?.name || "English";
+
+    // Get relevant history and last focus to prevent repetition
+    const relevantHistory = history
+      .filter(p => p.type === 'story' && p.narrative && (p.pageIndex || 0) < pageNum)
+      .sort((a, b) => (a.pageIndex || 0) - (b.pageIndex || 0));
+
+    const lastBeat = relevantHistory[relevantHistory.length - 1]?.narrative;
+    const lastFocus = lastBeat?.focus_char || 'none';
+
+    const historyText = relevantHistory.map(p =>
+      `[Page ${p.pageIndex}] [Focus: ${p.narrative?.focus_char}] (Caption: "${p.narrative?.caption || ''}") (Dialogue: "${p.narrative?.dialogue || ''}") (Scene: ${p.narrative?.scene}) ${p.resolvedChoice ? `-> USER CHOICE: "${p.resolvedChoice}"` : ''}`
+    ).join('\n');
+
+    // Aggressive Co-Star Injection Logic
+    let friendInstruction = "Not yet introduced.";
+    if (friend) {
+      friendInstruction = "ACTIVE and PRESENT (User Provided).";
+      if (lastFocus !== 'friend' && Math.random() > 0.4) {
+        friendInstruction += " MANDATORY: FOCUS ON THE CO-STAR FOR THIS PANEL.";
+      } else {
+        friendInstruction += " Ensure they are woven into the scene even if not the main focus.";
+      }
+    }
+
+    // Determine Core Story Driver (Genre vs Custom Premise)
+    let coreDriver = `GENRE: ${selectedGenre}. TONE: ${storyTone}.`;
+    if (selectedGenre === 'Custom') {
+      coreDriver = `STORY PREMISE: ${customPremise || "A totally unique, unpredictable adventure"}. (Follow this premise strictly over standard genre tropes).`;
+    }
+
+    // Guardrails to prevent everything becoming "Quantum Sci-Fi"
+    const guardrails = `
+    NEGATIVE CONSTRAINTS:
+    1. UNLESS GENRE IS "Dark Sci-Fi" OR "Superhero Action" OR "Custom": DO NOT use technical jargon like "Quantum", "Timeline", "Portal", "Multiverse", or "Singularity".
+    2. IF GENRE IS "Teen Drama" OR "Lighthearted Comedy": The "stakes" must be SOCIAL, EMOTIONAL, or PERSONAL (e.g., a rumor, a competition, a broken promise, being late, embarrassing oneself). Do NOT make it life-or-death. Keep it grounded.
+    3. Avoid "The artifact" or "The device" unless established earlier.
+    `;
+
+    // Character Context
+    const charContext = [
+      `HERO: ${hero.name || 'Main Hero'}. Role: ${getRoleLabel(hero) || 'Hero'}. Backstory: ${hero.backstoryText || 'Unknown'}.`,
+      friend ? `CO-STAR: ${friend.name || 'Sidekick'}. Role: ${getRoleLabel(friend) || 'Sidekick'}. Backstory: ${friend.backstoryText || 'Unknown'}.` : null,
+      ...additionalChars.map(c => `${c.name}: Role: ${getRoleLabel(c) || 'Supporting'}. ${c.backstoryText || 'Unknown'}.`)
+    ].filter(Boolean).join('\n');
+
+    // Story Context
+    const storyInfo = `
+    STORY TITLE: ${storyContext.title || 'Untitled Adventure'}
+    STORY DESCRIPTION: ${storyContext.descriptionText || 'A new adventure begins.'}
+    ${storyOutline.isReady ? `STORY OUTLINE: ${storyOutline.content}` : ''}
+    `;
+
+    // Batch-of-3 generation context for narrative continuity
+    const batchPosition = ((pageNum - 1) % 3) + 1;
+    const batchStart = pageNum - batchPosition + 1;
+    const batchContext = `
+=== BATCH GENERATION CONTEXT ===
+This is page ${batchPosition} of a 3-page narrative batch (Pages ${batchStart}-${batchStart + 2}).
+- Page 1 of batch: SETUP - Establish the scene, introduce the situation
+- Page 2 of batch: DEVELOPMENT - Build tension, advance the conflict, character interactions
+- Page 3 of batch: PAYOFF - Mini-climax, resolution of this beat, or cliffhanger for next batch
+MAINTAIN STRONG CONTINUITY with the other pages in this batch. The 3 pages should feel like a cohesive mini-chapter.`;
+
+    // Build base instruction
+    let baseInstruction = `You are the Lead Writer for a mature comic book. Write ONE single, vivid, narrative beat for the NEXT page. ALL OUTPUT TEXT (Captions, Dialogue, Choices) MUST BE IN ${langName.toUpperCase()}. ${coreDriver} ${guardrails}`;
+    baseInstruction += `\nCONTEXT: ${storyInfo}\nCHARACTERS:\n${charContext}`;
+    baseInstruction += batchContext;
+
+    if (richMode) {
+      baseInstruction += " RICH/NOVEL MODE ENABLED. Prioritize deeper character thoughts, descriptive captions, and meaningful dialogue exchanges over short punchlines.";
+    }
+
+    if (instruction) {
+      baseInstruction += `\nUSER REROLL INSTRUCTION: "${instruction}". (YOU MUST FOLLOW THIS OVER THE NORMAL NARRATIVE FLOW!).`;
+    }
+
+    if (isFinalPage) {
+      baseInstruction += " FINAL PAGE. KARMIC CLIFFHANGER REQUIRED. You MUST explicitly reference the User's choice from PAGE 3 in the narrative and show how that specific philosophy led to this conclusion. Text must end with 'TO BE CONTINUED...' (or localized equivalent).";
+    } else if (isDecisionPage) {
+      baseInstruction += " End with a PSYCHOLOGICAL choice about VALUES, RELATIONSHIPS, or RISK. (e.g., Truth vs. Safety, Forgive vs. Avenge). The choices MUST be a brief descriptive summary of the action the user is taking (e.g. 'Confront the suspect at the warehouse' vs 'Follow from a distance'). NEVER use generic 'Option A' or 'Option B'.";
+      if (previousChoices && previousChoices.length > 0) {
+        baseInstruction += ` REJECTED CHOICES (DO NOT REUSE): ${previousChoices.map(c => `"${c}"`).join(', ')}. Generate COMPLETELY DIFFERENT choices that explore alternative story directions.`;
+      }
+    } else {
+      // Narrative arc guidance based on page number
+      if (pageNum === 1) {
+        baseInstruction += " INCITING INCIDENT. An event disrupts the status quo. Establish the genre's intended mood. (If Slice of Life: A social snag/surprise. If Adventure: A call to action).";
+      } else if (pageNum <= 4) {
+        baseInstruction += " RISING ACTION. The heroes engage with the new situation. Focus on dialogue, character dynamics, and initial challenges.";
+      } else if (pageNum <= 8) {
+        baseInstruction += " COMPLICATION. A twist occurs! A secret is revealed, a misunderstanding deepens, or the path is blocked. (Keep intensity appropriate to Genre - e.g. Social awkwardness for Comedy, Danger for Horror).";
+      } else {
+        baseInstruction += " CLIMAX. The confrontation with the main conflict. The truth comes out, the contest ends, or the battle is fought.";
+      }
+    }
+
+    // Comic Fundamentals context from page breakdown
+    const pagePlan = storyOutline.pageBreakdown?.find(p => p.pageIndex === pageNum);
+    if (pagePlan) {
+      baseInstruction += `\n\n=== COMIC FUNDAMENTALS FOR PAGE ${pageNum} ===`;
+      baseInstruction += `\n${getLayoutInstructions(pagePlan.panelLayout)}`;
+      baseInstruction += `\n${getShotInstructions(pagePlan.suggestedShot)}`;
+
+      if (pageNum > 1) {
+        const prevScene = relevantHistory[relevantHistory.length - 1]?.narrative?.scene;
+        baseInstruction += `\n${getTransitionContext(pagePlan.transitionType, prevScene)}`;
+      }
+
+      const beatGuidance: Record<EmotionalBeat, string> = {
+        'establishing': 'BEAT: ESTABLISHING - Set the scene, introduce the location/mood.',
+        'action': 'BEAT: ACTION - Focus on physical movement, dynamic poses, kinetic energy.',
+        'dialogue': 'BEAT: DIALOGUE - Conversation focus, reaction shots, character interplay.',
+        'reaction': 'BEAT: REACTION - Show emotional response to what just happened.',
+        'climax': 'BEAT: CLIMAX - This is the PEAK MOMENT. Maximum drama and stakes!',
+        'transition': 'BEAT: TRANSITION - Bridge scene, moving from one situation to next.',
+        'reveal': 'BEAT: REVEAL - Important information disclosed. Dramatic impact moment.',
+      };
+      baseInstruction += `\n${beatGuidance[pagePlan.emotionalBeat]}`;
+
+      const pacingGuidance: Record<PacingIntent, string> = {
+        'slow': 'PACING: SLOW - Take time with this moment. Detailed descriptions, contemplative tone.',
+        'medium': 'PACING: MEDIUM - Standard narrative flow. Balance action and reflection.',
+        'fast': 'PACING: FAST - Quick, punchy beats. Short sentences, rapid progression.',
+      };
+      baseInstruction += `\n${pacingGuidance[pagePlan.pacingIntent]}`;
+
+      if (pagePlan.isFlashback) {
+        baseInstruction += `\nFLASHBACK: This scene takes place in the PAST. Use nostalgic/memory tone in narration.`;
+      }
+
+      if (pagePlan.primaryCharacters.length > 0) {
+        baseInstruction += `\nPLANNED CHARACTERS: Focus on ${pagePlan.primaryCharacters.join(', ')}.`;
+      }
+      baseInstruction += `\n=== END COMIC FUNDAMENTALS ===\n`;
+    }
+
+    // Dynamic text limits based on richMode
+    const capLimit = richMode ? "max 35 words. Detailed narration or internal monologue" : "max 15 words";
+    const diaLimit = richMode ? "max 30 words. Rich, character-driven speech" : "max 12 words";
+
+    const prompt = `
+You are writing a comic book script. PAGE ${pageNum} of ${comicConfig.MAX_STORY_PAGES}.
+TARGET LANGUAGE FOR TEXT: ${langName} (CRITICAL: CAPTIONS, DIALOGUE, CHOICES MUST BE IN THIS LANGUAGE).
+${coreDriver}
+
+CHARACTERS:
+- HERO: Active.
+- CO-STAR: ${friendInstruction}
+
+PREVIOUS PANELS (READ CAREFULLY):
+${historyText.length > 0 ? historyText : "Start the adventure."}
+
+RULES:
+1. NO REPETITION. Do not use the same captions or dialogue from previous pages.
+2. IF CO-STAR IS ACTIVE, THEY MUST APPEAR FREQUENTLY.
+3. VARIETY. If page ${pageNum - 1} was an action shot, make this one a reaction or wide shot.
+4. LANGUAGE: All user-facing text MUST be in ${langName}.
+5. Avoid saying "CO-star" and "hero" in the text captions. Use names if established, or generic descriptors.
+
+INSTRUCTION: ${baseInstruction}
+
+OUTPUT STRICT JSON ONLY (No markdown formatting):
+{
+  "caption": "Unique narrator text in ${langName}. (${capLimit}).",
+  "dialogue": "Unique speech in ${langName}. (${diaLimit}). Optional.",
+  "scene": "Vivid visual description (ALWAYS IN ENGLISH for the artist model). MUST explicitly name EVERY character present in the scene (Hero, Co-Star, or their exact given names).",
+  "focus_char": "hero" OR "friend" OR "other",
+  "choices": ["Descriptive Action A in ${langName}", "Descriptive Action B in ${langName}"] (Only if decision page)
+}
+`;
+
+    // Build Gemini parts (used as fallback)
+    const parts: Array<{ text: string } | { inlineData: { mimeType: string; data: string } }> = [{ text: prompt }];
+
+    // Add Story Description Files
+    storyContext.descriptionFiles.forEach(f => {
+      parts.push({ inlineData: { mimeType: f.mimeType, data: f.base64 } });
+    });
+
+    // Add Character Backstory Files
+    if (hero.backstoryFiles) {
+      hero.backstoryFiles.forEach(f => parts.push({ inlineData: { mimeType: f.mimeType, data: f.base64 } }));
+    }
+    if (friend?.backstoryFiles) {
+      friend.backstoryFiles.forEach(f => parts.push({ inlineData: { mimeType: f.mimeType, data: f.base64 } }));
+    }
+    additionalChars.forEach(c => {
+      c.backstoryFiles?.forEach(f => parts.push({ inlineData: { mimeType: f.mimeType, data: f.base64 } }));
+    });
+
+    // Try Claude first for text analysis
+    const claude = getClaude();
+    if (claude) {
+      try {
+        const claudeContent: ClaudeContentBlock[] = [createTextContent(prompt)];
+
+        // Add Story Description Files (images only for Claude)
+        storyContext.descriptionFiles.forEach(f => {
+          if (f.mimeType.startsWith('image/')) {
+            claudeContent.push(createImageContent(f.base64, f.mimeType));
+          }
+        });
+
+        // Add Character Backstory Files
+        if (hero.backstoryFiles) {
+          hero.backstoryFiles.forEach(f => {
+            if (f.mimeType.startsWith('image/')) {
+              claudeContent.push(createImageContent(f.base64, f.mimeType));
+            }
+          });
+        }
+        if (friend?.backstoryFiles) {
+          friend.backstoryFiles.forEach(f => {
+            if (f.mimeType.startsWith('image/')) {
+              claudeContent.push(createImageContent(f.base64, f.mimeType));
+            }
+          });
+        }
+        additionalChars.forEach(c => {
+          c.backstoryFiles?.forEach(f => {
+            if (f.mimeType.startsWith('image/')) {
+              claudeContent.push(createImageContent(f.base64, f.mimeType));
+            }
+          });
+        });
+
+        const response = await claude.messages.create({
+          model: MODEL_TEXT_NAME_CLAUDE,
+          max_tokens: 1024,
+          messages: [{ role: 'user', content: claudeContent }]
+        });
+
+        const responseText = getTextFromClaudeResponse(response.content);
+        const rawText = extractJsonFromResponse(responseText);
+        const parsed = JSON.parse(rawText);
+
+        return cleanBeatResponse(parsed, isDecisionPage, isFinalPage);
+      } catch (e) {
+        console.error("Claude beat generation failed, falling back to Gemini", e);
+        const errMsg = String(e).toLowerCase();
+        const isAuthError = errMsg.includes('invalid_api_key') ||
+          errMsg.includes('authentication_error') ||
+          errMsg.includes('permission_denied');
+
+        if (isAuthError) {
+          onAnthropicError(e);
+          return {
+            caption: pageNum === 1 ? "It began..." : "...",
+            scene: `Generic scene for page ${pageNum}.`,
+            focus_char: 'hero',
+            choices: []
+          };
+        }
+        // Continue to Gemini fallback for other errors
+      }
+    }
+
+    // Gemini fallback (or primary if no Claude key)
+    try {
+      const ai = getAI();
+      const res = await ai.models.generateContent({
+        model: MODEL_TEXT_NAME,
+        contents: { parts },
+        config: { responseMimeType: 'application/json' }
+      });
+      let rawText = res.text || "{}";
+      rawText = rawText.replace(/```json/g, '').replace(/```/g, '').trim();
+
+      const parsed = JSON.parse(rawText);
+      return cleanBeatResponse(parsed, isDecisionPage, isFinalPage);
+    } catch (e) {
+      console.error("Beat generation failed", e);
+      onAPIError(e);
+      return {
+        caption: pageNum === 1 ? "It began..." : "...",
+        scene: `Generic scene for page ${pageNum}.`,
+        focus_char: 'hero',
+        choices: []
+      };
+    }
+  };
+
+  return { generateBeat };
+};
+
+export default useGenerateBeat;

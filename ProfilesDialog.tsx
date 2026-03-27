@@ -37,10 +37,10 @@ export const ProfilesDialog: React.FC<Props> = ({ profiles, onUpdate, onAnalyze,
                 if (incoming && typeof incoming === 'object') {
                     onUpdate(idx, { ...profiles[idx], ...incoming, id: profiles[idx].id, name: profiles[idx].name });
                 } else {
-                    alert('Invalid JSON format. Expected a single character profile.');
+                    console.warn('Invalid JSON format. Expected a single character profile.');
                 }
             } catch (err) {
-                alert('Failed to parse JSON file.');
+                console.error('Failed to parse JSON file.');
             }
         };
         reader.readAsText(file);

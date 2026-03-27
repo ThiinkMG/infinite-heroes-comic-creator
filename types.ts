@@ -3,6 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
 */
 
+import { ensureString } from './claudeHelpers';
+
 // Novel Mode batch size - now 1 for page-by-page interactive flow
 export const NOVEL_MODE_BATCH_SIZE = 1;
 
@@ -177,6 +179,9 @@ export interface RerollOptions {
 
   /** Reinforce instruction with selected reference images (adds explicit AI directive) */
   reinforceWithReferenceImages?: boolean;
+
+  /** Use ONLY selected reference images (skip default character refs) - Batch 1.3 */
+  useSelectedRefsOnly?: boolean;
 }
 
 export interface Persona {
@@ -226,6 +231,54 @@ export interface StoryContext {
   pageLength: number;
   publisherLogoBgColor?: string;
   publisherLogoFit?: 'cover' | 'contain';
+}
+
+/**
+ * Reusable comic preset/template for quick story configuration
+ * Allows users to start from pre-configured story settings with optional character and plot suggestions
+ */
+export interface ComicPreset {
+  /** Unique identifier for the preset */
+  id: string;
+
+  /** Display name of the preset (e.g., "Superhero Origin", "Mystery Thriller") */
+  name: string;
+
+  /** Detailed description of what this preset includes and when to use it */
+  description: string;
+
+  /** Primary genre of this preset (should match GENRES constant) */
+  genre: string;
+
+  /** Recommended art style for this preset (should match ART_STYLES constant) */
+  artStyle: string;
+
+  /** Suggested page length for stories using this preset (should match PAGE_LENGTHS values) */
+  suggestedPageLength: number;
+
+  /** Optional starting plot outline that users can edit and refine */
+  samplePlotOutline?: string;
+
+  /** Optional suggested character templates with roles and AI prompts for generation */
+  characterTemplates?: Array<{
+    /** Character role (e.g., 'hero', 'costar') */
+    role: 'hero' | 'costar' | 'additional';
+
+    /** Suggestion prompt for AI character generation (e.g., "A wise mentor figure with mysterious powers") */
+    suggestionPrompt: string;
+  }>;
+
+  /** Optional tone suggestion (should match TONES constant) */
+  suggestedTone?: string;
+
+  /** Optional thematic keywords to guide AI generation */
+  themeKeywords?: string[];
+
+  /** Timestamp when this preset was created */
+  createdAt?: number;
+
+  /** Whether this is a built-in system preset or user-created */
+  isBuiltIn?: boolean;
 }
 
 export interface StoryOutline {
@@ -428,20 +481,6 @@ HARD NEGATIVES (never include): ${negativesStr}
 `.trim();
 }
 
-/**
- * Safely convert a value to string before splitting
- * Handles cases where AI returns objects instead of strings
- */
-function safeString(val: unknown): string {
-  if (val === null || val === undefined) return '';
-  if (typeof val === 'string') return val;
-  if (typeof val === 'object') {
-    return Object.entries(val as Record<string, unknown>)
-      .map(([k, v]) => `${k}: ${v}`)
-      .join(', ');
-  }
-  return String(val);
-}
 
 /**
  * Generate scene description with character reinforcement (Layer 3)
@@ -459,9 +498,9 @@ export function formatReinforcedScene(
     if (firstHairPart) keyFeatures.push(firstHairPart);
     if (profile.identityHeader.signature[0]) keyFeatures.push(profile.identityHeader.signature[0]);
   } else {
-    // Fallback to legacy fields - use safeString to handle object values
-    const colorStr = safeString(profile.colorPalette);
-    const featuresStr = safeString(profile.distinguishingFeatures);
+    // Fallback to legacy fields - use ensureString to handle object values
+    const colorStr = ensureString(profile.colorPalette);
+    const featuresStr = ensureString(profile.distinguishingFeatures);
     if (colorStr) keyFeatures.push(colorStr.split(',')[0]);
     if (featuresStr) keyFeatures.push(featuresStr.split(',')[0]);
   }
@@ -486,8 +525,8 @@ export function formatConsistencyInstruction(
     mustBeVisible.push(...profile.identityHeader.signature.slice(0, 2));
   }
   if (profile.distinguishingFeatures) {
-    // Use safeString to handle object values from AI
-    const featuresStr = safeString(profile.distinguishingFeatures);
+    // Use ensureString to handle object values from AI
+    const featuresStr = ensureString(profile.distinguishingFeatures);
     if (featuresStr) mustBeVisible.push(featuresStr.split(',')[0].trim());
   }
 
@@ -508,7 +547,7 @@ export function formatConsistencyInstruction(
   // Build clothing/armor reinforcement
   let clothingReinforcement = '';
   if (profile.clothing) {
-    const clothingStr = safeString(profile.clothing);
+    const clothingStr = ensureString(profile.clothing);
     clothingReinforcement = `\nCLOTHING/ARMOR REQUIREMENT: ${profile.name} MUST wear their signature outfit as shown in reference: ${clothingStr}. Do not change, simplify, or modify the costume design.`;
   } else {
     // No clothing description - instruct AI to rely on reference images if uploaded
