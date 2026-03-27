@@ -1,67 +1,190 @@
-# Infinite Heroes: AI-Powered Comic Creator 🦸‍♂️📖
+# Infinite Heroes: AI-Powered Comic Creator 🦸‍♂️💥📖
 
-**Infinite Heroes** is a state-of-the-art interactive web application that leverages Google's Gemini Models to help users create, manage, and read their own custom comic book series. From character design to page-by-page story generation, Infinite Heroes automates the complex comic creation pipeline while keeping the user in the creative driver's seat.
+> **Transform your imagination into stunning comic book adventures!**
 
-![Banner](https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6)
+[![Live Demo](https://img.shields.io/badge/🚀_Try_It_Now-Live_Demo-blue?style=for-the-badge)](https://infinite-heroes-comic-creator.vercel.app/)
+[![Powered by Gemini](https://img.shields.io/badge/Powered_by-Google_Gemini-4285F4?style=for-the-badge&logo=google)](https://ai.google.dev/)
 
-## 🚀 Key Features
+**Infinite Heroes** is your personal AI comic studio! Using Google's cutting-edge Gemini AI, create complete comic books with consistent characters, dynamic storytelling, and professional-quality art—all from your browser.
 
-- **Custom Cast Building**: Generate character visual profiles using AI or upload your own portraits.
-- **Strict Visual Consistency**: Multi-layered prompt enforcement ensures characters and art styles remain consistent across every page.
-- **Two Creative Modes**:
-  - **Novel Mode**: Interactive choice-based generation. Influence the story at every turn.
-  - **Outline Mode**: AI crafts a full 10-20 page plot for your review before automating the entire issue.
-- **Rich Configuration**: Support for various genres (Sci-Fi, Noir, Fantasy, etc.), art styles, and multiple languages.
-- **Native Comic Reader**: Read your creations directly in-app with zoom and pan controls.
-- **Export & Share**: Professional PDF export with custom cover overlays and branding.
-
-## 🛠️ Local Development
-
-### Prerequisites
-- [Node.js](https://nodejs.org/) (v18 or higher)
-- A [Google Gemini API Key](https://ai.google.dev/)
-
-### Setup Instructions
-
-1. **Clone the repository**:
-   ```bash
-   git clone https://github.com/your-username/infinite-heroes-comic-creator.git
-   cd infinite-heroes-comic-creator
-   ```
-
-2. **Install dependencies**:
-   ```bash
-   npm install
-   ```
-
-3. **Configure Environment Variables**:
-   Create a `.env.local` file in the root directory:
-   ```env
-   GEMINI_API_KEY=your_actual_api_key_here
-   ADMIN_PASSWORD=your_admin_password_here
-   ```
-
-4. **Launch the Development Server**:
-   ```bash
-   npm run dev
-   ```
-   Open `http://localhost:3000` in your browser.
-
-## ☁️ Deployment (Vercel)
-
-This project is optimized for [Vercel](https://vercel.com). To deploy:
-
-1. Connect your GitHub repository to Vercel.
-2. In the Vercel Project Settings, add the following **Environment Variables**:
-   - `GEMINI_API_KEY`: Your Google AI Studio key.
-   - `ADMIN_PASSWORD`: Your desired admin dashboard password.
-3. Vercel will automatically detect the Vite project and deploy from the `dist` directory.
-
-## 🎨 Credits & Contributors
-
-- **Vision & Strategy**: Thiink Media Graphics ([thiinkmedia.com](https://thiinkmedia.com))
-- **Lead Developer**: Antigravity AI
-- **Powered By**: Google Gemini 2.5 Pro & Gemini 3 Pro (Experimental)
+🎮 **[Try the Live Demo](https://infinite-heroes-comic-creator.vercel.app/)** — No installation required!
 
 ---
-*Built with React, Vite, and ❤️ for comic book lovers everywhere.*
+
+## ✨ What Makes It Special?
+
+🎨 **AI-Generated Art** — Every panel is a unique masterpiece
+🦸 **Character Consistency** — Your heroes look the same on every page
+📖 **Two Story Modes** — Interactive choices OR automated full-comic generation
+🌍 **Multiple Languages** — Create comics in English, Spanish, French & more
+📱 **Mobile Friendly** — Create on any device
+📥 **Export Ready** — Download as PDF or individual images
+
+---
+
+## 🖼️ See It In Action
+
+### Create Your Hero
+Upload a character portrait and watch the AI analyze it for perfect consistency across your comic!
+
+<p align="center">
+  <img src="assets/home-populated-app-screenshot.png" alt="Character Setup" width="700"/>
+</p>
+
+### Choose Your Adventure Mode
+
+**🎭 Novel Mode** — Make choices that shape the story!
+**📋 Outline Mode** — AI generates the full plot, you approve it!
+
+<p align="center">
+  <img src="assets/mode-select-app-screenshot.png" alt="Mode Selection" width="500"/>
+</p>
+
+### Watch Your Comic Come to Life
+
+<p align="center">
+  <img src="assets/novel-mode-image1-app-screenshot.png" alt="Novel Mode Reading" width="700"/>
+</p>
+
+### Interactive Decision Points
+Your choices matter! Shape the narrative at key moments.
+
+<p align="center">
+  <img src="assets/novel-mode-image3-app-screenshot.png" alt="Interactive Choices" width="700"/>
+</p>
+
+### Regenerate & Perfect
+Not happy with a panel? Reroll with custom instructions!
+
+<p align="center">
+  <img src="assets/reroll-app-screenshot.png" alt="Reroll Panel" width="600"/>
+</p>
+
+### Browse Your Masterpiece
+Full gallery view with easy navigation.
+
+<p align="center">
+  <img src="assets/gallery-app-screenshot.png" alt="Gallery View" width="700"/>
+</p>
+
+### Export & Share
+Professional PDF export with custom covers!
+
+<p align="center">
+  <img src="assets/export-comic-app-screenshot.png" alt="Export Options" width="500"/>
+</p>
+
+---
+
+## 🎯 Example Comics
+
+Check out what's possible with Infinite Heroes:
+
+### Covers That Pop! 💥
+<p align="center">
+  <img src="assets/comic-book-examples/Comic-cover (1).png" alt="Comic Cover Example 1" width="280"/>
+  <img src="assets/comic-book-examples/Comic-cover2.2.png" alt="Comic Cover Example 2" width="280"/>
+</p>
+
+### Interior Pages With Stunning Art 🎨
+<p align="center">
+  <img src="assets/comic-book-examples/Comic-page-1.png" alt="Comic Page 1" width="280"/>
+  <img src="assets/comic-book-examples/Comic-page-1.2.png" alt="Comic Page Variant" width="280"/>
+  <img src="assets/comic-book-examples/Comic-page-2.png" alt="Comic Page 2" width="280"/>
+</p>
+
+### Character Consistency Across Pages 🦸
+<p align="center">
+  <img src="assets/comic-book-examples/Colleen-Hero-Image1.png" alt="Hero Character" width="250"/>
+</p>
+
+---
+
+## 🚀 Features at a Glance
+
+| Feature | Description |
+|---------|-------------|
+| 🎨 **Genre Selection** | Superhero, Sci-Fi, Fantasy, Noir, Horror, Romance & more |
+| 🖌️ **Art Styles** | Classic, Manga, Watercolor, Digital, Vintage & custom |
+| 👥 **Multiple Characters** | Hero, Co-Star, and unlimited supporting cast |
+| 📏 **Variable Length** | 6 to 24+ pages per issue |
+| 🔄 **Smart Rerolls** | Regenerate any panel with custom instructions |
+| 💾 **Auto-Save** | Never lose your work |
+| 📚 **Preset Library** | Save your favorite configurations |
+| 🎯 **Character Profiles** | AI-analyzed visual consistency system |
+
+---
+
+## 🛠️ Quick Start (Local Development)
+
+### Prerequisites
+- [Node.js](https://nodejs.org/) v18+
+- [Google Gemini API Key](https://ai.google.dev/)
+
+### Installation
+
+```bash
+# Clone the repo
+git clone https://github.com/ThiinkMG/infinite-heroes-comic-creator.git
+cd infinite-heroes-comic-creator
+
+# Install dependencies
+npm install
+
+# Create your environment file
+echo "GEMINI_API_KEY=your_api_key_here" > .env.local
+
+# Launch!
+npm run dev
+```
+
+Open `http://localhost:3000` and start creating! 🎉
+
+---
+
+## ☁️ Deploy Your Own
+
+This project deploys perfectly on [Vercel](https://vercel.com):
+
+1. Fork this repository
+2. Connect to Vercel
+3. Add environment variables:
+   - `GEMINI_API_KEY` — Your Google AI Studio key
+   - `ADMIN_PASSWORD` — Optional admin access
+4. Deploy! 🚀
+
+---
+
+## 🤖 Powered By
+
+- **Google Gemini 2.5 Pro** — Narrative generation
+- **Google Gemini 3 Pro** — Image generation (experimental)
+- **Anthropic Claude** — Enhanced dialogue (optional)
+
+---
+
+## 👥 Credits
+
+- **Vision & Design**: [Thiink Media Graphics](https://thiinkmedia.com)
+- **Development**: Antigravity AI + Claude Code
+- **Special Thanks**: The comic book community for inspiration
+
+---
+
+## 📜 License
+
+Apache 2.0 — See [LICENSE](LICENSE) for details.
+
+---
+
+<p align="center">
+  <strong>🌟 Star this repo if you love comics! 🌟</strong>
+  <br><br>
+  <a href="https://infinite-heroes-comic-creator.vercel.app/">
+    <img src="https://img.shields.io/badge/🎮_CREATE_YOUR_COMIC-Try_Now-purple?style=for-the-badge" alt="Create Your Comic"/>
+  </a>
+</p>
+
+---
+
+*Built with React, Vite, TypeScript, and ❤️ for comic book lovers everywhere.*
