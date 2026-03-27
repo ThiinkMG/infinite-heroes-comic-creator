@@ -126,7 +126,12 @@ export const useGenerateBeat = (config: GenerateBeatConfig) => {
     }
 
     if (isDecisionPage && !isFinalPage && (!result.choices || result.choices.length < 2)) {
-      result.choices = ["Option A", "Option B"];
+      // Generate contextual fallback choices instead of generic "Option A/B"
+      console.warn('[Beat] No choices returned by AI, generating fallback choices');
+      result.choices = [
+        "Take the direct approach - confront the situation head-on",
+        "Proceed cautiously - gather more information first"
+      ];
     }
 
     if (!['hero', 'friend', 'other'].includes(result.focus_char)) {
@@ -334,7 +339,7 @@ OUTPUT STRICT JSON ONLY (No markdown formatting):
   "dialogue": "Unique speech in ${langName}. (${diaLimit}). Optional.",
   "scene": "Vivid visual description (ALWAYS IN ENGLISH for the artist model). MUST explicitly name EVERY character present in the scene (Hero, Co-Star, or their exact given names).",
   "focus_char": "hero" OR "friend" OR "other",
-  "choices": ["Descriptive Action A in ${langName}", "Descriptive Action B in ${langName}"] (Only if decision page)
+  "choices": ${isDecisionPage && !isFinalPage ? `["First choice: brief descriptive action in ${langName}", "Second choice: different action in ${langName}"] (REQUIRED - must be 2 distinct, descriptive actions the hero can take. NEVER use 'Option A' or 'Option B')` : `[] (empty array - not a decision page)`}
 }
 `;
 

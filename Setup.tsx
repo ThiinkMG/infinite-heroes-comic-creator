@@ -17,8 +17,11 @@ import {
     TutorialModal,
     SavePresetModal,
     Footer,
-    CostEstimator
+    CostEstimator,
+    CharacterAnalysisPanel,
+    PresetManager
 } from './components';
+import { useCharacterStore } from './stores/useCharacterStore';
 import { HelpTooltip } from './components/HelpTooltip';
 
 /**
@@ -67,6 +70,8 @@ interface SetupProps {
     onImproveText?: (text: string, context?: string, purpose?: 'story_description' | 'regeneration_instruction' | 'backstory') => Promise<string>;
     skipProfileAnalysis?: boolean;
     onSkipProfileAnalysisChange?: (val: boolean) => void;
+    useSavedProfiles?: boolean;
+    onUseSavedProfilesChange?: (val: boolean) => void;
     onPresetSelect?: (preset: ComicPreset) => void;
 }
 
@@ -112,6 +117,9 @@ export const Setup: React.FC<SetupProps> = (props) => {
     const [showExpandedStory, setShowExpandedStory] = useState(false);
     const [showSavePresetModal, setShowSavePresetModal] = useState(false);
     const [customPresets, setCustomPresets] = useState<CustomPreset[]>(loadCustomPresets);
+
+    // Access character profiles from store
+    const characterProfiles = useCharacterStore((state) => state.characterProfiles);
 
     // Responsive collapsible sections for mobile
     const [castExpanded, setCastExpanded] = useState(true);
@@ -261,6 +269,14 @@ export const Setup: React.FC<SetupProps> = (props) => {
 
     const handleDeleteCustomPreset = (presetId: string) => {
         const updated = customPresets.filter(p => p.id !== presetId);
+        setCustomPresets(updated);
+        saveCustomPresets(updated);
+    };
+
+    const handleUpdateCustomPreset = (presetId: string, updates: Partial<CustomPreset>) => {
+        const updated = customPresets.map(p =>
+            p.id === presetId ? { ...p, ...updates } : p
+        );
         setCustomPresets(updated);
         saveCustomPresets(updated);
     };
@@ -628,6 +644,20 @@ export const Setup: React.FC<SetupProps> = (props) => {
                                     <span className="text-black">✨ Rich Dialogue Mode</span>
                                     <Tooltip text="Uses longer, descriptive captions and deep internal monologues vs standard punchy comic dialogue. Works with both Novel Mode and Outline Mode." />
                                 </label>
+                                {props.onUseSavedProfilesChange && (
+                                    <label className="flex items-center gap-1.5 sm:gap-1 font-comic text-xs sm:text-sm cursor-pointer text-green-800 p-1.5 sm:p-1 hover:bg-green-100 rounded border-2 border-transparent hover:border-green-300 transition-colors touch-manipulation">
+                                        <input
+                                            type="checkbox"
+                                            checked={props.useSavedProfiles ?? true}
+                                            onChange={(e: React.ChangeEvent<HTMLInputElement>) => props.onUseSavedProfilesChange?.(e.target.checked)}
+                                            className="w-5 h-5 sm:w-4 sm:h-4 accent-green-600 shrink-0"
+                                            aria-label="Use saved character profiles"
+                                            disabled={props.skipProfileAnalysis}
+                                        />
+                                        <span className={props.skipProfileAnalysis ? 'opacity-50' : ''}>💾 Use Saved Profiles</span>
+                                        <Tooltip text="Reuses previously generated character analysis if available. If a character doesn't have a saved profile, it will be auto-generated and saved for future use. Skips the profile review step for faster generation." />
+                                    </label>
+                                )}
                                 {props.onSkipProfileAnalysisChange && (
                                     <label className="flex items-center gap-1.5 sm:gap-1 font-comic text-xs sm:text-sm cursor-pointer text-purple-800 p-1.5 sm:p-1 hover:bg-purple-100 rounded border-2 border-transparent hover:border-purple-300 transition-colors touch-manipulation">
                                         <input
@@ -666,6 +696,28 @@ export const Setup: React.FC<SetupProps> = (props) => {
                     showBreakdown={false}
                     className="mt-3 sm:mt-4"
                 />
+
+                {/* Character Analysis & Presets Section */}
+                <div className="mt-3 sm:mt-4 grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {/* Character Analysis Panel */}
+                    <CharacterAnalysisPanel
+                        characters={[
+                            ...(props.hero ? [props.hero] : []),
+                            ...(props.friend ? [props.friend] : []),
+                            ...props.additionalCharacters
+                        ]}
+                        profiles={characterProfiles}
+                    />
+
+                    {/* Preset Manager */}
+                    <PresetManager
+                        presets={customPresets}
+                        onSelectPreset={handleSelectCustomPreset}
+                        onDeletePreset={handleDeleteCustomPreset}
+                        onUpdatePreset={handleUpdateCustomPreset}
+                        onCreateNew={() => setShowSavePresetModal(true)}
+                    />
+                </div>
 
                 {/* Action Buttons */}
                 <ActionButtons

@@ -293,6 +293,7 @@ const App: React.FC = () => {
   const [showProfilesStep, setShowProfilesStep] = useState(false);
   const [tempProfiles, setTempProfiles] = useState<CharacterProfile[]>([]);
   const [skipProfileAnalysis, setSkipProfileAnalysis] = useState(false);
+  const [useSavedProfiles, setUseSavedProfiles] = useState(true); // Use saved profiles if available
   const [extraPages, setExtraPages] = useState(0);
 
   // Novel Mode page-by-page interactive state
@@ -931,8 +932,82 @@ const App: React.FC = () => {
         const profiles = generateBlankProfiles();
         setTempProfiles(profiles);
         setShowProfilesStep(true);
+    } else if (useSavedProfiles) {
+        // Check for existing saved profiles and use them if available
+        setIsGeneratingProfiles(true);
+        try {
+            const store = useCharacterStore.getState();
+            const allChars = [getHero(), getFriend(), ...additionalCharacters].filter(Boolean) as Persona[];
+            const existingProfiles = store.getProfilesArray();
+
+            // Find which characters already have profiles
+            const existingProfileIds = new Set(existingProfiles.map(p => p.id));
+            const charsWithProfiles = allChars.filter(c => existingProfileIds.has(c.id));
+            const charsWithoutProfiles = allChars.filter(c => !existingProfileIds.has(c.id));
+
+            let finalProfiles: CharacterProfile[] = [];
+
+            // Reuse existing profiles
+            for (const char of charsWithProfiles) {
+                const existingProfile = existingProfiles.find(p => p.id === char.id);
+                if (existingProfile) {
+                    finalProfiles.push(existingProfile);
+                }
+            }
+
+            // Generate missing profiles
+            if (charsWithoutProfiles.length > 0) {
+                console.log(`[Profile] Generating ${charsWithoutProfiles.length} missing profile(s)...`);
+                for (const char of charsWithoutProfiles) {
+                    try {
+                        const profile = await generateCharacterProfile(char);
+                        finalProfiles.push(profile);
+                        // Save to store immediately for future use
+                        store.setCharacterProfile(char.id, profile);
+                    } catch (e) {
+                        console.error(`Failed to generate profile for ${char.name}:`, e);
+                        // Create a blank profile as fallback
+                        const blankProfile: CharacterProfile = {
+                            id: char.id,
+                            name: char.name,
+                            faceDescription: '',
+                            bodyType: '',
+                            clothing: '',
+                            colorPalette: '',
+                            distinguishingFeatures: ''
+                        };
+                        finalProfiles.push(blankProfile);
+                        store.setCharacterProfile(char.id, blankProfile);
+                    }
+                }
+            }
+
+            // Sort profiles to match character order
+            const charOrder = allChars.map(c => c.id);
+            finalProfiles.sort((a, b) => charOrder.indexOf(a.id) - charOrder.indexOf(b.id));
+
+            // Set profiles and skip to generation (no ProfilesDialog)
+            setTempProfiles(finalProfiles);
+            store.setAllProfiles(finalProfiles);
+
+            // Skip ProfilesDialog and proceed directly
+            if (generateFromOutline && !storyOutline.isReady) {
+                setShowOutlineStep(true);
+                generateOutline();
+            } else {
+                proceedToComicGeneration();
+            }
+        } catch (e) {
+            console.error("Profile handling failed:", e);
+            // Fallback to manual entry
+            const profiles = generateBlankProfiles();
+            setTempProfiles(profiles);
+            setShowProfilesStep(true);
+        } finally {
+            setIsGeneratingProfiles(false);
+        }
     } else {
-        // Original flow - AI analysis
+        // Original flow - AI analysis with ProfilesDialog review
         setIsGeneratingProfiles(true);
         try {
             const profiles = await generateAllProfiles();
@@ -2205,6 +2280,8 @@ Create a powerful, memorable conclusion that honors the user's story path.
           onImproveText={improveTextWithAI}
           skipProfileAnalysis={skipProfileAnalysis}
           onSkipProfileAnalysisChange={setSkipProfileAnalysis}
+          useSavedProfiles={useSavedProfiles}
+          onUseSavedProfilesChange={setUseSavedProfiles}
           onPresetSelect={handlePresetSelect}
       />
 

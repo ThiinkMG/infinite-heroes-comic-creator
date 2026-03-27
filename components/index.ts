@@ -90,3 +90,9 @@ export type {
   CharacterRelationship,
   RelationshipCharacter
 } from './RelationshipMapper';
+
+// Character analysis panel
+export { CharacterAnalysisPanel } from './CharacterAnalysisPanel';
+
+// Preset manager
+export { PresetManager } from './PresetManager';
