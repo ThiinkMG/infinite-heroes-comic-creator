@@ -83,9 +83,9 @@ Check out what's possible with Infinite Heroes! Every image below was AI-generat
 ### 📚 Cover Art Gallery
 
 <p align="center">
+  <img src="assets/comic-book-examples/Comic-cover.png" alt="Comic Cover" width="220"/>
   <img src="assets/comic-book-examples/Vile-lence-00-Cover.png" alt="Vile-lence Cover" width="220"/>
   <img src="assets/comic-book-examples/Death-Punch-00-Cover (1).png" alt="Death Punch Cover" width="220"/>
-  <img src="assets/comic-book-examples/Comic-cover (1).png" alt="Comic Cover" width="220"/>
   <img src="assets/comic-book-examples/Comic-cover2.2.png" alt="Comic Cover 2" width="220"/>
 </p>
 
