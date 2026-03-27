@@ -96,6 +96,9 @@ export const CharacterCard: React.FC<CharacterCardProps> = ({
     const [showExpandedBackstory, setShowExpandedBackstory] = useState(false);
     const [isImprovingBackstory, setIsImprovingBackstory] = useState(false);
     const [librarySaveStatus, setLibrarySaveStatus] = useState<'idle' | 'saved'>('idle');
+    const [showPortraitOptions, setShowPortraitOptions] = useState(false);
+    const [showEmblemOptions, setShowEmblemOptions] = useState(false);
+    const [showWeaponOptions, setShowWeaponOptions] = useState(false);
 
     // Character Library store
     const saveToLibrary = useCharacterLibraryStore((state) => state.saveCharacter);
@@ -197,17 +200,28 @@ export const CharacterCard: React.FC<CharacterCardProps> = ({
                         />
                     </p>
                     {persona?.base64 ? (
-                        <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 sm:items-center">
-                            <img src={`data:image/jpeg;base64,${persona.base64}`} alt="Portrait" className="w-24 h-24 sm:w-28 sm:h-28 object-cover border-2 border-black shadow-[3px_3px_0px_rgba(0,0,0,0.2)] bg-white shrink-0" />
-                            <div className="flex flex-row sm:flex-col gap-2">
-                                <label className="cursor-pointer comic-btn bg-yellow-400 text-black text-xs sm:text-sm px-3 py-1.5 hover:bg-yellow-300 border-2 border-black uppercase text-center">
-                                    REPLACE
-                                    <input type="file" accept="image/*" className="hidden" onChange={(e) => { e.target.files?.[0] && onPortraitUpload(e.target.files[0]); onPortraitBlur?.(); }} aria-label="Replace portrait image" />
-                                </label>
-                                <button onClick={() => { onUpdate({ base64: '' }); onPortraitBlur?.(); }} className="comic-btn bg-red-500 text-white text-xs sm:text-sm px-3 py-1.5 hover:bg-red-400 border-2 border-black uppercase" aria-label="Clear portrait image">
-                                    CLEAR
-                                </button>
-                            </div>
+                        <div className="relative inline-block">
+                            <img
+                                src={`data:image/jpeg;base64,${persona.base64}`}
+                                alt="Portrait"
+                                className="w-24 h-24 sm:w-28 sm:h-28 object-cover border-2 border-black shadow-[3px_3px_0px_rgba(0,0,0,0.2)] bg-white cursor-pointer hover:opacity-90 transition-opacity"
+                                onClick={() => setShowPortraitOptions(!showPortraitOptions)}
+                                title="Click to show options"
+                            />
+                            {showPortraitOptions && (
+                                <>
+                                    <div className="fixed inset-0 z-[99]" onClick={() => setShowPortraitOptions(false)} />
+                                    <div className="absolute top-0 left-full ml-2 z-[100] flex flex-col gap-2 animate-in fade-in slide-in-from-left-2 duration-150">
+                                        <label className="cursor-pointer comic-btn bg-yellow-400 text-black text-xs sm:text-sm px-3 py-1.5 hover:bg-yellow-300 border-2 border-black uppercase text-center whitespace-nowrap shadow-lg">
+                                            REPLACE
+                                            <input type="file" accept="image/*" className="hidden" onChange={(e) => { e.target.files?.[0] && onPortraitUpload(e.target.files[0]); onPortraitBlur?.(); setShowPortraitOptions(false); }} aria-label="Replace portrait image" />
+                                        </label>
+                                        <button onClick={() => { onUpdate({ base64: '' }); onPortraitBlur?.(); setShowPortraitOptions(false); }} className="comic-btn bg-red-500 text-white text-xs sm:text-sm px-3 py-1.5 hover:bg-red-400 border-2 border-black uppercase shadow-lg" aria-label="Clear portrait image">
+                                            CLEAR
+                                        </button>
+                                    </div>
+                                </>
+                            )}
                         </div>
                     ) : (
                         <label className={`comic-btn bg-blue-500 text-white text-sm px-4 py-3 block w-full hover:bg-blue-400 cursor-pointer text-center font-bold ${portraitError ? 'border-[3px] border-red-600' : 'border-2 border-black'}`}>
@@ -259,17 +273,28 @@ export const CharacterCard: React.FC<CharacterCardProps> = ({
                         />
                     </div>
                     {persona?.emblemImage ? (
-                        <div className="flex gap-3 items-start mb-3">
-                            <img src={`data:image/jpeg;base64,${persona.emblemImage}`} alt="Emblem" className="w-16 h-16 sm:w-18 sm:h-18 object-contain border-2 border-black bg-white" />
-                            <div className="flex flex-col gap-2 flex-1">
-                                <label className="cursor-pointer comic-btn bg-yellow-400 text-black text-xs sm:text-sm px-3 py-1.5 hover:bg-yellow-300 border-2 border-black uppercase text-center">
-                                    REPLACE
-                                    <input type="file" accept="image/*" className="hidden" onChange={(e) => e.target.files?.[0] && onEmblemUpload(e.target.files[0])} aria-label="Replace emblem image" />
-                                </label>
-                                <button onClick={onEmblemRemove} className="comic-btn bg-red-500 text-white text-xs sm:text-sm px-3 py-1.5 hover:bg-red-400 border-2 border-black uppercase" aria-label="Clear emblem image">
-                                    CLEAR
-                                </button>
-                            </div>
+                        <div className="relative inline-block mb-3">
+                            <img
+                                src={`data:image/jpeg;base64,${persona.emblemImage}`}
+                                alt="Emblem"
+                                className="w-16 h-16 sm:w-18 sm:h-18 object-contain border-2 border-black bg-white cursor-pointer hover:opacity-90 transition-opacity"
+                                onClick={() => setShowEmblemOptions(!showEmblemOptions)}
+                                title="Click to show options"
+                            />
+                            {showEmblemOptions && (
+                                <>
+                                    <div className="fixed inset-0 z-[99]" onClick={() => setShowEmblemOptions(false)} />
+                                    <div className="absolute top-0 left-full ml-2 z-[100] flex flex-col gap-2">
+                                        <label className="cursor-pointer comic-btn bg-yellow-400 text-black text-xs px-3 py-1.5 hover:bg-yellow-300 border-2 border-black uppercase text-center whitespace-nowrap shadow-lg">
+                                            REPLACE
+                                            <input type="file" accept="image/*" className="hidden" onChange={(e) => { e.target.files?.[0] && onEmblemUpload(e.target.files[0]); setShowEmblemOptions(false); }} aria-label="Replace emblem image" />
+                                        </label>
+                                        <button onClick={() => { onEmblemRemove(); setShowEmblemOptions(false); }} className="comic-btn bg-red-500 text-white text-xs px-3 py-1.5 hover:bg-red-400 border-2 border-black uppercase shadow-lg" aria-label="Clear emblem image">
+                                            CLEAR
+                                        </button>
+                                    </div>
+                                </>
+                            )}
                         </div>
                     ) : (
                         <label className="comic-btn bg-purple-500 text-white text-sm px-4 py-2.5 block w-full hover:bg-purple-400 cursor-pointer text-center border-2 border-black mb-3">
@@ -313,17 +338,28 @@ export const CharacterCard: React.FC<CharacterCardProps> = ({
                         />
                     </div>
                     {persona?.weaponImage ? (
-                        <div className="flex gap-3 items-start mb-3">
-                            <img src={`data:image/jpeg;base64,${persona.weaponImage}`} alt="Weapon" className="w-16 h-16 sm:w-18 sm:h-18 object-contain border-2 border-black bg-white" />
-                            <div className="flex flex-col gap-2 flex-1">
-                                <label className="cursor-pointer comic-btn bg-yellow-400 text-black text-xs sm:text-sm px-3 py-1.5 hover:bg-yellow-300 border-2 border-black uppercase text-center">
-                                    REPLACE
-                                    <input type="file" accept="image/*" className="hidden" onChange={(e) => e.target.files?.[0] && onWeaponUpload(e.target.files[0])} aria-label="Replace weapon image" />
-                                </label>
-                                <button onClick={onWeaponRemove} className="comic-btn bg-red-500 text-white text-xs sm:text-sm px-3 py-1.5 hover:bg-red-400 border-2 border-black uppercase" aria-label="Clear weapon image">
-                                    CLEAR
-                                </button>
-                            </div>
+                        <div className="relative inline-block mb-3">
+                            <img
+                                src={`data:image/jpeg;base64,${persona.weaponImage}`}
+                                alt="Weapon"
+                                className="w-16 h-16 sm:w-18 sm:h-18 object-contain border-2 border-black bg-white cursor-pointer hover:opacity-90 transition-opacity"
+                                onClick={() => setShowWeaponOptions(!showWeaponOptions)}
+                                title="Click to show options"
+                            />
+                            {showWeaponOptions && (
+                                <>
+                                    <div className="fixed inset-0 z-[99]" onClick={() => setShowWeaponOptions(false)} />
+                                    <div className="absolute top-0 left-full ml-2 z-[100] flex flex-col gap-2">
+                                        <label className="cursor-pointer comic-btn bg-yellow-400 text-black text-xs px-3 py-1.5 hover:bg-yellow-300 border-2 border-black uppercase text-center whitespace-nowrap shadow-lg">
+                                            REPLACE
+                                            <input type="file" accept="image/*" className="hidden" onChange={(e) => { e.target.files?.[0] && onWeaponUpload(e.target.files[0]); setShowWeaponOptions(false); }} aria-label="Replace weapon image" />
+                                        </label>
+                                        <button onClick={() => { onWeaponRemove(); setShowWeaponOptions(false); }} className="comic-btn bg-red-500 text-white text-xs px-3 py-1.5 hover:bg-red-400 border-2 border-black uppercase shadow-lg" aria-label="Clear weapon image">
+                                            CLEAR
+                                        </button>
+                                    </div>
+                                </>
+                            )}
                         </div>
                     ) : (
                         <label className="comic-btn bg-amber-600 text-white text-sm px-4 py-2.5 block w-full hover:bg-amber-500 cursor-pointer text-center border-2 border-black mb-3">
