@@ -334,6 +334,8 @@ const App: React.FC = () => {
   const resetZoom = () => setZoom(1);
 
   const [rerollTarget, setRerollTarget] = useState<number | null>(null);
+  // Persisted profile selection for RerollModal (so it doesn't reset when modal closes)
+  const [rerollProfileSelection, setRerollProfileSelection] = useState<string[]>([]);
 
   // --- AI Helpers ---
   // Key priority: admin (server key) → user key (localStorage) → env fallback
@@ -905,6 +907,10 @@ const App: React.FC = () => {
 
   const handleModeSelect = (mode: 'novel' | 'outline') => {
     setGenerateFromOutline(mode === 'outline');
+    // Reset outline state when selecting Outline mode to ensure the modal appears
+    if (mode === 'outline') {
+      setStoryOutline({ content: "", isReady: false, isGenerating: false });
+    }
     setShowModeSelection(false);
     launchStory();
   };
@@ -2253,6 +2259,8 @@ Create a powerful, memorable conclusion that honors the user's story path.
               availableProfiles={getProfilesArray().map(p => ({ id: p.id, name: p.name }))}
               fullProfiles={getProfilesArray()}
               originalPrompt={comicFaces.find(f => f.pageIndex === rerollTarget)?.originalPrompt}
+              initialSelectedProfileIds={rerollProfileSelection}
+              onProfileSelectionChange={setRerollProfileSelection}
               onSubmit={handleRerollSubmit}
               onClose={() => setRerollTarget(null)}
               onUploadRef={handleRerollUploadRef}

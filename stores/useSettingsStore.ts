@@ -30,6 +30,9 @@ export interface SettingsState {
   // Mode settings
   generateFromOutline: boolean;
   skipProfileAnalysis: boolean;
+
+  // UI settings
+  showApiCostEstimate: boolean;
 }
 
 export interface ComicConfig {
@@ -52,6 +55,7 @@ export interface SettingsActions {
   setPublisherInfo: (info: Partial<PublisherInfo>) => void;
   setGenerateFromOutline: (value: boolean) => void;
   setSkipProfileAnalysis: (value: boolean) => void;
+  setShowApiCostEstimate: (value: boolean) => void;
 
   // Bulk operations
   resetSettings: () => void;
@@ -79,6 +83,7 @@ const getDefaultSettings = (): SettingsState => ({
   },
   generateFromOutline: true, // Outline Mode by default
   skipProfileAnalysis: false,
+  showApiCostEstimate: true, // Show by default
 });
 
 // ============================================================================
@@ -111,6 +116,8 @@ export const useSettingsStore = create<SettingsStore>()(
       setGenerateFromOutline: (value) => set({ generateFromOutline: value }),
 
       setSkipProfileAnalysis: (value) => set({ skipProfileAnalysis: value }),
+
+      setShowApiCostEstimate: (value) => set({ showApiCostEstimate: value }),
 
       // Reset to defaults
       resetSettings: () => set(getDefaultSettings()),
@@ -154,6 +161,7 @@ export const useSettingsStore = create<SettingsStore>()(
         publisherInfo: state.publisherInfo,
         generateFromOutline: state.generateFromOutline,
         skipProfileAnalysis: state.skipProfileAnalysis,
+        showApiCostEstimate: state.showApiCostEstimate,
       }),
     }
   )
@@ -174,3 +182,6 @@ export const useSkipProfileAnalysis = () => useSettingsStore((state) => state.sk
 
 // Computed selector for novel mode (inverse of generateFromOutline)
 export const useIsNovelMode = () => useSettingsStore((state) => !state.generateFromOutline);
+
+// UI settings selectors
+export const useShowApiCostEstimate = () => useSettingsStore((state) => state.showApiCostEstimate);

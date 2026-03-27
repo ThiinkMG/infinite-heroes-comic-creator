@@ -214,6 +214,25 @@ export const ProfileSelector: React.FC<ProfileSelectorProps> = ({
                                                             placeholder="Glowing green energy sword..."
                                                         />
                                                     </div>
+
+                                                    {/* Hard Negatives / Things to Avoid */}
+                                                    <div className="sm:col-span-2">
+                                                        <label className="font-comic text-xs sm:text-sm font-bold text-gray-600 uppercase block mb-1">
+                                                            🚫 Avoid <span className="text-[10px] text-gray-500 font-normal normal-case">(comma-separated)</span>
+                                                        </label>
+                                                        <textarea
+                                                            className="w-full p-3 border-2 border-gray-400 font-comic text-sm h-20 sm:h-16 resize-none focus:border-gray-600 focus:outline-none bg-gray-100 touch-manipulation"
+                                                            value={(fullProfile.hardNegatives || []).join(', ')}
+                                                            onChange={e => {
+                                                                const negatives = e.target.value
+                                                                    .split(',')
+                                                                    .map(s => s.trim())
+                                                                    .filter(s => s.length > 0);
+                                                                onProfileUpdate?.(p.id, { hardNegatives: negatives });
+                                                            }}
+                                                            placeholder="no glasses, no beard, avoid purple..."
+                                                        />
+                                                    </div>
                                                 </div>
                                             </details>
                                         </div>

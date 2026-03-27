@@ -22,6 +22,10 @@ interface RerollModalProps {
     availableProfiles: { id: string, name: string }[];
     fullProfiles: CharacterProfile[];  // Full profile data for editing
     originalPrompt?: string;  // For debugging/reference
+    /** Initial selected profile IDs (for preserving selection across modal open/close) */
+    initialSelectedProfileIds?: string[];
+    /** Callback when profile selection changes (for preserving state in parent) */
+    onProfileSelectionChange?: (selectedIds: string[]) => void;
     onSubmit: (options: RerollOptions) => void;
     onClose: () => void;
     onUploadRef: (files: FileList) => void;
@@ -39,6 +43,8 @@ export const RerollModal: React.FC<RerollModalProps> = ({
     availableProfiles,
     fullProfiles,
     originalPrompt,
+    initialSelectedProfileIds,
+    onProfileSelectionChange,
     onSubmit,
     onClose,
     onUploadRef,
@@ -56,7 +62,13 @@ export const RerollModal: React.FC<RerollModalProps> = ({
 
     // Selection state
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set(allRefImages.map(r => r.id)));
-    const [selectedProfileIds, setSelectedProfileIds] = useState<Set<string>>(new Set(availableProfiles.map(p => p.id)));
+    // Use initial selection from parent if provided, otherwise select all
+    const [selectedProfileIds, setSelectedProfileIds] = useState<Set<string>>(() => {
+        if (initialSelectedProfileIds && initialSelectedProfileIds.length > 0) {
+            return new Set(initialSelectedProfileIds);
+        }
+        return new Set(availableProfiles.map(p => p.id));
+    });
     const [deleteMode, setDeleteMode] = useState(false);
 
     // Regeneration mode state
@@ -95,6 +107,8 @@ export const RerollModal: React.FC<RerollModalProps> = ({
             const next = new Set(prev);
             if (next.has(id)) next.delete(id);
             else next.add(id);
+            // Notify parent of selection change
+            onProfileSelectionChange?.(Array.from(next));
             return next;
         });
     };

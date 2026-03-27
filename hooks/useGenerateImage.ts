@@ -239,7 +239,25 @@ export const useGenerateImage = (config: GenerateImageConfig) => {
     const styleEra = selectedGenre === 'Custom' ? "Modern American" : selectedGenre;
     const artStyleTag = storyContext.artStyle ? `, ${storyContext.artStyle} style` : '';
 
-    let promptText = `[STRICT GENRE: ${selectedGenre}] [STRICT ART STYLE: ${storyContext.artStyle || 'Comic Book'}]\n`;
+    // Build compact character identity summary for front-loading (most critical info first)
+    const buildCharacterSummary = (): string => {
+      const summaries: string[] = [];
+      profiles.forEach(profile => {
+        const ih = profile.identityHeader;
+        if (ih) {
+          const negatives = profile.hardNegatives?.length ? ` NEVER: ${profile.hardNegatives.slice(0, 3).join(', ')}` : '';
+          summaries.push(`[${profile.name.toUpperCase()}]: ${ih.face}, ${ih.hair}, ${ih.skin}.${negatives}`);
+        } else {
+          summaries.push(`[${profile.name.toUpperCase()}]: ${profile.faceDescription || 'standard'}, ${profile.colorPalette || 'standard colors'}`);
+        }
+      });
+      return summaries.length > 0
+        ? `\n=== CRITICAL: CHARACTER IDENTITIES (MATCH EXACTLY) ===\n${summaries.join('\n')}\n===\n`
+        : '';
+    };
+
+    let promptText = buildCharacterSummary();
+    promptText += `[STRICT GENRE: ${selectedGenre}] [STRICT ART STYLE: ${storyContext.artStyle || 'Comic Book'}]\n`;
     promptText += `STYLE: ${styleEra} comic book art${artStyleTag}, detailed ink, vibrant colors. `;
     promptText += `STORY TITLE: ${storyContext.title || 'Untitled'}. STORY DESC: ${storyContext.descriptionText || 'Adventure'}. `;
 

@@ -179,6 +179,29 @@ export const ProfilesDialog: React.FC<Props> = ({ profiles, onUpdate, onAnalyze,
                                         placeholder="e.g., Glowing green energy sword, red and gold trident with ornate engravings..."
                                     />
                                 </div>
+
+                                {/* Hard Negatives / Things to Avoid */}
+                                <div className="md:col-span-2">
+                                    <label className="font-comic text-xs font-bold text-gray-600 uppercase flex items-center gap-1">
+                                        🚫 Avoid in Generation
+                                        <span className="text-[9px] text-gray-500 font-normal normal-case">(comma-separated)</span>
+                                    </label>
+                                    <textarea
+                                        className="w-full p-2 border-2 border-gray-400 font-comic text-sm h-16 resize-none bg-gray-100"
+                                        value={(p.hardNegatives || []).join(', ')}
+                                        onChange={e => {
+                                            const negatives = e.target.value
+                                                .split(',')
+                                                .map(s => s.trim())
+                                                .filter(s => s.length > 0);
+                                            onUpdate(idx, { ...p, hardNegatives: negatives });
+                                        }}
+                                        placeholder="e.g., no glasses, no beard, no cape, avoid purple color, never show without mask..."
+                                    />
+                                    <p className="text-[9px] text-gray-400 mt-1 font-comic">
+                                        Specify things the AI should NEVER include when generating this character.
+                                    </p>
+                                </div>
                             </div>
                         </div>
                         );

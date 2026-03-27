@@ -8,6 +8,7 @@
 
 import React, { useMemo } from 'react';
 import { estimateGenerationCost, formatCost, ESTIMATED_COSTS } from '../stores/useMetricsStore';
+import { useSettingsStore } from '../stores/useSettingsStore';
 
 // ============================================================================
 // TYPES
@@ -37,6 +38,9 @@ export const CostEstimator: React.FC<CostEstimatorProps> = ({
   className = '',
   showBreakdown = false,
 }) => {
+  const showApiCostEstimate = useSettingsStore((state) => state.showApiCostEstimate);
+  const setShowApiCostEstimate = useSettingsStore((state) => state.setShowApiCostEstimate);
+
   // Calculate estimated cost
   const estimate = useMemo(() => {
     const totalCost = estimateGenerationCost(pageCount, characterCount, isOutlineMode);
@@ -65,6 +69,28 @@ export const CostEstimator: React.FC<CostEstimatorProps> = ({
     return null;
   }
 
+  // Collapsed state - show just a toggle button
+  if (!showApiCostEstimate) {
+    return (
+      <button
+        onClick={() => setShowApiCostEstimate(true)}
+        className={`
+          flex items-center gap-2 text-purple-600 hover:text-purple-800 transition-colors
+          text-sm font-bold py-2
+          ${className}
+        `}
+        style={{ fontFamily: "'Comic Neue', sans-serif" }}
+        title="Show API cost estimate"
+      >
+        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+        </svg>
+        <span>Show API Cost (~{formatCost(estimate.total)})</span>
+      </button>
+    );
+  }
+
   return (
     <div
       className={`
@@ -74,7 +100,7 @@ export const CostEstimator: React.FC<CostEstimatorProps> = ({
       `}
       style={{ fontFamily: "'Comic Neue', sans-serif" }}
     >
-      {/* Main estimate */}
+      {/* Main estimate with hide button */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <span className="text-purple-600 text-lg">$</span>
@@ -82,12 +108,23 @@ export const CostEstimator: React.FC<CostEstimatorProps> = ({
             Estimated API Cost:
           </span>
         </div>
-        <span
-          className="text-lg font-bold text-purple-700"
-          style={{ fontFamily: "'Bangers', cursive" }}
-        >
-          ~{formatCost(estimate.total)}
-        </span>
+        <div className="flex items-center gap-2">
+          <span
+            className="text-lg font-bold text-purple-700"
+            style={{ fontFamily: "'Bangers', cursive" }}
+          >
+            ~{formatCost(estimate.total)}
+          </span>
+          <button
+            onClick={() => setShowApiCostEstimate(false)}
+            className="text-gray-400 hover:text-gray-600 transition-colors p-1"
+            title="Hide API cost estimate"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
+            </svg>
+          </button>
+        </div>
       </div>
 
       {/* Configuration summary */}
