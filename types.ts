@@ -301,6 +301,8 @@ export interface ComicFace {
     imageUrl?: string;
     isLoading?: boolean;
     hasFailed?: boolean;
+    /** Reason for generation failure (safety filter, rate limit, etc.) */
+    failureReason?: 'safety' | 'rate_limit' | 'quota' | 'content_policy' | 'unknown' | string;
     choices: string[];
     isDecisionPage?: boolean;
     resolvedChoice?: string;

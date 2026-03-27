@@ -46,34 +46,55 @@ export const Panel: React.FC<PanelProps> = ({ face, allFaces, storyContext, gene
             {face.imageUrl && <img key={face.imageUrl.slice(-20)} src={face.imageUrl} alt={`Comic panel ${face.pageIndex !== undefined ? `page ${face.pageIndex}` : ''}`} className={`panel-image ${isFullBleed ? '!object-cover' : ''}`} />}
             
             {/* Failed Generation State */}
-            {hasFailed && (
-                <div className="absolute inset-0 flex flex-col items-center justify-center bg-gray-900 text-white z-10">
-                    <p className="font-comic text-2xl mb-2 text-red-400">⚠️ GENERATION FAILED</p>
-                    <p className="font-comic text-sm text-gray-400 mb-4">Panel couldn't be generated.</p>
-                    <div className="flex flex-col gap-3 w-64">
-                        {onQuickRetry && (
+            {hasFailed && (() => {
+                // Generate helpful error message based on failure reason
+                const getFailureMessage = () => {
+                    switch (face.failureReason) {
+                        case 'safety':
+                            return { title: 'Content Filtered', desc: 'Image blocked by safety filter. Try a different scene or simplify the description.', tip: 'Try Reroll with modified instructions.' };
+                        case 'rate_limit':
+                            return { title: 'Rate Limited', desc: 'Too many requests. Please wait a moment and try again.', tip: 'Wait 30 seconds, then retry.' };
+                        case 'quota':
+                            return { title: 'API Quota Reached', desc: 'Daily generation limit reached. Try again tomorrow or check API settings.', tip: 'Check your API quota.' };
+                        case 'content_policy':
+                            return { title: 'Content Policy', desc: 'Scene description may violate content guidelines. Try a different approach.', tip: 'Modify the scene to be less intense.' };
+                        case 'api_key':
+                            return { title: 'API Key Issue', desc: 'There may be a problem with your API key. Check settings.', tip: 'Verify API key in settings.' };
+                        default:
+                            return { title: 'Generation Failed', desc: 'Panel couldn\'t be generated. Retry or try different instructions.', tip: 'Quick Retry often helps.' };
+                    }
+                };
+                const msg = getFailureMessage();
+                return (
+                    <div className="absolute inset-0 flex flex-col items-center justify-center bg-gray-900 text-white z-10">
+                        <p className="font-comic text-2xl mb-2 text-red-400">⚠️ {msg.title.toUpperCase()}</p>
+                        <p className="font-comic text-sm text-gray-400 mb-2 max-w-xs text-center">{msg.desc}</p>
+                        <p className="font-comic text-xs text-yellow-400 mb-4 max-w-xs text-center">💡 {msg.tip}</p>
+                        <div className="flex flex-col gap-3 w-64">
+                            {onQuickRetry && (
+                                <button
+                                    onClick={(e) => { e.stopPropagation(); onQuickRetry(face.pageIndex as number); }}
+                                    className="comic-btn bg-green-500 text-white px-6 py-3 text-lg font-bold border-[3px] border-black hover:scale-105 shadow-[4px_4px_0px_rgba(0,0,0,1)] w-full"
+                                    title="Quick retry with enhanced context (emblem, weapon, outline)"
+                                    aria-label="Quick retry panel generation"
+                                >
+                                    🔄 Continue (Quick Retry)
+                                </button>
+                            )}
                             <button
-                                onClick={(e) => { e.stopPropagation(); onQuickRetry(face.pageIndex as number); }}
-                                className="comic-btn bg-green-500 text-white px-6 py-3 text-lg font-bold border-[3px] border-black hover:scale-105 shadow-[4px_4px_0px_rgba(0,0,0,1)] w-full"
-                                title="Quick retry with enhanced context (emblem, weapon, outline)"
-                                aria-label="Quick retry panel generation"
+                                onClick={(e) => { e.stopPropagation(); onReroll(face.pageIndex as number); }}
+                                className="comic-btn bg-yellow-400 text-black px-6 py-3 text-lg font-bold border-[3px] border-black hover:scale-105 shadow-[4px_4px_0px_rgba(0,0,0,1)] w-full"
+                                aria-label="Reroll panel with full options"
                             >
-                                🔄 Continue (Quick Retry)
+                                🎲 Reroll (Full Options)
                             </button>
-                        )}
-                        <button
-                            onClick={(e) => { e.stopPropagation(); onReroll(face.pageIndex as number); }}
-                            className="comic-btn bg-yellow-400 text-black px-6 py-3 text-lg font-bold border-[3px] border-black hover:scale-105 shadow-[4px_4px_0px_rgba(0,0,0,1)] w-full"
-                            aria-label="Reroll panel with full options"
-                        >
-                            🎲 Reroll (Full Options)
-                        </button>
+                        </div>
+                        <p className="font-comic text-[10px] text-gray-500 mt-3 max-w-xs text-center">
+                            Quick Retry uses outline + emblem/weapon refs automatically
+                        </p>
                     </div>
-                    <p className="font-comic text-[10px] text-gray-500 mt-3 max-w-xs text-center">
-                        Quick Retry uses outline + emblem/weapon refs automatically
-                    </p>
-                </div>
-            )}
+                );
+            })()}
 
             {/* Reroll Button — shows on any non-loading story/cover panel */}
             {!face.isLoading && (face.type === 'story' || face.type === 'cover') && face.pageIndex !== undefined && face.imageUrl && (

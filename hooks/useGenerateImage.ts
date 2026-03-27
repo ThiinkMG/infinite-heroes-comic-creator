@@ -82,6 +82,8 @@ export interface GenerateImageParams {
 export interface GenerateImageResult {
   imageUrl: string;
   originalPrompt: string;
+  /** Failure reason if image generation failed */
+  failureReason?: 'safety' | 'rate_limit' | 'quota' | 'content_policy' | 'unknown' | string;
 }
 
 // ============================================================================
@@ -556,12 +558,28 @@ export const useGenerateImage = (config: GenerateImageConfig) => {
 
       if (!imageUrl) {
         const candidate = res.candidates?.[0];
+        const finishReason = candidate?.finishReason;
+        const safetyRatings = candidate?.safetyRatings;
+
         console.warn(`[generateImage] Empty image response:`, {
           candidateCount: res.candidates?.length ?? 0,
-          finishReason: candidate?.finishReason,
-          safetyRatings: candidate?.safetyRatings,
+          finishReason,
+          safetyRatings,
           contentParts: candidate?.content?.parts?.map(p => 'text' in p ? 'text' : 'inlineData' in p ? 'image' : 'unknown'),
         });
+
+        // Determine failure reason from API response
+        let failureReason: GenerateImageResult['failureReason'] = 'unknown';
+
+        if (finishReason === 'SAFETY' || finishReason === 'BLOCKLIST') {
+          failureReason = 'safety';
+        } else if (finishReason === 'PROHIBITED_CONTENT' || finishReason === 'OTHER') {
+          failureReason = 'content_policy';
+        } else if (safetyRatings?.some(r => r.blocked)) {
+          failureReason = 'safety';
+        }
+
+        return { imageUrl: '', originalPrompt: promptText, failureReason };
       }
 
       return { imageUrl, originalPrompt: promptText };
@@ -569,7 +587,22 @@ export const useGenerateImage = (config: GenerateImageConfig) => {
       const totalDuration = Date.now() - startTime;
       console.error(`[generateImage] FAILED after ${totalDuration}ms:`, e);
       onAPIError(e);
-      return { imageUrl: '', originalPrompt: promptText };
+
+      // Determine failure reason from error message
+      const errorMsg = String(e).toLowerCase();
+      let failureReason: GenerateImageResult['failureReason'] = 'unknown';
+
+      if (errorMsg.includes('rate') || errorMsg.includes('429') || errorMsg.includes('too many')) {
+        failureReason = 'rate_limit';
+      } else if (errorMsg.includes('quota') || errorMsg.includes('resource exhausted')) {
+        failureReason = 'quota';
+      } else if (errorMsg.includes('safety') || errorMsg.includes('blocked')) {
+        failureReason = 'safety';
+      } else if (errorMsg.includes('permission') || errorMsg.includes('invalid')) {
+        failureReason = 'api_key';
+      }
+
+      return { imageUrl: '', originalPrompt: promptText, failureReason };
     }
   };
 

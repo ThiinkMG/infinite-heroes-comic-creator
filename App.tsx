@@ -529,7 +529,7 @@ const App: React.FC = () => {
     comicOverrides?: { shotTypeOverride?: ShotType; balloonShapeOverride?: BalloonShape; applyFlashbackStyle?: boolean },
     useOnlySelectedRefs?: boolean,
     currentImageToPreserve?: string
-  ): Promise<{ imageUrl: string; originalPrompt: string }> => {
+  ): Promise<{ imageUrl: string; originalPrompt: string; failureReason?: string }> => {
     return hookGenerateImage({
       beat,
       type,
@@ -710,9 +710,9 @@ const App: React.FC = () => {
       const result = await generateImage(beat, type, instruction, extraRefImages, prevImage, prevBeat, pageNum, comicOverrides, useOnlySelectedRefs, currentImageToPreserve);
       if (isStoppedRef.current) return;
       if (!result.imageUrl) {
-          updateFaceState(faceId, { isLoading: false, hasFailed: true, originalPrompt: result.originalPrompt });
+          updateFaceState(faceId, { isLoading: false, hasFailed: true, originalPrompt: result.originalPrompt, failureReason: result.failureReason });
       } else {
-          updateFaceState(faceId, { imageUrl: result.imageUrl, isLoading: false, hasFailed: false, originalPrompt: result.originalPrompt });
+          updateFaceState(faceId, { imageUrl: result.imageUrl, isLoading: false, hasFailed: false, originalPrompt: result.originalPrompt, failureReason: undefined });
       }
   };
 
