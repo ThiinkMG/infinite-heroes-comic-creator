@@ -184,7 +184,7 @@ export const CharacterCard: React.FC<CharacterCardProps> = ({
             )}
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 sm:gap-6 lg:gap-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-5 md:gap-6 lg:gap-8">
             <div className="space-y-4 sm:space-y-5">
                 {/* Portrait Section */}
                 <div>
