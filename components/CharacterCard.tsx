@@ -184,7 +184,7 @@ export const CharacterCard: React.FC<CharacterCardProps> = ({
             )}
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-5 md:gap-6 lg:gap-8">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-5 md:gap-6 lg:gap-8">
             <div className="space-y-4 sm:space-y-5">
                 {/* Portrait Section */}
                 <div>
@@ -197,10 +197,10 @@ export const CharacterCard: React.FC<CharacterCardProps> = ({
                         />
                     </p>
                     {persona?.base64 ? (
-                        <div className="flex gap-4 items-center">
-                            <img src={`data:image/jpeg;base64,${persona.base64}`} alt="Portrait" className="w-24 h-24 sm:w-28 sm:h-28 object-cover border-2 border-black shadow-[3px_3px_0px_rgba(0,0,0,0.2)] bg-white" />
-                            <div className="flex flex-col gap-2">
-                                <label className="cursor-pointer comic-btn bg-yellow-400 text-black text-xs sm:text-sm px-3 py-1.5 hover:bg-yellow-300 border-2 border-black uppercase">
+                        <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 sm:items-center">
+                            <img src={`data:image/jpeg;base64,${persona.base64}`} alt="Portrait" className="w-24 h-24 sm:w-28 sm:h-28 object-cover border-2 border-black shadow-[3px_3px_0px_rgba(0,0,0,0.2)] bg-white shrink-0" />
+                            <div className="flex flex-row sm:flex-col gap-2">
+                                <label className="cursor-pointer comic-btn bg-yellow-400 text-black text-xs sm:text-sm px-3 py-1.5 hover:bg-yellow-300 border-2 border-black uppercase text-center">
                                     REPLACE
                                     <input type="file" accept="image/*" className="hidden" onChange={(e) => { e.target.files?.[0] && onPortraitUpload(e.target.files[0]); onPortraitBlur?.(); }} aria-label="Replace portrait image" />
                                 </label>
