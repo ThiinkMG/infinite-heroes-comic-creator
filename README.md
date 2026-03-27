@@ -76,26 +76,48 @@ Professional PDF export with custom covers!
 
 ---
 
-## 🎯 Example Comics
+## 🎯 Comic Gallery
 
-Check out what's possible with Infinite Heroes:
+Check out what's possible with Infinite Heroes! Every image below was AI-generated:
 
-### Covers That Pop! 💥
+### 📚 Cover Art Gallery
+
 <p align="center">
-  <img src="assets/comic-book-examples/Comic-cover (1).png" alt="Comic Cover Example 1" width="280"/>
-  <img src="assets/comic-book-examples/Comic-cover2.2.png" alt="Comic Cover Example 2" width="280"/>
+  <img src="assets/comic-book-examples/Vile-lence-00-Cover.png" alt="Vile-lence Cover" width="220"/>
+  <img src="assets/comic-book-examples/Death-Punch-00-Cover (1).png" alt="Death Punch Cover" width="220"/>
+  <img src="assets/comic-book-examples/Comic-cover (1).png" alt="Comic Cover" width="220"/>
+  <img src="assets/comic-book-examples/Comic-cover2.2.png" alt="Comic Cover 2" width="220"/>
 </p>
 
-### Interior Pages With Stunning Art 🎨
+### 📖 Interior Pages
+
 <p align="center">
-  <img src="assets/comic-book-examples/Comic-page-1.png" alt="Comic Page 1" width="280"/>
-  <img src="assets/comic-book-examples/Comic-page-1.2.png" alt="Comic Page Variant" width="280"/>
-  <img src="assets/comic-book-examples/Comic-page-2.png" alt="Comic Page 2" width="280"/>
+  <img src="assets/comic-book-examples/Blood and 'Vile'lence-Page-1.png" alt="Vile-lence Page 1" width="220"/>
+  <img src="assets/comic-book-examples/Death-Punch-Page-05.png" alt="Death Punch Page 5" width="220"/>
+  <img src="assets/comic-book-examples/Death-Punch-Page-09.png" alt="Death Punch Page 9" width="220"/>
+  <img src="assets/comic-book-examples/Comic-page-6.png" alt="Comic Page 6" width="220"/>
 </p>
 
-### Character Consistency Across Pages 🦸
 <p align="center">
-  <img src="assets/comic-book-examples/Colleen-Hero-Image1.png" alt="Hero Character" width="250"/>
+  <img src="assets/comic-book-examples/Comic-page-1.png" alt="Comic Page 1" width="220"/>
+  <img src="assets/comic-book-examples/Comic-page-2.png" alt="Comic Page 2" width="220"/>
+  <img src="assets/comic-book-examples/Comic-page-4 (2).png" alt="Comic Page 4" width="220"/>
+  <img src="assets/comic-book-examples/Comic-page-11 (1).png" alt="Comic Page 11" width="220"/>
+</p>
+
+### 🎭 Character Consistency
+
+The same characters maintain their look across every page:
+
+<p align="center">
+  <img src="assets/comic-book-examples/Colleen-Hero-Image1.png" alt="Hero Character" width="200"/>
+  <img src="assets/comic-book-examples/Gemini_Generated_Image_gws4t7gws4t7gws4.png" alt="Generated Character" width="200"/>
+</p>
+
+### 📕 Back Covers Too!
+
+<p align="center">
+  <img src="assets/comic-book-examples/Vile-lence-99-BackCover.png" alt="Back Cover Example" width="280"/>
 </p>
 
 ---
