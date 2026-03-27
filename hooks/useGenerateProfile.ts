@@ -21,6 +21,7 @@ import {
   ClaudeContentBlock,
 } from '../claudeHelpers';
 import { useCharacterStore } from '../stores/useCharacterStore';
+import { validateProfileCompleteness } from '../utils/profileValidation';
 
 // ============================================================================
 // TYPES
@@ -44,6 +45,192 @@ export interface GenerateProfileConfig {
 
 const MODEL_TEXT_NAME = "gemini-2.5-pro";
 const MODEL_TEXT_NAME_CLAUDE = "claude-sonnet-4-5-20250929";
+
+// ============================================================================
+// IDENTITY HEADER EXTRACTION HELPERS
+// ============================================================================
+
+/**
+ * Checks if an object is a valid IdentityHeader with non-empty required fields.
+ */
+const isValidIdentityHeader = (obj: unknown): obj is IdentityHeader => {
+  if (!obj || typeof obj !== 'object') return false;
+  const header = obj as Record<string, unknown>;
+  const face = typeof header.face === 'string' ? header.face.trim() : '';
+  const eyes = typeof header.eyes === 'string' ? header.eyes.trim() : '';
+  const hair = typeof header.hair === 'string' ? header.hair.trim() : '';
+  const skin = typeof header.skin === 'string' ? header.skin.trim() : '';
+  const build = typeof header.build === 'string' ? header.build.trim() : '';
+  // Require at least face, eyes, hair, and skin to be non-empty
+  return face.length > 0 && eyes.length > 0 && hair.length > 0 && skin.length > 0 && build.length > 0;
+};
+
+/**
+ * Helper to ensure string fields are actually strings (AI sometimes returns objects)
+ */
+const ensureStringStatic = (val: unknown): string => {
+  if (val === null || val === undefined) return '';
+  if (typeof val === 'string') return val;
+  if (typeof val === 'object') {
+    return Object.entries(val as Record<string, unknown>)
+      .map(([k, v]) => `${k}: ${v}`)
+      .join(', ');
+  }
+  return String(val);
+};
+
+/**
+ * Extract eyes description from parsed profile fields using multiple strategies.
+ */
+const extractEyesFromFields = (parsed: Record<string, unknown>): string => {
+  // Strategy 1: Check colorPalette for "eyes: X" pattern
+  const colorPalette = ensureStringStatic(parsed.colorPalette);
+  const eyesFromPalette = colorPalette.match(/eyes?[:\s]+([^,;]+)/i)?.[1]?.trim();
+  if (eyesFromPalette && eyesFromPalette.length > 0) {
+    return eyesFromPalette;
+  }
+
+  // Strategy 2: Check faceDescription for "[color] eyes" or "eyes are [color]" patterns
+  const faceDesc = ensureStringStatic(parsed.faceDescription);
+  // Match patterns like "brown eyes", "deep blue eyes", "almond-shaped green eyes"
+  const eyesFromFace = faceDesc.match(/(\w+(?:[-\s]\w+)*)\s+eyes/i)?.[1]?.trim();
+  if (eyesFromFace && eyesFromFace.length > 0 && eyesFromFace.toLowerCase() !== 'the') {
+    return `${eyesFromFace} eyes`;
+  }
+  // Match "eyes are [description]" pattern
+  const eyesArePattern = faceDesc.match(/eyes\s+(?:are\s+)?([^,.;]+)/i)?.[1]?.trim();
+  if (eyesArePattern && eyesArePattern.length > 0) {
+    return eyesArePattern;
+  }
+
+  // Strategy 3: Check distinguishingFeatures for eye-related info
+  const features = ensureStringStatic(parsed.distinguishingFeatures);
+  const eyesFromFeatures = features.match(/(\w+(?:[-\s]\w+)*)\s+eyes/i)?.[1]?.trim();
+  if (eyesFromFeatures && eyesFromFeatures.length > 0) {
+    return `${eyesFromFeatures} eyes`;
+  }
+
+  return '';
+};
+
+/**
+ * Extract hair description from parsed profile fields using multiple strategies.
+ */
+const extractHairFromFields = (parsed: Record<string, unknown>): string => {
+  // Strategy 1: Check hairDetails.color and combine with length/style
+  const hairDetails = parsed.hairDetails as Record<string, unknown> | undefined;
+  if (hairDetails) {
+    const color = ensureStringStatic(hairDetails.color);
+    const length = ensureStringStatic(hairDetails.length);
+    const type = ensureStringStatic(hairDetails.type);
+    const style = ensureStringStatic(hairDetails.style);
+
+    if (color || length || type) {
+      const parts = [length, color, type].filter(p => p.length > 0);
+      const hairDesc = parts.join(' ');
+      if (style && style.length > 0) {
+        return `${hairDesc} hair worn ${style}`;
+      }
+      return hairDesc.length > 0 ? `${hairDesc} hair` : '';
+    }
+  }
+
+  // Strategy 2: Check colorPalette for "hair: X" pattern
+  const colorPalette = ensureStringStatic(parsed.colorPalette);
+  const hairFromPalette = colorPalette.match(/hair[:\s]+([^,;]+)/i)?.[1]?.trim();
+  if (hairFromPalette && hairFromPalette.length > 0) {
+    return hairFromPalette.includes('hair') ? hairFromPalette : `${hairFromPalette} hair`;
+  }
+
+  // Strategy 3: Check faceDescription for hair mentions
+  const faceDesc = ensureStringStatic(parsed.faceDescription);
+  const hairFromFace = faceDesc.match(/(\w+(?:[-\s]\w+)*)\s+hair/i)?.[1]?.trim();
+  if (hairFromFace && hairFromFace.length > 0 && hairFromFace.toLowerCase() !== 'the') {
+    return `${hairFromFace} hair`;
+  }
+
+  // Strategy 4: Check distinguishingFeatures
+  const features = ensureStringStatic(parsed.distinguishingFeatures);
+  const hairFromFeatures = features.match(/(\w+(?:[-\s]\w+)*)\s+hair/i)?.[1]?.trim();
+  if (hairFromFeatures && hairFromFeatures.length > 0) {
+    return `${hairFromFeatures} hair`;
+  }
+
+  return '';
+};
+
+/**
+ * Extract skin description from parsed profile fields using multiple strategies.
+ */
+const extractSkinFromFields = (parsed: Record<string, unknown>): string => {
+  // Strategy 1: Check colorPalette for "skin: X" pattern
+  const colorPalette = ensureStringStatic(parsed.colorPalette);
+  const skinFromPalette = colorPalette.match(/skin[:\s]+([^,;]+)/i)?.[1]?.trim();
+  if (skinFromPalette && skinFromPalette.length > 0) {
+    return skinFromPalette;
+  }
+
+  // Strategy 2: Check faceDescription for skin tone mentions
+  const faceDesc = ensureStringStatic(parsed.faceDescription);
+  // Match patterns like "fair skin", "dark complexion", "olive-toned skin"
+  const skinFromFace = faceDesc.match(/(\w+(?:[-\s]\w+)*)\s+(?:skin|complexion)/i)?.[1]?.trim();
+  if (skinFromFace && skinFromFace.length > 0 && skinFromFace.toLowerCase() !== 'the') {
+    return `${skinFromFace} skin`;
+  }
+  // Also check for "skin is [description]"
+  const skinIsPattern = faceDesc.match(/skin\s+(?:is\s+)?([^,.;]+)/i)?.[1]?.trim();
+  if (skinIsPattern && skinIsPattern.length > 0) {
+    return skinIsPattern;
+  }
+
+  // Strategy 3: Check bodyType for skin-related info
+  const bodyType = ensureStringStatic(parsed.bodyType);
+  const skinFromBody = bodyType.match(/(\w+(?:[-\s]\w+)*)\s+(?:skin|complexion)/i)?.[1]?.trim();
+  if (skinFromBody && skinFromBody.length > 0) {
+    return `${skinFromBody} skin`;
+  }
+
+  return '';
+};
+
+/**
+ * Build signature array from various profile fields.
+ */
+const buildSignatureArray = (parsed: Record<string, unknown>): string[] => {
+  const signature: string[] = [];
+
+  // Add from distinguishingFeatures
+  const features = ensureStringStatic(parsed.distinguishingFeatures);
+  if (features.length > 0) {
+    const featureList = features.split(/[,;]/).map(s => s.trim()).filter(s => s.length > 0);
+    signature.push(...featureList.slice(0, 2)); // Take first 2 distinguishing features
+  }
+
+  // Add emblem if present
+  const emblem = ensureStringStatic(parsed.emblemDescription);
+  if (emblem.length > 0) {
+    signature.push('signature emblem/logo');
+  }
+
+  // Add mask if present
+  const mask = ensureStringStatic(parsed.maskDescription);
+  if (mask.length > 0) {
+    signature.push(mask.length > 30 ? 'distinctive mask' : mask);
+  }
+
+  // Add weapon if present
+  const weapon = ensureStringStatic(parsed.weaponDescription);
+  if (weapon.length > 0) {
+    signature.push('signature weapon');
+  }
+
+  // Ensure we have at least one item
+  if (signature.length === 0) {
+    signature.push('unique appearance');
+  }
+
+  return signature;
+};
 
 // ============================================================================
 // HOOK
@@ -77,16 +264,47 @@ export const useGenerateProfile = (config: GenerateProfileConfig) => {
 
   /**
    * Helper to process parsed JSON into CharacterProfile
+   * Uses 3-tier strategy for identity header extraction:
+   *   1. Use structured identityHeader if provided AND valid
+   *   2. Extract from individual fields with better parsing
+   *   3. Use sensible defaults as fallback
    */
   const processProfileResponse = (parsed: Record<string, unknown>, persona: Persona): CharacterProfile => {
-    const identityHeader: IdentityHeader = (parsed.identityHeader as IdentityHeader) || {
-      face: (parsed.faceDescription as string) || '',
-      eyes: ((parsed.faceDescription as string)?.match(/eye[s]?[:\s]+([^,.]+)/i)?.[1] || '').trim(),
-      hair: (ensureString(parsed.colorPalette)?.match(/hair[:\s]+([^,.]+)/i)?.[1] || '').trim(),
-      skin: (ensureString(parsed.colorPalette)?.match(/skin[:\s]+([^,.]+)/i)?.[1] || '').trim(),
-      build: (parsed.bodyType as string) || '',
-      signature: ensureString(parsed.distinguishingFeatures)?.split(',').map((s: string) => s.trim()).filter(Boolean) || [],
-    };
+    let identityHeader: IdentityHeader;
+
+    // Strategy 1: Use structured identityHeader if provided AND valid
+    if (isValidIdentityHeader(parsed.identityHeader)) {
+      const rawHeader = parsed.identityHeader as IdentityHeader;
+      identityHeader = {
+        face: rawHeader.face,
+        eyes: rawHeader.eyes,
+        hair: rawHeader.hair,
+        skin: rawHeader.skin,
+        build: rawHeader.build,
+        // Ensure signature is always an array with items
+        signature: Array.isArray(rawHeader.signature) && rawHeader.signature.length > 0
+          ? rawHeader.signature
+          : buildSignatureArray(parsed),
+      };
+    } else {
+      // Strategy 2: Extract from individual fields with better multi-strategy parsing
+      const extractedFace = ensureString(parsed.faceDescription);
+      const extractedEyes = extractEyesFromFields(parsed);
+      const extractedHair = extractHairFromFields(parsed);
+      const extractedSkin = extractSkinFromFields(parsed);
+      const extractedBuild = ensureString(parsed.bodyType);
+      const extractedSignature = buildSignatureArray(parsed);
+
+      // Strategy 3: Apply sensible defaults for any still-empty fields
+      identityHeader = {
+        face: extractedFace || 'distinctive facial features',
+        eyes: extractedEyes || 'expressive eyes',
+        hair: extractedHair || 'styled hair',
+        skin: extractedSkin || 'natural skin tone',
+        build: extractedBuild || 'standard build',
+        signature: extractedSignature,
+      };
+    }
 
     const hardNegatives = (parsed.hardNegatives as string[]) || generateHardNegatives(identityHeader);
 
@@ -273,7 +491,26 @@ For hardNegatives, analyze the image and add negatives for:
         const cleaned = extractJsonFromResponse(text);
         const parsed = JSON.parse(cleaned);
         console.log(`[Claude] Profile generated for ${persona.name}`);
-        return processProfileResponse(parsed, persona);
+        const profile = processProfileResponse(parsed, persona);
+
+        // Log profile quality for debugging
+        const profileQuality = validateProfileCompleteness(profile);
+        console.log(`[Profile Quality] ${persona.name}:`, {
+          score: profileQuality.score,
+          missingFields: profileQuality.missingFields,
+          hasIdentityHeader: !!profile.identityHeader,
+          identityHeaderFields: {
+            face: !!profile.identityHeader?.face,
+            eyes: !!profile.identityHeader?.eyes,
+            hair: !!profile.identityHeader?.hair,
+            skin: !!profile.identityHeader?.skin,
+            build: !!profile.identityHeader?.build
+          },
+          hardNegativesCount: profile.hardNegatives?.length || 0,
+          warnings: profileQuality.warnings
+        });
+
+        return profile;
       } catch (e) {
         console.warn(`[Claude] Failed for ${persona.name}, falling back to Gemini:`, e);
         onAnthropicError(e);
@@ -292,7 +529,26 @@ For hardNegatives, analyze the image and add negatives for:
       const cleaned = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
       const parsed = JSON.parse(cleaned);
       console.log(`[Gemini] Profile generated for ${persona.name}`);
-      return processProfileResponse(parsed, persona);
+      const profile = processProfileResponse(parsed, persona);
+
+      // Log profile quality for debugging
+      const profileQuality = validateProfileCompleteness(profile);
+      console.log(`[Profile Quality] ${persona.name}:`, {
+        score: profileQuality.score,
+        missingFields: profileQuality.missingFields,
+        hasIdentityHeader: !!profile.identityHeader,
+        identityHeaderFields: {
+          face: !!profile.identityHeader?.face,
+          eyes: !!profile.identityHeader?.eyes,
+          hair: !!profile.identityHeader?.hair,
+          skin: !!profile.identityHeader?.skin,
+          build: !!profile.identityHeader?.build
+        },
+        hardNegativesCount: profile.hardNegatives?.length || 0,
+        warnings: profileQuality.warnings
+      });
+
+      return profile;
     } catch (e) {
       console.warn('Failed to generate character profile for', persona.name, e);
       onAPIError(e);

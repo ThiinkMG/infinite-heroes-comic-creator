@@ -392,37 +392,96 @@ export interface RerollPayload {
 // ============================================================================
 
 /**
+ * Analysis context for determining default negatives.
+ * Used when identity data may be incomplete but we know certain features exist.
+ */
+export interface HardNegativesAnalysisContext {
+  hasGlasses?: boolean;
+  hasMask?: boolean;
+  hasBeard?: boolean;
+  hasBangs?: boolean;
+}
+
+/**
  * Generate hard negatives based on a character's identity header.
  * Prevents common AI drift patterns (adding glasses, changing hair, etc.)
+ *
+ * @param identity - The character's structured visual identity
+ * @param analysisContext - Optional context from profile analysis (overrides identity-based detection)
+ * @returns Array of hard negative strings (always includes defaults even if identity is empty)
  */
-export function generateHardNegatives(identity: IdentityHeader): string[] {
+export function generateHardNegatives(
+  identity: IdentityHeader,
+  analysisContext?: HardNegativesAnalysisContext
+): string[] {
   const negatives: string[] = [];
 
-  // Hair-based negatives
-  const hairLower = identity.hair.toLowerCase();
-  if (hairLower.includes('curly')) negatives.push('no straight hair');
-  else if (hairLower.includes('straight')) negatives.push('no curly hair');
-  if (!hairLower.includes('bangs')) negatives.push('no bangs');
-  if (hairLower.includes('short')) negatives.push('no long hair');
-  else if (hairLower.includes('long')) negatives.push('no short hair');
+  // ============================================================================
+  // DEFAULT NEGATIVES - Always apply unless explicitly present in analysisContext
+  // These prevent the most common AI drift patterns
+  // ============================================================================
 
-  // Eye color negatives
-  const eyeLower = identity.eyes.toLowerCase();
-  if (eyeLower.includes('green')) negatives.push('no blue eyes', 'no brown eyes');
-  else if (eyeLower.includes('blue')) negatives.push('no green eyes', 'no brown eyes');
-  else if (eyeLower.includes('brown')) negatives.push('no blue eyes', 'no green eyes');
+  // Check glasses - use analysisContext if provided, otherwise check identity
+  const allText = JSON.stringify(identity).toLowerCase();
+  const hasGlasses = analysisContext?.hasGlasses ?? allText.includes('glass');
+  if (!hasGlasses) {
+    negatives.push('no glasses');
+  }
 
-  // Face/skin negatives (assume no features unless specified)
-  const skinLower = identity.skin.toLowerCase();
-  if (!skinLower.includes('freckle')) negatives.push('no freckles');
-  if (!skinLower.includes('beard') && !skinLower.includes('facial hair')) {
+  // Check beard/facial hair - use analysisContext if provided, otherwise check identity
+  const skinLower = identity.skin?.toLowerCase() || '';
+  const hasBeard = analysisContext?.hasBeard ??
+    (skinLower.includes('beard') || skinLower.includes('facial hair') || allText.includes('beard'));
+  if (!hasBeard) {
     negatives.push('no beard', 'no facial hair');
   }
 
-  // Accessory negatives
-  const allText = JSON.stringify(identity).toLowerCase();
-  if (!allText.includes('glass')) negatives.push('no glasses');
-  if (!allText.includes('earring')) negatives.push('no earrings');
+  // Helmet - always exclude (no analysisContext option for this)
+  negatives.push('no helmet');
+
+  // Check mask - use analysisContext if provided, otherwise check identity
+  const hasMask = analysisContext?.hasMask ?? allText.includes('mask');
+  if (!hasMask) {
+    negatives.push('no mask');
+  }
+
+  // Check bangs - use analysisContext if provided, otherwise check identity
+  const hairLower = identity.hair?.toLowerCase() || '';
+  const hasBangs = analysisContext?.hasBangs ?? hairLower.includes('bangs');
+  if (!hasBangs) {
+    negatives.push('no bangs');
+  }
+
+  // Earrings - always exclude unless present in identity
+  if (!allText.includes('earring')) {
+    negatives.push('no earrings');
+  }
+
+  // ============================================================================
+  // IDENTITY-BASED NEGATIVES - Derived from character's specific features
+  // ============================================================================
+
+  // Hair-based negatives (only if hair data exists)
+  if (hairLower) {
+    if (hairLower.includes('curly')) negatives.push('no straight hair');
+    else if (hairLower.includes('straight')) negatives.push('no curly hair');
+
+    if (hairLower.includes('short')) negatives.push('no long hair');
+    else if (hairLower.includes('long')) negatives.push('no short hair');
+  }
+
+  // Eye color negatives (only if eye data exists)
+  const eyeLower = identity.eyes?.toLowerCase() || '';
+  if (eyeLower) {
+    if (eyeLower.includes('green')) negatives.push('no blue eyes', 'no brown eyes');
+    else if (eyeLower.includes('blue')) negatives.push('no green eyes', 'no brown eyes');
+    else if (eyeLower.includes('brown')) negatives.push('no blue eyes', 'no green eyes');
+  }
+
+  // Freckles negative (only if skin data exists)
+  if (skinLower && !skinLower.includes('freckle')) {
+    negatives.push('no freckles');
+  }
 
   return negatives;
 }
@@ -743,6 +802,52 @@ export interface EnhancedPersona extends Persona {
 
   /** All pages where this character appears */
   appearancePages?: number[];
+}
+
+// ============================================================================
+// VILLAIN GENERATOR TYPES
+// ============================================================================
+
+/**
+ * Villain relationship to the hero - defines the narrative dynamic
+ */
+export type VillainRelationship =
+  | 'rival'         // Competitive relationship, similar goals/methods, different approach
+  | 'nemesis'       // Arch-enemy, personal vendetta, opposite sides of a conflict
+  | 'former-ally'   // Once friends/partners, now enemies due to betrayal or ideology
+  | 'mirror'        // Dark reflection of the hero, same powers/origin but different choices
+  | 'oppressor';    // Powerful tyrant/system that the hero fights against
+
+/**
+ * Threat level determines the villain's role in the story hierarchy
+ */
+export type ThreatLevel =
+  | 'minion'        // Low-level threat, easily defeated, serves a greater villain
+  | 'lieutenant'    // Mid-tier threat, commands minions, answers to the big bad
+  | 'boss'          // Major threat for a story arc, significant challenge for the hero
+  | 'arch-nemesis'; // Ultimate enemy, recurring threat across multiple stories
+
+/**
+ * Extended Persona interface for villains with additional antagonist-specific fields
+ */
+export interface VillainPersona extends Persona {
+  /** How this villain relates to the hero narratively */
+  relationshipToHero: VillainRelationship;
+
+  /** What drives this villain - their core motivation */
+  motivation: string;
+
+  /** The villain's vulnerability or fatal flaw */
+  weakness: string;
+
+  /** Where this villain fits in the threat hierarchy */
+  threatLevel: ThreatLevel;
+
+  /** Optional: The villain's primary power or method of operation */
+  primaryPower?: string;
+
+  /** Optional: A memorable catchphrase or signature line */
+  catchphrase?: string;
 }
 
 // ============================================================================

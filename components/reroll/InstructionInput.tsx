@@ -6,21 +6,16 @@
 import React from 'react';
 import { LOCATION_LIBRARY, CATEGORY_DISPLAY_NAMES, getAllCategories } from '../../data/locationLibrary';
 import { POSE_LIBRARY, POSE_CATEGORY_LABELS } from '../../data/poseLibrary';
-import { HelpTooltip } from '../HelpTooltip';
 
 interface InstructionInputProps {
     instruction: string;
     negativePrompt: string;
-    useReferenceImages: boolean;
-    useSelectedRefsOnly: boolean;
     selectedLocationId: string;
     selectedPoseId: string;
     isImprovingInstruction: boolean;
     isImprovingNegative: boolean;
     onInstructionChange: (value: string) => void;
     onNegativePromptChange: (value: string) => void;
-    onUseReferenceImagesChange: (value: boolean) => void;
-    onUseSelectedRefsOnlyChange: (value: boolean) => void;
     onLocationChange: (locationId: string) => void;
     onPoseChange: (poseId: string) => void;
     onImproveInstruction?: () => void;
@@ -30,16 +25,12 @@ interface InstructionInputProps {
 export const InstructionInput: React.FC<InstructionInputProps> = ({
     instruction,
     negativePrompt,
-    useReferenceImages,
-    useSelectedRefsOnly,
     selectedLocationId,
     selectedPoseId,
     isImprovingInstruction,
     isImprovingNegative,
     onInstructionChange,
     onNegativePromptChange,
-    onUseReferenceImagesChange,
-    onUseSelectedRefsOnlyChange,
     onLocationChange,
     onPoseChange,
     onImproveInstruction,
@@ -108,58 +99,10 @@ export const InstructionInput: React.FC<InstructionInputProps> = ({
                     aria-label="Regeneration instructions"
                 />
 
-                {/* Reference Image Checkboxes - larger touch targets */}
-                <div className="mt-4 space-y-3">
-                    {/* Reinforce with Reference Images Checkbox */}
-                    <label className="flex items-start gap-3 cursor-pointer touch-manipulation min-h-[48px] p-2 -m-2 rounded hover:bg-green-100 active:bg-green-200 transition-colors">
-                        <input
-                            type="checkbox"
-                            checked={useReferenceImages}
-                            onChange={(e) => onUseReferenceImagesChange(e.target.checked)}
-                            className="w-6 h-6 sm:w-5 sm:h-5 accent-green-600 cursor-pointer flex-shrink-0 mt-0.5"
-                            aria-label="Use selected reference images"
-                        />
-                        <span className="font-comic text-sm sm:text-base font-bold text-green-800 flex items-center gap-1 flex-wrap">
-                            🖼️ Use reference images
-                            <HelpTooltip
-                                title="Reference Images"
-                                text="AI will study your selected refs to match character appearance, costumes, and accessories more accurately."
-                                position="top"
-                            />
-                        </span>
-                    </label>
-                    {useReferenceImages && (
-                        <p className="font-comic text-xs text-green-700 ml-9 italic">
-                            AI will match selected references
-                        </p>
-                    )}
-
-                    {/* Use ONLY Selected Refs Toggle */}
-                    <label className="flex items-start gap-3 cursor-pointer touch-manipulation min-h-[48px] p-2 -m-2 rounded hover:bg-amber-100 active:bg-amber-200 transition-colors">
-                        <input
-                            type="checkbox"
-                            checked={useSelectedRefsOnly}
-                            onChange={(e) => onUseSelectedRefsOnlyChange(e.target.checked)}
-                            className="w-6 h-6 sm:w-5 sm:h-5 accent-amber-600 cursor-pointer flex-shrink-0 mt-0.5"
-                            aria-label="Use only selected reference images"
-                        />
-                        <span className="font-comic text-sm sm:text-base font-bold text-amber-800 flex items-center gap-1 flex-wrap">
-                            🎯 ONLY selected refs
-                            <HelpTooltip
-                                title="Exclusive Mode"
-                                text="Only your selected refs will be sent to AI. Default portraits won't be included. Use for precise control or testing specific references."
-                                position="top"
-                            />
-                        </span>
-                    </label>
-                    {useSelectedRefsOnly && (
-                        <div className="ml-9 p-3 bg-amber-100 border-l-4 border-amber-500 rounded-r">
-                            <p className="font-comic text-xs sm:text-sm text-amber-800">
-                                <span className="font-bold">⚠️ Exclusive:</span> Only selected refs will be sent.
-                            </p>
-                        </div>
-                    )}
-                </div>
+                {/* Hint about reference images */}
+                <p className="mt-2 font-comic text-xs text-green-700 italic">
+                    💡 Selected images in the gallery below will be sent to AI
+                </p>
             </div>
 
             {/* Negative Prompt - Second most used */}

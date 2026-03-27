@@ -1,5 +1,7 @@
 import React, { useRef, useState } from 'react';
 import { CharacterProfile } from './types';
+import { validateProfileCompleteness } from './utils/profileValidation';
+import { ProfileQualityIndicator } from './components/ProfileQualityIndicator';
 
 interface Props {
     profiles: CharacterProfile[];
@@ -54,17 +56,86 @@ export const ProfilesDialog: React.FC<Props> = ({ profiles, onUpdate, onAnalyze,
                         <h2 className="font-comic text-4xl text-purple-600 uppercase tracking-tighter">Character Profiles</h2>
                         <p className="font-comic text-sm text-gray-600 mt-1">Review and heavily edit the AI's understanding of your characters before generating!</p>
                     </div>
+                    <button
+                        onClick={() => {
+                            const exportData = {
+                                exportDate: new Date().toISOString(),
+                                profiles: profiles.map(p => ({
+                                    ...p,
+                                    // Exclude large base64 data if present
+                                    referenceImages: undefined
+                                }))
+                            };
+                            const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+                            const url = URL.createObjectURL(blob);
+                            const a = document.createElement('a');
+                            a.href = url;
+                            a.download = `character-profiles-debug-${Date.now()}.json`;
+                            a.click();
+                            URL.revokeObjectURL(url);
+                        }}
+                        className="comic-btn bg-gray-700 text-white text-xs px-3 py-2 font-bold border-2 border-black hover:bg-gray-600 uppercase flex items-center gap-1 shrink-0"
+                        title="Export all profiles as JSON for debugging character consistency issues"
+                    >
+                        <span>Export All</span>
+                    </button>
                 </div>
+
+                {profiles.some(p => validateProfileCompleteness(p).score < 50) && (
+                    <div className="bg-yellow-100 border-2 border-yellow-600 rounded p-3 mb-4">
+                        <p className="text-yellow-800 text-sm font-comic">
+                            <span className="font-bold">Warning:</span> Some character profiles are incomplete. This may cause inconsistent character appearance across pages.
+                        </p>
+                    </div>
+                )}
 
                 <div className="overflow-y-auto flex-1 pr-2 space-y-6">
                     {profiles.map((p, idx) => {
+                        const profileQuality = validateProfileCompleteness(p);
                         const isFilled = String(p.faceDescription || '').trim() !== '' || String(p.clothing || '').trim() !== '';
                         const btnText = isFilled ? "REANALYZE" : "ANALYZE";
 
                         return (
                         <div key={p.id} className="border-4 border-black p-4 bg-gray-50 flex flex-col gap-3">
+                            {/* Profile Quality Warning Banner */}
+                            {profileQuality.score < 50 && (
+                                <div className="bg-yellow-100 border-2 border-yellow-500 rounded p-3">
+                                    <div className="flex items-start justify-between gap-3">
+                                        <div className="flex items-start gap-2">
+                                            <span className="text-yellow-600 text-lg">!</span>
+                                            <div>
+                                                <p className="font-comic text-sm font-bold text-yellow-800 mb-1">
+                                                    Low Profile Quality ({profileQuality.score}%)
+                                                </p>
+                                                <ul className="text-xs text-yellow-700 space-y-0.5">
+                                                    {profileQuality.warnings.map((warning, i) => (
+                                                        <li key={i}>- {warning}</li>
+                                                    ))}
+                                                </ul>
+                                            </div>
+                                        </div>
+                                        {onAnalyze && (
+                                            <button
+                                                onClick={async () => {
+                                                    setAnalyzingIdx(idx);
+                                                    await onAnalyze(idx);
+                                                    setAnalyzingIdx(null);
+                                                }}
+                                                disabled={analyzingIdx === idx}
+                                                className="bg-yellow-600 hover:bg-yellow-500 px-3 py-1 rounded text-sm flex items-center gap-1 font-comic font-bold text-white border-2 border-black disabled:opacity-50 transition-colors shrink-0"
+                                            >
+                                                {analyzingIdx === idx ? 'Analyzing...' : 'Re-Analyze Profile'}
+                                            </button>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
+
                             <div className="flex justify-between items-center border-b-2 border-black pb-1 mb-2">
-                                <h3 className="font-comic text-2xl font-bold uppercase text-blue-800">{p.name || 'Unknown'}</h3>
+                                <div className="flex items-center gap-3">
+                                    <h3 className="font-comic text-2xl font-bold uppercase text-blue-800">{p.name || 'Unknown'}</h3>
+                                    <ProfileQualityIndicator profile={p} />
+                                </div>
                                 <div className="flex items-center gap-2">
                                     <button 
                                         onClick={() => handleDownloadIndividual(p)}

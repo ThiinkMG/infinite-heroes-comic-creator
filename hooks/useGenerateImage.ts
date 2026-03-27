@@ -74,6 +74,8 @@ export interface GenerateImageParams {
   useOnlySelectedRefs?: boolean;
   /** Current image to preserve (for non-full regeneration) */
   currentImageToPreserve?: string;
+  /** Use compact prompt mode (shorter prompts, less text before images) */
+  compactMode?: boolean;
 }
 
 /** Result from image generation */
@@ -81,6 +83,80 @@ export interface GenerateImageResult {
   imageUrl: string;
   originalPrompt: string;
 }
+
+// ============================================================================
+// PROFILE LOOKUP HELPER (Task 5.3.3 - Partial name match fallback)
+// ============================================================================
+
+/**
+ * Find profile by name with fallback to partial matching.
+ * Tries: exact match -> case-insensitive -> partial match -> first name only
+ */
+const findProfileByName = (name: string, profiles: CharacterProfile[]): CharacterProfile | undefined => {
+  if (!name) return undefined;
+  const nameLower = name.toLowerCase().trim();
+
+  // Strategy 1: Exact match
+  const exact = profiles.find(p => p.name === name);
+  if (exact) return exact;
+
+  // Strategy 2: Case-insensitive match
+  const caseInsensitive = profiles.find(p => p.name.toLowerCase() === nameLower);
+  if (caseInsensitive) {
+    console.log(`[Profile Lookup] Fuzzy matched "${name}" to "${caseInsensitive.name}" (case-insensitive)`);
+    return caseInsensitive;
+  }
+
+  // Strategy 3: Partial match (profile name contains search or vice versa)
+  const partial = profiles.find(p =>
+    p.name.toLowerCase().includes(nameLower) ||
+    nameLower.includes(p.name.toLowerCase())
+  );
+  if (partial) {
+    console.log(`[Profile Lookup] Fuzzy matched "${name}" to "${partial.name}" (partial match)`);
+    return partial;
+  }
+
+  // Strategy 4: First name only match
+  const firstName = nameLower.split(' ')[0];
+  const firstNameMatch = profiles.find(p =>
+    p.name.toLowerCase().split(' ')[0] === firstName
+  );
+  if (firstNameMatch) {
+    console.log(`[Profile Lookup] Fuzzy matched "${name}" to "${firstNameMatch.name}" (first name match)`);
+    return firstNameMatch;
+  }
+
+  return undefined;
+};
+
+// ============================================================================
+// CRITICAL DIRECTIVES V2 - Focused and concise (Task 5.2.2)
+// ============================================================================
+
+/**
+ * Generate focused critical directives (replaces verbose 4-paragraph version).
+ * Includes hardNegatives from all profiles.
+ */
+const buildCriticalDirectivesV2 = (profiles: CharacterProfile[]): string => {
+  // Collect all hardNegatives from all profiles
+  const allNegatives: string[] = [];
+  profiles.forEach(p => {
+    if (p.hardNegatives?.length) {
+      allNegatives.push(...p.hardNegatives);
+    }
+  });
+  const uniqueNegatives = [...new Set(allNegatives)];
+  const negativesList = uniqueNegatives.length > 0 ? uniqueNegatives.join(', ') : 'nothing specific';
+
+  return `
+[CRITICAL - CHARACTER CONSISTENCY]
+1. FACE: Copy EXACT facial features from each character's PORTRAIT image. Same face shape, eye color, hair style, skin tone. The portrait is the SOURCE OF TRUTH.
+2. COSTUME: Copy EXACT outfit from reference images. Same colors, emblems, accessories. Do not simplify or change the design.
+
+DO NOT ADD: ${negativesList}
+`;
+};
 
 // ============================================================================
 // HOOK
@@ -117,6 +193,7 @@ export const useGenerateImage = (config: GenerateImageConfig) => {
       comicOverrides,
       useOnlySelectedRefs,
       currentImageToPreserve,
+      compactMode = false,
     } = params;
 
     const startTime = Date.now();
@@ -152,92 +229,104 @@ export const useGenerateImage = (config: GenerateImageConfig) => {
       return { image: p.weaponImage, description: p.weaponDescriptionText || 'signature weapon' };
     };
 
-    // Helper to get inline identity from profile
-    const getInlineIdentity = (name: string): string => {
-      const profile = profiles.find(cp => cp.name === name);
+    // Helper to get inline identity from profile (Task 5.2.3 - enhanced inline identity)
+    const getInlineIdentity = (name: string, role: 'HERO' | 'CO-STAR' | 'CHARACTER' = 'CHARACTER'): string => {
+      const profile = findProfileByName(name, profiles);
       if (profile) {
         const ih = profile.identityHeader;
         if (ih) {
-          return `[${profile.name.toUpperCase()} IDENTITY: ${ih.face}, ${ih.skin}, ${ih.hair}, ${ih.build}]`;
+          return `[${role}: ${profile.name.toUpperCase()}]\nFace: ${ih.face}\nHair: ${ih.hair}\nSkin: ${ih.skin}\n[PORTRAIT - COPY THIS FACE EXACTLY]:`;
         }
         const hairInfo = profile.hairDetails
           ? `${profile.hairDetails.style} ${profile.hairDetails.color} hair`
-          : 'styled hair';
-        return `[${profile.name.toUpperCase()} IDENTITY: ${profile.faceDescription || 'standard face'}, ${hairInfo}, ${profile.distinguishingFeatures || 'no notable features'}]`;
+          : 'match portrait';
+        return `[${role}: ${profile.name.toUpperCase()}]\nFace: ${profile.faceDescription || 'match portrait'}\nHair: ${hairInfo}\nSkin: match portrait\n[PORTRAIT - COPY THIS FACE EXACTLY]:`;
       }
-      return '';
+      return `[${role}: ${name.toUpperCase()}]\nFace: match portrait\nHair: match portrait\nSkin: match portrait\n[PORTRAIT - COPY THIS FACE EXACTLY]:`;
     };
 
-    // Push character references with inline identity headers
+    // Push character references with inline identity headers (Task 5.2.3 - identity immediately before each image)
     const pushCharacterReferences = () => {
       contents.push({ text: "\n=== CHARACTER VISUAL REFERENCES (Match these EXACTLY) ===" });
 
       if (hero?.base64) {
-        const heroIdentity = getInlineIdentity(hero.name);
-        contents.push({ text: `\n[PRIORITY: HIGH] ${hero.name.toUpperCase()} PORTRAIT - COPY THIS FACE EXACTLY:\n${heroIdentity}` });
+        // Inline identity immediately before portrait image (Task 5.2.3)
+        contents.push({ text: `\n${getInlineIdentity(hero.name, 'HERO')}` });
         contents.push(createInlineImage(hero.base64));
         getAllRefs(hero).forEach((ref, i) => {
-          contents.push({ text: `[PRIORITY: MEDIUM] ${hero.name.toUpperCase()} COSTUME REF ${i + 1}:` });
+          contents.push({ text: `[${hero.name.toUpperCase()} COSTUME REF ${i + 1}]:` });
           contents.push(createInlineImage(ref));
         });
         const heroEmblem = getEmblemDesc(hero);
         if (heroEmblem) {
-          contents.push({ text: `[PRIORITY: MEDIUM] ${hero.name.toUpperCase()} EMBLEM (place on ${heroEmblem.placement}):` });
+          contents.push({ text: `[${hero.name.toUpperCase()} EMBLEM - place on ${heroEmblem.placement}]:` });
           contents.push(createInlineImage(heroEmblem.image));
         }
         const heroWeapon = getWeaponDesc(hero);
         if (heroWeapon) {
-          contents.push({ text: `[PRIORITY: LOW] ${hero.name.toUpperCase()} WEAPON (${heroWeapon.description}):` });
+          contents.push({ text: `[${hero.name.toUpperCase()} WEAPON - ${heroWeapon.description}]:` });
           contents.push(createInlineImage(heroWeapon.image));
         }
       }
 
       if (friend?.base64) {
-        const friendIdentity = getInlineIdentity(friend.name);
-        contents.push({ text: `\n[PRIORITY: HIGH] ${friend.name.toUpperCase()} PORTRAIT - COPY THIS FACE EXACTLY:\n${friendIdentity}` });
+        // Inline identity immediately before portrait image (Task 5.2.3)
+        contents.push({ text: `\n${getInlineIdentity(friend.name, 'CO-STAR')}` });
         contents.push(createInlineImage(friend.base64));
         getAllRefs(friend).forEach((ref, i) => {
-          contents.push({ text: `[PRIORITY: MEDIUM] ${friend.name.toUpperCase()} COSTUME REF ${i + 1}:` });
+          contents.push({ text: `[${friend.name.toUpperCase()} COSTUME REF ${i + 1}]:` });
           contents.push(createInlineImage(ref));
         });
         const friendEmblem = getEmblemDesc(friend);
         if (friendEmblem) {
-          contents.push({ text: `[PRIORITY: MEDIUM] ${friend.name.toUpperCase()} EMBLEM (place on ${friendEmblem.placement}):` });
+          contents.push({ text: `[${friend.name.toUpperCase()} EMBLEM - place on ${friendEmblem.placement}]:` });
           contents.push(createInlineImage(friendEmblem.image));
         }
         const friendWeapon = getWeaponDesc(friend);
         if (friendWeapon) {
-          contents.push({ text: `[PRIORITY: LOW] ${friend.name.toUpperCase()} WEAPON (${friendWeapon.description}):` });
+          contents.push({ text: `[${friend.name.toUpperCase()} WEAPON - ${friendWeapon.description}]:` });
           contents.push(createInlineImage(friendWeapon.image));
         }
       }
 
       additionalChars.forEach((c) => {
         if (c.base64) {
-          const charIdentity = getInlineIdentity(c.name);
-          contents.push({ text: `\n[PRIORITY: HIGH] ${c.name.toUpperCase()} PORTRAIT - COPY THIS FACE EXACTLY:\n${charIdentity}` });
+          // Inline identity immediately before portrait image (Task 5.2.3)
+          contents.push({ text: `\n${getInlineIdentity(c.name, 'CHARACTER')}` });
           contents.push(createInlineImage(c.base64));
         }
         getAllRefs(c).forEach((ref, ri) => {
-          contents.push({ text: `[PRIORITY: MEDIUM] ${c.name.toUpperCase()} COSTUME REF ${ri + 1}:` });
+          contents.push({ text: `[${c.name.toUpperCase()} COSTUME REF ${ri + 1}]:` });
           contents.push(createInlineImage(ref));
         });
         const charEmblem = getEmblemDesc(c);
         if (charEmblem) {
-          contents.push({ text: `[PRIORITY: MEDIUM] ${c.name.toUpperCase()} EMBLEM (place on ${charEmblem.placement}):` });
+          contents.push({ text: `[${c.name.toUpperCase()} EMBLEM - place on ${charEmblem.placement}]:` });
           contents.push(createInlineImage(charEmblem.image));
         }
         const charWeapon = getWeaponDesc(c);
         if (charWeapon) {
-          contents.push({ text: `[PRIORITY: LOW] ${c.name.toUpperCase()} WEAPON (${charWeapon.description}):` });
+          contents.push({ text: `[${c.name.toUpperCase()} WEAPON - ${charWeapon.description}]:` });
           contents.push(createInlineImage(charWeapon.image));
         }
       });
     };
 
-    // Build prompt text
+    // ==========================================================================
+    // OPTIMIZED PROMPT STRUCTURE (Tasks 5.2.1-5.2.4)
+    // ==========================================================================
+    // NEW ORDER:
+    // 1. Character Summary (compact)
+    // 2. CHARACTER IMAGES WITH INLINE IDENTITY (moved up!)
+    // 3. Style/Genre tags (short)
+    // 4. Scene description
+    // 5. CRITICAL DIRECTIVES V2 (2 focused)
+    // 6. Caption/dialogue
+    // 7. Previous page context
+    // ==========================================================================
+
     const styleEra = selectedGenre === 'Custom' ? "Modern American" : selectedGenre;
-    const artStyleTag = storyContext.artStyle ? `, ${storyContext.artStyle} style` : '';
+    const artStyleTag = storyContext.artStyle ? `, ${storyContext.artStyle}` : '';
 
     // Build compact character identity summary for front-loading (most critical info first)
     const buildCharacterSummary = (): string => {
@@ -252,37 +341,90 @@ export const useGenerateImage = (config: GenerateImageConfig) => {
         }
       });
       return summaries.length > 0
-        ? `\n=== CRITICAL: CHARACTER IDENTITIES (MATCH EXACTLY) ===\n${summaries.join('\n')}\n===\n`
+        ? `=== CHARACTER IDENTITIES ===\n${summaries.join('\n')}\n===\n`
         : '';
     };
 
-    let promptText = buildCharacterSummary();
-    promptText += `[STRICT GENRE: ${selectedGenre}] [STRICT ART STYLE: ${storyContext.artStyle || 'Comic Book'}]\n`;
-    promptText += `STYLE: ${styleEra} comic book art${artStyleTag}, detailed ink, vibrant colors. `;
-    promptText += `STORY TITLE: ${storyContext.title || 'Untitled'}. STORY DESC: ${storyContext.descriptionText || 'Adventure'}. `;
+    // STEP 1: Character Summary (compact, text-only header)
+    let preImageText = buildCharacterSummary();
+    contents.push({ text: preImageText });
 
+    // STEP 2: CHARACTER IMAGES WITH INLINE IDENTITY (Task 5.2.1 - images BEFORE long text)
+    if (useOnlySelectedRefs && extraRefImages && extraRefImages.length > 0) {
+      contents.push({ text: "\n=== SELECTED REFERENCES (Use ONLY these) ===" });
+      extraRefImages.forEach((ref, i) => {
+        contents.push({ text: `[SELECTED REF ${i + 1}]:` });
+        contents.push(createInlineImage(ref));
+      });
+    } else {
+      pushCharacterReferences();
+      if (extraRefImages && extraRefImages.length > 0) {
+        extraRefImages.forEach((ref, i) => {
+          contents.push({ text: `[ADDITIONAL REF ${i + 1}]:` });
+          contents.push(createInlineImage(ref));
+        });
+      }
+    }
+
+    // Current image to preserve (for partial regeneration)
+    if (currentImageToPreserve) {
+      const preserveData = currentImageToPreserve.includes(',')
+        ? currentImageToPreserve.split(',')[1]
+        : currentImageToPreserve;
+      contents.push({ text: "\n=== CURRENT PANEL (PRESERVE SCENE) ===" });
+      contents.push({ text: "[PRESERVE] Keep background, lighting, composition. Only modify as specified." });
+      contents.push(createInlineImage(preserveData));
+    }
+
+    // Previous page visual context (image reference)
+    if (prevImage && prevBeat) {
+      contents.push({ text: "\n[PREVIOUS PAGE - maintain continuity]:" });
+      contents.push(createInlineImage(prevImage.split(',')[1] || prevImage));
+    }
+
+    // Publisher logo for cover (if applicable, add near other images)
+    let publisherLogoAdded = false;
+    if (type === 'cover' && !storyContext.useOverlayLogo && storyContext.publisherLogo) {
+      contents.push({ text: "[PUBLISHER LOGO]:" });
+      contents.push(createInlineImage(storyContext.publisherLogo));
+      publisherLogoAdded = true;
+    }
+
+    // ==========================================================================
+    // STEP 3-7: POST-IMAGE TEXT (Style, Scene, Directives, Caption, Context)
+    // ==========================================================================
+
+    let promptText = '';
+
+    // STEP 3: Style/Genre tags (SHORT - Task 5.2.4 compact mode uses minimal)
+    if (compactMode) {
+      promptText += `\n[STYLE: ${styleEra}${artStyleTag}]\n`;
+    } else {
+      promptText += `\n[GENRE: ${selectedGenre}] [STYLE: ${storyContext.artStyle || 'Comic Book'}]\n`;
+      promptText += `${styleEra} comic art${artStyleTag}, detailed ink, vibrant colors.\n`;
+    }
+
+    // STEP 4: Scene description (varies by page type)
     if (type === 'cover') {
-      const langName = LANGUAGES.find(l => l.code === selectedLanguage)?.name || "English";
-
       if (storyContext.useOverlayLogo) {
-        promptText += `TYPE: Comic Book Cover Art. Main visual: Dynamic action shot of [HERO] (Use REFERENCE 1). LEAVE ROOM AT TOP FOR LOGO AND TITLE OVERLAY. DO NOT DRAW ANY LOGOS, TITLES, OR TEXT ON THE ARTWORK. WE WILL ADD IT DIGITALLY OVER THE IMAGE.`;
+        promptText += `TYPE: Comic Cover Art. Dynamic action shot of HERO. LEAVE ROOM AT TOP FOR LOGO OVERLAY. DO NOT DRAW TEXT/LOGOS.`;
       } else {
-        promptText += `TYPE: Comic Book Cover. SERIES TITLE: "${storyContext.seriesTitle.toUpperCase()}". STORY TITLE: "${storyContext.title || 'Untitled'}". PUBLISHER: "${storyContext.publisherName.toUpperCase()}". ISSUE: "#${storyContext.issueNumber || '1'}". Draw the series title and story title prominently on the cover. Main visual: Dynamic action shot of [HERO] (Use REFERENCE 1).`;
-        if (storyContext.publisherLogo) {
-          contents.push({ text: "PUBLISHER LOGO REFERENCE:" });
-          contents.push(createInlineImage(storyContext.publisherLogo));
-        }
+        promptText += `TYPE: Comic Cover. SERIES: "${storyContext.seriesTitle.toUpperCase()}". TITLE: "${storyContext.title || 'Untitled'}". PUBLISHER: "${storyContext.publisherName.toUpperCase()}". ISSUE: #${storyContext.issueNumber || '1'}. Draw titles prominently. Dynamic action shot of HERO.`;
       }
     } else if (type === 'back_cover') {
-      promptText += `TYPE: Comic Back Cover. FULL PAGE VERTICAL ART. Dramatic teaser. Text: "NEXT ISSUE SOON".`;
+      promptText += `TYPE: Back Cover. FULL PAGE ART. Dramatic teaser. Text: "NEXT ISSUE SOON".`;
     } else {
       // Story page - Scene Reinforcement
       let sceneText = beat.scene;
-      const focusProfile = profiles.find(cp => {
-        if (beat.focus_char === 'hero') return cp.name === hero?.name;
-        if (beat.focus_char === 'friend') return cp.name === friend?.name;
-        return cp.name.toLowerCase() === beat.focus_char.toLowerCase();
-      });
+      // Use fuzzy matching for focus character lookup (Task 5.3.3)
+      let focusProfile: CharacterProfile | undefined;
+      if (beat.focus_char === 'hero' && hero?.name) {
+        focusProfile = findProfileByName(hero.name, profiles);
+      } else if (beat.focus_char === 'friend' && friend?.name) {
+        focusProfile = findProfileByName(friend.name, profiles);
+      } else if (beat.focus_char) {
+        focusProfile = findProfileByName(beat.focus_char, profiles);
+      }
 
       if (focusProfile) {
         const envMatch = sceneText.match(/\b(in|at|on|near|inside|outside|within)\b.*/i);
@@ -291,9 +433,9 @@ export const useGenerateImage = (config: GenerateImageConfig) => {
         sceneText = formatReinforcedScene(focusProfile, action, environment);
       }
 
-      promptText += `TYPE: Vertical comic panel. SCENE: ${sceneText}. `;
+      promptText += `TYPE: Vertical comic panel.\nSCENE: ${sceneText}\n`;
 
-      // Comic fundamentals
+      // Comic fundamentals (Task 5.2.4 - minimal in compact mode)
       const pagePlan = pageIndex !== undefined
         ? storyOutline.pageBreakdown?.find(p => p.pageIndex === pageIndex)
         : undefined;
@@ -303,121 +445,88 @@ export const useGenerateImage = (config: GenerateImageConfig) => {
       const effectiveBalloonShape = comicOverrides?.balloonShapeOverride;
 
       if (effectiveShotType) {
-        promptText += `\n${getShotInstructions(effectiveShotType)} `;
+        if (compactMode) {
+          promptText += `[SHOT: ${effectiveShotType}] `;
+        } else {
+          promptText += `${getShotInstructions(effectiveShotType)} `;
+        }
       }
 
-      if (pagePlan) {
+      if (!compactMode && pagePlan) {
         if (pagePlan.panelLayout === 'splash') {
-          promptText += `COMPOSITION: This is a SPLASH PAGE - full dramatic composition, maximum visual impact. `;
+          promptText += `SPLASH PAGE - maximum visual impact. `;
         } else if (pagePlan.panelLayout === 'grid-2x3' || pagePlan.panelLayout === 'grid-3x3') {
-          promptText += `COMPOSITION: Design as part of a multi-panel page - tighter framing, efficient use of space. `;
+          promptText += `Multi-panel page - tighter framing. `;
         } else if (pagePlan.panelLayout === 'asymmetric') {
-          promptText += `COMPOSITION: Dynamic layout - this may be the dramatic payoff panel (larger) or a quick beat (smaller). `;
+          promptText += `Dynamic layout. `;
         }
       }
 
       if (effectiveFlashback) {
-        promptText += `\n${getFlashbackInstructions()} `;
+        if (compactMode) {
+          promptText += `[FLASHBACK: sepia/faded edges] `;
+        } else {
+          promptText += `${getFlashbackInstructions()} `;
+        }
       }
 
-      if (effectiveBalloonShape) {
+      if (effectiveBalloonShape && !compactMode) {
         const balloonInstructions: Record<BalloonShape, string> = {
-          'oval': 'DIALOGUE STYLE: Use standard oval speech bubbles for normal conversation.',
-          'burst': 'DIALOGUE STYLE: Use BURST/EXPLOSION speech bubbles - spiky edges indicating SHOUTING or excitement!',
-          'wavy': 'DIALOGUE STYLE: Use WAVY/WOBBLY speech bubbles indicating weak, distressed, or injured speech...',
-          'dashed': 'DIALOGUE STYLE: Use DASHED-OUTLINE speech bubbles indicating whispered or quiet speech.',
-          'cloud': 'DIALOGUE STYLE: Use CLOUD/THOUGHT bubbles for internal thoughts.',
-          'rectangle': 'DIALOGUE STYLE: Use RECTANGULAR speech boxes for robotic, electronic, or AI voices.',
-          'jagged': 'DIALOGUE STYLE: Use JAGGED/ELECTRIC speech bubbles for radio, phone, or broadcast transmissions.',
-          'inverted': 'DIALOGUE STYLE: Use INVERTED (black background, white text) speech bubbles for alien or otherworldly voices.',
+          'oval': 'Oval speech bubbles.',
+          'burst': 'BURST bubbles - spiky edges for shouting!',
+          'wavy': 'WAVY bubbles - weak/distressed speech.',
+          'dashed': 'DASHED bubbles - whispered speech.',
+          'cloud': 'CLOUD bubbles for thoughts.',
+          'rectangle': 'RECTANGLE boxes for robotic/AI voices.',
+          'jagged': 'JAGGED bubbles for radio/transmissions.',
+          'inverted': 'INVERTED (black bg, white text) for alien voices.',
         };
-        promptText += `\n${balloonInstructions[effectiveBalloonShape]} `;
+        promptText += `[DIALOGUE: ${balloonInstructions[effectiveBalloonShape]}] `;
       }
 
-      const heroName = hero?.name || 'HERO';
-      const friendName = friend?.name || 'CO-STAR';
-      let mappings = `${heroName}'s face MUST match the image labeled '${heroName.toUpperCase()} PORTRAIT'. ${friendName}'s face MUST match the image labeled '${friendName.toUpperCase()} PORTRAIT'.`;
-      additionalChars.forEach((c) => {
-        mappings += ` ${c.name}'s face MUST match the image labeled '${c.name.toUpperCase()} PORTRAIT'.`;
-      });
-      promptText += `\n[CHARACTER-TO-IMAGE BINDING]: ${mappings}\n`;
+      // STEP 6: Caption/dialogue
+      if (beat.caption) promptText += `\nCAPTION: "${beat.caption}"`;
+      if (beat.dialogue) promptText += `\nSPEECH: "${beat.dialogue}"`;
 
-      if (beat.caption) promptText += ` INCLUDE CAPTION BOX: "${beat.caption}"`;
-      if (beat.dialogue) promptText += ` INCLUDE SPEECH BUBBLE: "${beat.dialogue}"`;
-
+      // User reroll instruction
       if (instruction) {
-        promptText += ` \nUSER REROLL INSTRUCTION: "${instruction}". Ensure this explicit instruction is followed perfectly in the visual!`;
-        promptText += ` \nWhen regenerating a character or scene, reference all selected character profiles, uploaded reference images, and attached visual assets to maintain visual consistency. Prioritize matching defining features (face, build, clothing, color palette) from the selected references before applying any stylistic changes from the user's text input.`;
+        promptText += `\n[USER INSTRUCTION]: "${instruction}" - Follow this precisely!`;
+        if (!compactMode) {
+          promptText += ` Maintain visual consistency with all character references.`;
+        }
       }
     }
 
-    // Critical consistency directives
+    // STEP 5: CRITICAL DIRECTIVES V2 (Task 5.2.2 - 2 focused directives, not 4 verbose)
     if (type !== 'back_cover') {
-      promptText += ` \n[CRITICAL CONSISTENCY DIRECTIVES - MUST FOLLOW]:
-1. [FACE & IDENTITY] Copy EXACT facial features, hairstyle, body type from REFERENCE images. Characters MUST be instantly recognizable. Include all distinguishing features (scars, tattoos, hair color). Reference images are SOURCE OF TRUTH.
-2. [ART STYLE] STRICT ${styleEra} comic book art${artStyleTag}, ${selectedGenre} genre. Every pixel must match this style - line work, coloring, shading, environment, lighting.
-3. [EMBLEM/LOGO] If character has emblem reference, draw it EXACTLY at specified placement. Match shape, colors, design precisely.
-4. [CLOTHING] Copy costume/outfit EXACTLY from references - fabric patterns, armor, accessories, boots, capes. This is their SIGNATURE LOOK.\n`;
+      promptText += buildCriticalDirectivesV2(profiles);
 
-      // Identity blocks (Layer 2)
-      if (profiles.length > 0) {
-        promptText += '\n--- CHARACTER IDENTITY BLOCKS (LAYER 2) ---\n';
+      // Layer 2/4 blocks only in non-compact mode (Task 5.2.4)
+      if (!compactMode && profiles.length > 0) {
+        promptText += '\n--- CHARACTER IDENTITY BLOCKS ---\n';
         profiles.forEach(cp => {
-          promptText += formatIdentityHeader(cp) + '\n\n';
+          promptText += formatIdentityHeader(cp) + '\n';
         });
-        promptText += '--- END CHARACTER IDENTITY BLOCKS ---\n';
+        promptText += '--- END IDENTITY BLOCKS ---\n';
 
-        // Consistency requirements (Layer 4)
-        promptText += '\n--- CONSISTENCY REQUIREMENTS (LAYER 4) ---\n';
+        promptText += '\n--- CONSISTENCY REQUIREMENTS ---\n';
         profiles.forEach(cp => {
-          promptText += formatConsistencyInstruction(cp, storyContext.artStyle || 'Comic Book') + '\n\n';
+          promptText += formatConsistencyInstruction(cp, storyContext.artStyle || 'Comic Book') + '\n';
         });
-        promptText += '--- END CONSISTENCY REQUIREMENTS ---\n';
+        promptText += '---\n';
       }
 
-      promptText += `\n[FINAL VISUAL ANCHOR]: REMEMBER, THIS PROJECT IS A ${selectedGenre.toUpperCase()} COMIC IN ${storyContext.artStyle.toUpperCase()} STYLE. EVERY PIXEL MUST REFLECT THIS.`;
+      // Final anchor (shortened)
+      promptText += `\n[ANCHOR: ${selectedGenre.toUpperCase()} comic, ${storyContext.artStyle.toUpperCase()} style]`;
     }
 
-    // Previous page context
+    // STEP 7: Previous page context (text reference)
     if (prevImage && prevBeat) {
-      promptText += ` \n[SEQUENTIAL CONTEXT]: This panel follows the scene where: "${prevBeat.scene}". You MUST maintain continuity with the background, lighting, and character positions from the PREVIOUS PAGE VISUAL REFERENCE provided.`;
+      promptText += `\n[CONTINUITY]: Previous scene: "${prevBeat.scene}". Maintain background, lighting, positions.`;
     }
 
-    // Push prompt text first
+    // Push the post-image prompt text
     contents.push({ text: promptText });
-
-    // Push character references
-    if (useOnlySelectedRefs && extraRefImages && extraRefImages.length > 0) {
-      contents.push({ text: "\n=== SELECTED CHARACTER REFERENCES (Use ONLY these for this regeneration) ===" });
-      extraRefImages.forEach((ref, i) => {
-        contents.push({ text: `[PRIORITY: HIGH] SELECTED REFERENCE ${i + 1} - MATCH THIS EXACTLY:` });
-        contents.push(createInlineImage(ref));
-      });
-    } else {
-      pushCharacterReferences();
-      if (extraRefImages && extraRefImages.length > 0) {
-        extraRefImages.forEach((ref, i) => {
-          contents.push({ text: `[PRIORITY: MEDIUM] ADDITIONAL REF ${i + 1}:` });
-          contents.push(createInlineImage(ref));
-        });
-      }
-    }
-
-    // Current image to preserve
-    if (currentImageToPreserve) {
-      const preserveData = currentImageToPreserve.includes(',')
-        ? currentImageToPreserve.split(',')[1]
-        : currentImageToPreserve;
-      contents.push({ text: "\n=== CURRENT PANEL IMAGE (PRESERVE THIS SCENE) ===" });
-      contents.push({ text: "[CRITICAL] This is the CURRENT panel. Preserve the background, environment, lighting, and composition. Only modify what the regeneration mode specifies." });
-      contents.push(createInlineImage(preserveData));
-    }
-
-    // Previous page visual context
-    if (prevImage && prevBeat) {
-      contents.push({ text: "CONTEXT: PREVIOUS PAGE VISUAL REFERENCE (PAGE BEFORE THIS ONE):" });
-      contents.push(createInlineImage(prevImage.split(',')[1] || prevImage));
-    }
 
     // Log contents summary
     const imageCount = contents.filter(c => 'inlineData' in c).length;

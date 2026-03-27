@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { ComicFace } from './types';
+import { downloadComicPages, ImageForDownload, formatFileSize } from './utils/downloadHelpers';
 
 interface GalleryModalProps {
     faces: ComicFace[];
@@ -8,12 +9,13 @@ interface GalleryModalProps {
     onReplaceImage?: (faceId: string, newImageUrl: string) => void;
     onGenerateCoverVariants?: () => void;
     onBatchRegenerate?: (faceIds: string[]) => void;
+    onBatchDownload?: (pageIndices: number[]) => void;
 }
 
 type SortOption = 'page-order' | 'generation-time';
 type FilterOption = 'all' | 'cover' | 'story' | 'back_cover';
 
-export const GalleryModal: React.FC<GalleryModalProps> = ({ faces, title, onClose, onReplaceImage, onGenerateCoverVariants, onBatchRegenerate }) => {
+export const GalleryModal: React.FC<GalleryModalProps> = ({ faces, title, onClose, onReplaceImage, onGenerateCoverVariants, onBatchRegenerate, onBatchDownload }) => {
     const validFaces = faces.filter(f => f.imageUrl && !f.isLoading);
 
     // State for selection and view modes
@@ -25,6 +27,8 @@ export const GalleryModal: React.FC<GalleryModalProps> = ({ faces, title, onClos
     // Multi-select state for batch operations
     const [multiSelectMode, setMultiSelectMode] = useState(false);
     const [selectedFaceIds, setSelectedFaceIds] = useState<Set<string>>(new Set());
+    const [isDownloading, setIsDownloading] = useState(false);
+    const [downloadStatus, setDownloadStatus] = useState<string | null>(null);
 
     // Sorting and filtering state
     const [sortBy, setSortBy] = useState<SortOption>('page-order');
@@ -321,6 +325,93 @@ export const GalleryModal: React.FC<GalleryModalProps> = ({ faces, title, onClos
         back_cover: validFaces.filter(f => f.type === 'back_cover').length,
     }), [validFaces]);
 
+    // Select All pages in current filter view
+    const handleSelectAll = useCallback(() => {
+        setSelectedFaceIds(new Set(sortedFaces.map(f => f.id)));
+    }, [sortedFaces]);
+
+    // Deselect all pages
+    const handleSelectNone = useCallback(() => {
+        setSelectedFaceIds(new Set());
+    }, []);
+
+    // Get page indices from selected face IDs
+    const getSelectedPageIndices = useCallback((): number[] => {
+        return sortedFaces
+            .filter(f => selectedFaceIds.has(f.id))
+            .map(f => f.pageIndex || 0);
+    }, [sortedFaces, selectedFaceIds]);
+
+    // Handle batch download of selected pages
+    const handleBatchDownload = useCallback(async () => {
+        if (selectedFaceIds.size === 0) return;
+
+        // If external handler is provided, use it
+        if (onBatchDownload) {
+            onBatchDownload(getSelectedPageIndices());
+            return;
+        }
+
+        // Otherwise, use internal download logic
+        setIsDownloading(true);
+        setDownloadStatus('Preparing download...');
+
+        try {
+            const selectedFacesArray = sortedFaces.filter(f => selectedFaceIds.has(f.id));
+            const safeTitle = (title || 'Comic').replace(/[^a-zA-Z0-9 -]/g, '').replace(/\s+/g, '-');
+
+            // Prepare images for download
+            const images: ImageForDownload[] = selectedFacesArray.map((face, idx) => {
+                const pName = face.type === 'cover'
+                    ? '00-Cover'
+                    : face.type === 'back_cover'
+                        ? '99-BackCover'
+                        : `Page-${String(face.pageIndex).padStart(2, '0')}`;
+                return {
+                    base64: face.imageUrl!,
+                    pageNumber: idx + 1,
+                    customName: `${safeTitle}-${pName}`,
+                };
+            });
+
+            setDownloadStatus(`Downloading ${images.length} page${images.length > 1 ? 's' : ''}...`);
+            const result = await downloadComicPages(images, safeTitle, { format: 'png' });
+
+            if (result.success) {
+                setDownloadStatus(`Downloaded ${result.fileCount} page${result.fileCount > 1 ? 's' : ''} (${formatFileSize(result.totalSize || 0)})`);
+                setTimeout(() => setDownloadStatus(null), 3000);
+            } else {
+                setDownloadStatus(`Error: ${result.error || 'Download failed'}`);
+                setTimeout(() => setDownloadStatus(null), 5000);
+            }
+        } catch (error) {
+            const message = error instanceof Error ? error.message : 'Unknown error';
+            setDownloadStatus(`Error: ${message}`);
+            setTimeout(() => setDownloadStatus(null), 5000);
+        } finally {
+            setIsDownloading(false);
+        }
+    }, [selectedFaceIds, sortedFaces, title, onBatchDownload, getSelectedPageIndices]);
+
+    // Handle batch regeneration
+    const handleBatchRegenerate = useCallback(() => {
+        if (selectedFaceIds.size === 0 || !onBatchRegenerate) return;
+        onBatchRegenerate(Array.from(selectedFaceIds));
+        setSelectedFaceIds(new Set());
+        setMultiSelectMode(false);
+    }, [selectedFaceIds, onBatchRegenerate]);
+
+    // Clear selection and exit selection mode
+    const handleClearSelection = useCallback(() => {
+        setSelectedFaceIds(new Set());
+    }, []);
+
+    // Exit selection mode
+    const exitSelectionMode = useCallback(() => {
+        setMultiSelectMode(false);
+        setSelectedFaceIds(new Set());
+    }, []);
+
     return (
         <div
             className="fixed inset-0 z-[500] flex flex-col items-center justify-start bg-black/95 backdrop-blur-md overflow-hidden"
@@ -387,7 +478,7 @@ export const GalleryModal: React.FC<GalleryModalProps> = ({ faces, title, onClos
                 </div>
 
                 <div className="flex gap-2 md:gap-4">
-                    {selectedFaceId && !expandedFaceId && (
+                    {selectedFaceId && !expandedFaceId && !multiSelectMode && (
                         <button
                             onClick={handleViewFullSize}
                             className="comic-btn bg-green-500 text-white px-3 md:px-6 py-2 border-[3px] border-black font-bold uppercase tracking-wider text-xs md:text-sm hover:bg-green-400 focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:ring-offset-2 focus:ring-offset-black"
@@ -396,7 +487,7 @@ export const GalleryModal: React.FC<GalleryModalProps> = ({ faces, title, onClos
                             View Full Size
                         </button>
                     )}
-                    {onGenerateCoverVariants && (
+                    {onGenerateCoverVariants && !multiSelectMode && (
                         <button
                             onClick={onGenerateCoverVariants}
                             className="comic-btn bg-purple-500 text-white px-3 md:px-6 py-2 border-[3px] border-black font-bold uppercase tracking-wider text-xs md:text-sm hover:bg-purple-400 focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:ring-offset-2 focus:ring-offset-black"
@@ -406,44 +497,31 @@ export const GalleryModal: React.FC<GalleryModalProps> = ({ faces, title, onClos
                             Cover Variants
                         </button>
                     )}
-                    {onBatchRegenerate && (
-                        <>
-                            <button
-                                onClick={() => {
-                                    setMultiSelectMode(!multiSelectMode);
-                                    if (multiSelectMode) {
-                                        setSelectedFaceIds(new Set());
-                                    }
-                                }}
-                                className={`comic-btn ${multiSelectMode ? 'bg-yellow-500' : 'bg-gray-600'} text-white px-3 md:px-6 py-2 border-[3px] border-black font-bold uppercase tracking-wider text-xs md:text-sm hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:ring-offset-2 focus:ring-offset-black`}
-                                aria-label={multiSelectMode ? 'Exit multi-select mode' : 'Enter multi-select mode'}
-                                aria-pressed={multiSelectMode}
-                                title="Select multiple pages for batch regeneration"
-                            >
-                                {multiSelectMode ? `Selected (${selectedFaceIds.size})` : 'Multi-Select'}
-                            </button>
-                            {selectedFaceIds.size > 0 && (
-                                <button
-                                    onClick={() => {
-                                        onBatchRegenerate(Array.from(selectedFaceIds));
-                                        setSelectedFaceIds(new Set());
-                                        setMultiSelectMode(false);
-                                    }}
-                                    className="comic-btn bg-orange-500 text-white px-3 md:px-6 py-2 border-[3px] border-black font-bold uppercase tracking-wider text-xs md:text-sm hover:bg-orange-400 focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:ring-offset-2 focus:ring-offset-black"
-                                    aria-label={`Regenerate ${selectedFaceIds.size} selected pages`}
-                                >
-                                    Regenerate ({selectedFaceIds.size})
-                                </button>
-                            )}
-                        </>
-                    )}
+                    {/* Multi-Select Toggle Button */}
                     <button
-                        onClick={downloadAll}
-                        className="comic-btn bg-blue-500 text-white px-3 md:px-6 py-2 border-[3px] border-black font-bold uppercase tracking-wider text-xs md:text-sm hover:bg-blue-400 focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:ring-offset-2 focus:ring-offset-black"
-                        aria-label="Download all images"
+                        onClick={() => {
+                            if (multiSelectMode) {
+                                exitSelectionMode();
+                            } else {
+                                setMultiSelectMode(true);
+                            }
+                        }}
+                        className={`comic-btn ${multiSelectMode ? 'bg-yellow-500 text-black' : 'bg-gray-600 text-white'} px-3 md:px-6 py-2 border-[3px] border-black font-bold uppercase tracking-wider text-xs md:text-sm hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:ring-offset-2 focus:ring-offset-black`}
+                        aria-label={multiSelectMode ? 'Exit selection mode' : 'Enter selection mode'}
+                        aria-pressed={multiSelectMode}
+                        title={multiSelectMode ? 'Exit batch selection mode' : 'Select multiple pages for batch operations'}
                     >
-                        Download All
+                        {multiSelectMode ? 'Exit Select' : 'Select Pages'}
                     </button>
+                    {!multiSelectMode && (
+                        <button
+                            onClick={downloadAll}
+                            className="comic-btn bg-blue-500 text-white px-3 md:px-6 py-2 border-[3px] border-black font-bold uppercase tracking-wider text-xs md:text-sm hover:bg-blue-400 focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:ring-offset-2 focus:ring-offset-black"
+                            aria-label="Download all images"
+                        >
+                            Download All
+                        </button>
+                    )}
                     <button
                         onClick={onClose}
                         className="comic-btn bg-red-600 text-white w-10 h-10 md:w-12 md:h-12 flex items-center justify-center font-bold text-xl md:text-2xl border-[3px] border-black hover:bg-red-500 focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:ring-offset-2 focus:ring-offset-black"
@@ -453,6 +531,81 @@ export const GalleryModal: React.FC<GalleryModalProps> = ({ faces, title, onClos
                     </button>
                 </div>
             </div>
+
+            {/* Batch Actions Bar - visible when in selection mode */}
+            {multiSelectMode && (
+                <div
+                    className="w-full bg-yellow-500 border-b-[4px] border-black px-4 md:px-6 py-3 flex flex-wrap gap-3 justify-between items-center shrink-0 shadow-[0_4px_0_rgba(0,0,0,0.5)] z-10"
+                    onClick={e => e.stopPropagation()}
+                >
+                    {/* Selection Counter and Quick Actions */}
+                    <div className="flex items-center gap-3">
+                        <span className="font-comic text-sm md:text-base font-bold text-black bg-white px-3 py-1 rounded-full border-2 border-black shadow-[2px_2px_0_rgba(0,0,0,1)]">
+                            {selectedFaceIds.size} page{selectedFaceIds.size !== 1 ? 's' : ''} selected
+                        </span>
+                        <button
+                            onClick={handleSelectAll}
+                            className="comic-btn bg-white text-black px-3 py-1 border-2 border-black font-bold uppercase tracking-wider text-xs hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-400 shadow-[2px_2px_0_rgba(0,0,0,1)]"
+                            aria-label="Select all pages"
+                            title={`Select all ${sortedFaces.length} pages in current view`}
+                        >
+                            Select All
+                        </button>
+                        <button
+                            onClick={handleSelectNone}
+                            className="comic-btn bg-white text-black px-3 py-1 border-2 border-black font-bold uppercase tracking-wider text-xs hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-400 shadow-[2px_2px_0_rgba(0,0,0,1)]"
+                            aria-label="Deselect all pages"
+                            disabled={selectedFaceIds.size === 0}
+                        >
+                            Select None
+                        </button>
+                    </div>
+
+                    {/* Batch Action Buttons */}
+                    <div className="flex items-center gap-2 md:gap-3">
+                        {/* Download Status */}
+                        {downloadStatus && (
+                            <span className="font-comic text-xs md:text-sm text-black bg-white/80 px-3 py-1 rounded border border-black">
+                                {downloadStatus}
+                            </span>
+                        )}
+
+                        {/* Download Selected Button */}
+                        <button
+                            onClick={handleBatchDownload}
+                            disabled={selectedFaceIds.size === 0 || isDownloading}
+                            className="comic-btn bg-blue-600 text-white px-3 md:px-5 py-2 border-[3px] border-black font-bold uppercase tracking-wider text-xs md:text-sm hover:bg-blue-500 focus:outline-none focus:ring-2 focus:ring-white disabled:opacity-50 disabled:cursor-not-allowed shadow-[3px_3px_0_rgba(0,0,0,1)]"
+                            aria-label={`Download ${selectedFaceIds.size} selected pages`}
+                            title="Download selected pages as a ZIP file"
+                        >
+                            {isDownloading ? 'Downloading...' : `Download (${selectedFaceIds.size})`}
+                        </button>
+
+                        {/* Regenerate Selected Button */}
+                        {onBatchRegenerate && (
+                            <button
+                                onClick={handleBatchRegenerate}
+                                disabled={selectedFaceIds.size === 0}
+                                className="comic-btn bg-orange-600 text-white px-3 md:px-5 py-2 border-[3px] border-black font-bold uppercase tracking-wider text-xs md:text-sm hover:bg-orange-500 focus:outline-none focus:ring-2 focus:ring-white disabled:opacity-50 disabled:cursor-not-allowed shadow-[3px_3px_0_rgba(0,0,0,1)]"
+                                aria-label={`Regenerate ${selectedFaceIds.size} selected pages`}
+                                title="Regenerate selected pages with AI"
+                            >
+                                Regenerate ({selectedFaceIds.size})
+                            </button>
+                        )}
+
+                        {/* Clear Selection Button */}
+                        <button
+                            onClick={handleClearSelection}
+                            disabled={selectedFaceIds.size === 0}
+                            className="comic-btn bg-gray-700 text-white px-3 md:px-5 py-2 border-[3px] border-black font-bold uppercase tracking-wider text-xs md:text-sm hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-white disabled:opacity-50 disabled:cursor-not-allowed shadow-[3px_3px_0_rgba(0,0,0,1)]"
+                            aria-label="Clear selection"
+                        >
+                            Clear
+                        </button>
+                    </div>
+                </div>
+            )}
 
             {/* Keyboard shortcuts hint */}
             {!expandedFaceId && sortedFaces.length > 0 && (

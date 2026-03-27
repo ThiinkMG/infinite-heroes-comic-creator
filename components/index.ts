@@ -67,3 +67,26 @@ export type { TutorialOverlayProps } from './TutorialOverlay';
 // Quick Start wizard
 export { QuickStartWizard } from './QuickStartWizard';
 export type { QuickStartWizardProps, QuickStartConfig } from './QuickStartWizard';
+
+// SFX components
+export { SFXOverlay, useSFXElements } from './SFXOverlay';
+export type { SFXOverlayProps } from './SFXOverlay';
+export { SFXEditor } from './SFXEditor';
+export type { SFXEditorProps, PlacedSFX } from './SFXEditor';
+
+// Speech bubble components
+export { BubbleOverlay, useSpeechBubbles, BubblePresets } from './BubbleOverlay';
+export type { default as BubbleOverlayComponent } from './BubbleOverlay';
+
+// Caption components
+export { CaptionOverlay, useCaptionBoxes, CaptionPresets, useCharacterCaptionColors } from './CaptionOverlay';
+export type { default as CaptionOverlayComponent } from './CaptionOverlay';
+
+// Relationship mapper
+export { RelationshipMapper, formatRelationshipsForPrompt, getCharacterRelationshipSummary } from './RelationshipMapper';
+export type {
+  RelationshipMapperProps,
+  RelationshipType,
+  CharacterRelationship,
+  RelationshipCharacter
+} from './RelationshipMapper';
