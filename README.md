@@ -154,7 +154,8 @@ cd infinite-heroes-comic-creator
 npm install
 
 # Create your environment file
-echo "GEMINI_API_KEY=your_api_key_here" > .env.local
+echo "GEMINI_API_KEY=your_gemini_key_here" > .env.local
+echo "ANTHROPIC_API_KEY=your_claude_key_here" >> .env.local  # Optional
 
 # Launch!
 npm run dev
@@ -171,9 +172,12 @@ This project deploys perfectly on [Vercel](https://vercel.com):
 1. Fork this repository
 2. Connect to Vercel
 3. Add environment variables:
-   - `GEMINI_API_KEY` — Your Google AI Studio key
+   - `GEMINI_API_KEY` — Your Google AI Studio key (required)
+   - `ANTHROPIC_API_KEY` — Your Claude API key (optional, enhances text quality)
    - `ADMIN_PASSWORD` — Optional admin access
 4. Deploy! 🚀
+
+> 💡 **Tip:** Claude enhances dialogue and story generation. Gemini handles all image generation.
 
 ---
 
