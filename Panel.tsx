@@ -35,11 +35,9 @@ export const Panel: React.FC<PanelProps> = ({ face, allFaces, storyContext, gene
 
     // In Novel Mode, only show decision overlay on the MOST RECENT unresolved decision page
     // This prevents multiple overlays from appearing on different pages simultaneously
-    const unresolvedDecisions = allFaces
-        .filter(f => f.isDecisionPage && !f.resolvedChoice && f.choices && f.choices.length > 0 && !f.isLoading);
-    const latestUnresolvedDecision = unresolvedDecisions.length > 0
-        ? Math.max(...unresolvedDecisions.map(f => f.pageIndex ?? -1))
-        : -1;
+    const latestUnresolvedDecision = allFaces
+        .filter(f => f.isDecisionPage && !f.resolvedChoice && f.choices && f.choices.length > 0 && !f.isLoading)
+        .reduce((max, f) => Math.max(max, f.pageIndex || 0), 0);
     const isLatestDecisionPage = face.pageIndex === latestUnresolvedDecision;
 
     return (
