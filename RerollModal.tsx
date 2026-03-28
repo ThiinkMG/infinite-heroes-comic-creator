@@ -7,7 +7,7 @@
  */
 
 import React, { useState, useRef, useEffect } from 'react';
-import { RegenerationMode, ShotType, BalloonShape, RerollOptions, CharacterProfile, Z_INDEX } from './types';
+import { RegenerationMode, ShotType, BalloonShape, RerollOptions, CharacterProfile } from './types';
 import {
     RegenerationModeSelector,
     ReferenceImageGallery,
@@ -289,7 +289,7 @@ export const RerollModal: React.FC<RerollModalProps> = ({
     };
 
     return (
-        <div className={`fixed inset-0 z-[${Z_INDEX.MODAL}] flex items-end sm:items-center justify-center bg-black/80 backdrop-blur-sm`} onClick={onClose} role="dialog" aria-modal="true" aria-labelledby="reroll-modal-title">
+        <div className="fixed inset-0 z-[500] flex items-end sm:items-center justify-center bg-black/80 backdrop-blur-sm" onClick={onClose} role="dialog" aria-modal="true" aria-labelledby="reroll-modal-title">
             <div
                 className="bg-white border-0 sm:border-[6px] border-black shadow-none sm:shadow-[8px_8px_0px_rgba(0,0,0,1)] max-w-[750px] w-full max-h-[100dvh] sm:max-h-[90vh] overflow-hidden m-0 sm:m-4 rounded-none sm:rounded-lg relative flex flex-col"
                 onClick={(e) => e.stopPropagation()}
