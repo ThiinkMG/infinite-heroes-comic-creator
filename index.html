@@ -119,6 +119,14 @@
         box-shadow: inset -25px 0 40px -20px rgba(0,0,0,0.6);
       }
 
+      /* Disable pointer events on hidden side to prevent click-through in 3D space */
+      .paper:not(.flipped) .back {
+        pointer-events: none;
+      }
+      .paper.flipped .front {
+        pointer-events: none;
+      }
+
       /* --- authentic GLOSS finish --- */
       .gloss {
         position: absolute;
