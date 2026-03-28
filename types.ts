@@ -8,6 +8,15 @@ import { ensureString } from './claudeHelpers';
 // Novel Mode batch size - now 1 for page-by-page interactive flow
 export const NOVEL_MODE_BATCH_SIZE = 1;
 
+// Z-Index Constants for consistent modal stacking
+export const Z_INDEX = {
+    OVERLAY: 400,
+    MODAL: 500,
+    MODAL_IMPORTANT: 600,
+    ALERT: 700,
+    LOADING: 800,
+} as const;
+
 // Core Configuration Factory
 export const getComicConfig = (storyLength: number, extraPages: number = 0, isNovelMode: boolean = false) => {
     // Decision pages: In Novel Mode, EVERY story page is a decision page
@@ -17,10 +26,14 @@ export const getComicConfig = (storyLength: number, extraPages: number = 0, isNo
             // Novel Mode: Every story page (1 to MAX_STORY_PAGES) is a decision page
             return Array.from({ length: pages }, (_, i) => i + 1);
         }
-        // Outline Mode: Fixed intervals
-        if (pages <= 3) return [2];                    // Quick Shot: 1 decision
-        if (pages <= 6) return [2, 4];                 // Short Story: 2 decisions
-        return [3, 5, 7];                              // Standard Issue: 3 decisions
+        // Outline Mode: Fixed intervals, filtered to valid range
+        let decisionPages: number[];
+        if (pages <= 3) decisionPages = [2];           // Quick Shot: 1 decision
+        else if (pages <= 6) decisionPages = [2, 4];   // Short Story: 2 decisions
+        else decisionPages = [3, 5, 7];                // Standard Issue: 3 decisions
+
+        // Filter out pages that exceed total page count
+        return decisionPages.filter(p => p <= pages);
     };
 
     return {

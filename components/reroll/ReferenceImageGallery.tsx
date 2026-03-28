@@ -55,14 +55,14 @@ export const ReferenceImageGallery: React.FC<ReferenceImageGalleryProps> = ({
                 <div className="flex gap-2 flex-wrap">
                     <button
                         onClick={onSelectAll}
-                        className="comic-btn bg-green-600 text-white text-xs sm:text-sm min-h-[44px] min-w-[44px] px-3 sm:px-4 py-2 border-[2px] border-black font-bold touch-manipulation"
+                        className="comic-btn bg-green-600 text-white text-xs sm:text-sm min-h-[48px] min-w-[48px] px-3 sm:px-4 py-2 border-[2px] border-black font-bold touch-manipulation"
                         aria-label="Select all reference images"
                     >
                         All
                     </button>
                     <button
                         onClick={onSelectNone}
-                        className="comic-btn bg-gray-500 text-white text-xs sm:text-sm min-h-[44px] min-w-[44px] px-3 sm:px-4 py-2 border-[2px] border-black font-bold touch-manipulation"
+                        className="comic-btn bg-gray-500 text-white text-xs sm:text-sm min-h-[48px] min-w-[48px] px-3 sm:px-4 py-2 border-[2px] border-black font-bold touch-manipulation"
                         aria-label="Deselect all reference images"
                     >
                         None

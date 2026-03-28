@@ -1,5 +1,5 @@
 import React, { useRef, useState } from 'react';
-import { CharacterProfile } from './types';
+import { CharacterProfile, Z_INDEX } from './types';
 import { validateProfileCompleteness } from './utils/profileValidation';
 import { ProfileQualityIndicator } from './components/ProfileQualityIndicator';
 
@@ -49,7 +49,7 @@ export const ProfilesDialog: React.FC<Props> = ({ profiles, onUpdate, onAnalyze,
         e.target.value = '';
     };
     return (
-        <div className="fixed inset-0 z-[500] bg-black/90 backdrop-blur-md flex items-center justify-center p-4">
+        <div className={`fixed inset-0 z-[${Z_INDEX.MODAL}] bg-black/90 backdrop-blur-md flex items-center justify-center p-4`}>
             <div className="max-w-[800px] w-full max-h-[90vh] bg-white border-[6px] border-black p-6 shadow-[12px_12px_0px_rgba(0,0,0,0.5)] flex flex-col">
                 <div className="flex justify-between items-end mb-4 border-b-4 border-black pb-2">
                     <div>

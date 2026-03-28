@@ -50,7 +50,7 @@ export const StorySettingsSection: React.FC<StorySettingsSectionProps> = ({
 }) => {
     return (
         <>
-            <div className="grid grid-cols-2 gap-2 mb-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-3">
                 <div>
                     <p className="font-comic text-xs mb-1 font-bold text-gray-800 uppercase">GENRE</p>
                     <select

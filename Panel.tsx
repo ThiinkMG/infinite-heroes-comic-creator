@@ -35,9 +35,11 @@ export const Panel: React.FC<PanelProps> = ({ face, allFaces, storyContext, gene
 
     // In Novel Mode, only show decision overlay on the MOST RECENT unresolved decision page
     // This prevents multiple overlays from appearing on different pages simultaneously
-    const latestUnresolvedDecision = allFaces
-        .filter(f => f.isDecisionPage && !f.resolvedChoice && f.choices && f.choices.length > 0 && !f.isLoading)
-        .reduce((max, f) => Math.max(max, f.pageIndex || 0), 0);
+    const unresolvedDecisions = allFaces
+        .filter(f => f.isDecisionPage && !f.resolvedChoice && f.choices && f.choices.length > 0 && !f.isLoading);
+    const latestUnresolvedDecision = unresolvedDecisions.length > 0
+        ? Math.max(...unresolvedDecisions.map(f => f.pageIndex ?? -1))
+        : -1;
     const isLatestDecisionPage = face.pageIndex === latestUnresolvedDecision;
 
     return (
@@ -68,7 +70,7 @@ export const Panel: React.FC<PanelProps> = ({ face, allFaces, storyContext, gene
                 return (
                     <div className="absolute inset-0 flex flex-col items-center justify-center bg-gray-900 text-white z-10">
                         <p className="font-comic text-2xl mb-2 text-red-400">⚠️ {msg.title.toUpperCase()}</p>
-                        <p className="font-comic text-sm text-gray-400 mb-2 max-w-xs text-center">{msg.desc}</p>
+                        <p className="font-comic text-sm text-gray-400 mb-2 max-w-[85vw] sm:max-w-xs text-center">{msg.desc}</p>
                         <p className="font-comic text-xs text-yellow-400 mb-4 max-w-xs text-center">💡 {msg.tip}</p>
                         <div className="flex flex-col gap-3 w-64">
                             {onQuickRetry && (
@@ -113,18 +115,11 @@ export const Panel: React.FC<PanelProps> = ({ face, allFaces, storyContext, gene
             
             {/* Target Reached Indicator - Novel Mode only */}
             {face.isDecisionPage && face.isExtraPage && !face.resolvedChoice && !generateFromOutline && (
-                <div className="absolute top-4 left-4 right-4 bg-purple-600/95 text-white px-4 py-3 rounded-lg z-30 flex flex-col sm:flex-row items-center justify-between gap-2 border-2 border-purple-400 shadow-lg">
+                <div className="absolute top-2 left-2 right-2 sm:top-4 sm:left-4 sm:right-4 bg-purple-600/95 text-white px-4 py-3 rounded-lg z-30 flex flex-col sm:flex-row items-center justify-between gap-2 border-2 border-purple-400 shadow-lg">
                     <span className="font-comic text-sm text-center sm:text-left">
                         🎯 Target length reached! Continue your adventure or wrap up?
                     </span>
                     <div className="flex gap-2">
-                        <button
-                            onClick={(e) => { e.stopPropagation(); /* continue normally via choices below */ }}
-                            className="px-3 py-1.5 bg-green-500 rounded text-xs font-bold hover:bg-green-400 border border-white/30 transition-colors"
-                            aria-label="Continue story"
-                        >
-                            Keep Going
-                        </button>
                         {onStopHere && (
                             <button
                                 onClick={(e) => { e.stopPropagation(); onStopHere(); }}

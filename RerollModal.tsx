@@ -7,7 +7,7 @@
  */
 
 import React, { useState, useRef, useEffect } from 'react';
-import { RegenerationMode, ShotType, BalloonShape, RerollOptions, CharacterProfile } from './types';
+import { RegenerationMode, ShotType, BalloonShape, RerollOptions, CharacterProfile, Z_INDEX } from './types';
 import {
     RegenerationModeSelector,
     ReferenceImageGallery,
@@ -289,9 +289,9 @@ export const RerollModal: React.FC<RerollModalProps> = ({
     };
 
     return (
-        <div className="fixed inset-0 z-[500] flex items-end sm:items-center justify-center bg-black/80 backdrop-blur-sm" onClick={onClose} role="dialog" aria-modal="true" aria-labelledby="reroll-modal-title">
+        <div className={`fixed inset-0 z-[${Z_INDEX.MODAL}] flex items-end sm:items-center justify-center bg-black/80 backdrop-blur-sm`} onClick={onClose} role="dialog" aria-modal="true" aria-labelledby="reroll-modal-title">
             <div
-                className="bg-white border-0 sm:border-[6px] border-black shadow-none sm:shadow-[8px_8px_0px_rgba(0,0,0,1)] max-w-[750px] w-full h-full sm:h-auto sm:max-h-[90vh] overflow-y-auto m-0 sm:m-4 rounded-none sm:rounded-lg relative flex flex-col"
+                className="bg-white border-0 sm:border-[6px] border-black shadow-none sm:shadow-[8px_8px_0px_rgba(0,0,0,1)] max-w-[750px] w-full max-h-[100dvh] sm:max-h-[90vh] overflow-hidden m-0 sm:m-4 rounded-none sm:rounded-lg relative flex flex-col"
                 onClick={(e) => e.stopPropagation()}
             >
                 {/* Header - sticky */}
@@ -303,7 +303,7 @@ export const RerollModal: React.FC<RerollModalProps> = ({
                         {/* Expert Mode Toggle (2.1.2) */}
                         <button
                             onClick={() => setExpertMode(!expertMode)}
-                            className={`comic-btn ${expertMode ? 'bg-purple-600' : 'bg-gray-500'} text-white min-w-[44px] min-h-[44px] px-2 sm:px-3 py-2 flex items-center justify-center gap-1 font-bold text-xs sm:text-sm border-[3px] border-black hover:opacity-90 touch-manipulation`}
+                            className={`comic-btn ${expertMode ? 'bg-purple-600' : 'bg-gray-500'} text-white min-w-[48px] min-h-[48px] px-2 sm:px-3 py-2 flex items-center justify-center gap-1 font-bold text-xs sm:text-sm border-[3px] border-black hover:opacity-90 touch-manipulation`}
                             title={expertMode ? "Switch to Simple mode" : "Switch to Expert mode"}
                             aria-pressed={expertMode}
                         >
@@ -314,7 +314,7 @@ export const RerollModal: React.FC<RerollModalProps> = ({
                         {pageHistory.length > 0 && (
                             <button
                                 onClick={() => setShowHistory(!showHistory)}
-                                className={`comic-btn ${showHistory ? 'bg-amber-600' : 'bg-amber-500'} text-white min-w-[44px] min-h-[44px] px-2 sm:px-3 py-2 flex items-center justify-center gap-1 font-bold text-xs sm:text-sm border-[3px] border-black hover:opacity-90 touch-manipulation relative`}
+                                className={`comic-btn ${showHistory ? 'bg-amber-600' : 'bg-amber-500'} text-white min-w-[48px] min-h-[48px] px-2 sm:px-3 py-2 flex items-center justify-center gap-1 font-bold text-xs sm:text-sm border-[3px] border-black hover:opacity-90 touch-manipulation relative`}
                                 title={`${pageHistory.length} previous attempts`}
                                 aria-label={showHistory ? "Hide history" : "Show history"}
                             >
@@ -328,7 +328,7 @@ export const RerollModal: React.FC<RerollModalProps> = ({
                         {/* Tips Toggle */}
                         <button
                             onClick={() => setShowTips(!showTips)}
-                            className={`comic-btn ${showTips ? 'bg-green-600' : 'bg-blue-600'} text-white min-w-[44px] min-h-[44px] px-2 sm:px-3 py-2 flex items-center justify-center gap-1 font-bold text-xs sm:text-sm border-[3px] border-black hover:opacity-90 touch-manipulation`}
+                            className={`comic-btn ${showTips ? 'bg-green-600' : 'bg-blue-600'} text-white min-w-[48px] min-h-[48px] px-2 sm:px-3 py-2 flex items-center justify-center gap-1 font-bold text-xs sm:text-sm border-[3px] border-black hover:opacity-90 touch-manipulation`}
                             title="Show regeneration tips"
                             aria-label={showTips ? "Hide tips" : "Show tips"}
                         >
@@ -337,7 +337,7 @@ export const RerollModal: React.FC<RerollModalProps> = ({
                         </button>
                         <button
                             onClick={onClose}
-                            className="comic-btn bg-red-600 text-white min-w-[44px] min-h-[44px] w-11 h-11 sm:w-10 sm:h-10 flex items-center justify-center font-bold text-xl border-[3px] border-black hover:bg-red-500 touch-manipulation"
+                            className="comic-btn bg-red-600 text-white min-w-[48px] min-h-[48px] w-11 h-11 sm:w-10 sm:h-10 flex items-center justify-center font-bold text-xl border-[3px] border-black hover:bg-red-500 touch-manipulation"
                             aria-label="Close reroll modal"
                         >✕</button>
                     </div>
@@ -458,7 +458,7 @@ export const RerollModal: React.FC<RerollModalProps> = ({
                     {/* 6. ADVANCED OPTIONS - Only visible in Expert Mode (2.1.2) */}
                     {expertMode && (
                         <details className="border-[3px] border-purple-400 bg-purple-50 group" open>
-                            <summary className="p-3 sm:p-4 cursor-pointer flex justify-between items-center list-none touch-manipulation min-h-[44px]">
+                            <summary className="p-3 sm:p-4 cursor-pointer flex justify-between items-center list-none touch-manipulation min-h-[48px]">
                                 <p className="font-comic text-sm sm:text-base font-bold uppercase text-purple-800">
                                     🔧 Expert Options
                                 </p>
@@ -512,7 +512,7 @@ export const RerollModal: React.FC<RerollModalProps> = ({
                     {/* 7. DEBUG INFO - Only visible in Expert Mode */}
                     {expertMode && (outline || originalPrompt) && (
                         <details className="border-[3px] border-black bg-gray-100 group">
-                            <summary className="p-3 sm:p-4 cursor-pointer flex justify-between items-center list-none touch-manipulation min-h-[44px]">
+                            <summary className="p-3 sm:p-4 cursor-pointer flex justify-between items-center list-none touch-manipulation min-h-[48px]">
                                 <p className="font-comic text-sm sm:text-base font-bold uppercase text-gray-600">
                                     🔍 Debug Info
                                 </p>

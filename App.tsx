@@ -32,7 +32,7 @@ import { useSettingsStore } from './stores/useSettingsStore';
 
 // --- Generation Hooks ---
 import { useGenerateBeat } from './hooks/useGenerateBeat';
-import { useGenerateImage } from './hooks/useGenerateImage';
+import { useGenerateImage, ComicOverrides } from './hooks/useGenerateImage';
 import { useGenerateProfile } from './hooks/useGenerateProfile';
 import { useGenerateOutline } from './hooks/useGenerateOutline';
 import { useExportImport } from './hooks/useExportImport';
@@ -179,7 +179,7 @@ const App: React.FC = () => {
       const strippedPayload = JSON.stringify({
         hero: stripStr(hero),
         friend: stripStr(friend),
-        additionalCharacters: additionalCharacters.map(c => stripStr(c)!)
+        additionalCharacters: additionalCharacters.map(c => stripStr(c)).filter((c): c is Persona => c !== null)
       });
 
       try {
@@ -665,13 +665,6 @@ const App: React.FC = () => {
       if (idx !== -1) historyRef.current[idx] = { ...historyRef.current[idx], ...updates };
   };
 
-  // Comic fundamentals overrides for reroll
-  interface ComicOverrides {
-      shotTypeOverride?: ShotType;
-      balloonShapeOverride?: BalloonShape;
-      applyFlashbackStyle?: boolean;
-  }
-
   const generateSinglePage = async (faceId: string, pageNum: number, type: ComicFace['type'], instruction?: string, extraRefImages?: string[], previousChoices?: string[], comicOverrides?: ComicOverrides, useOnlySelectedRefs?: boolean, currentImageToPreserve?: string) => {
       const isNovelMode = !generateFromOutline;
       const config = getComicConfig(storyContext.pageLength, extraPages, isNovelMode);
@@ -761,7 +754,17 @@ const App: React.FC = () => {
         );
       }
 
-      await Promise.all(variantPromises);
+      const results = await Promise.all(variantPromises);
+
+      // Track failure count for logging
+      const failedCount = results.filter(r => r === null || !r?.imageUrl).length;
+
+      if (failedCount === variantCount) {
+        console.error(`All ${variantCount} cover variants failed to generate`);
+        // Could show user notification here in future
+      } else if (failedCount > 0) {
+        console.warn(`${failedCount}/${variantCount} cover variants failed to generate`);
+      }
 
       if (variants.length > 0) {
         setCoverVariants(variants);
@@ -962,8 +965,7 @@ const App: React.FC = () => {
                     try {
                         const profile = await generateCharacterProfile(char);
                         finalProfiles.push(profile);
-                        // Save to store immediately for future use
-                        store.setCharacterProfile(char.id, profile);
+                        // Note: Profile will be saved via batch setAllProfiles() at the end
                     } catch (e) {
                         console.error(`Failed to generate profile for ${char.name}:`, e);
                         // Create a blank profile as fallback
@@ -977,7 +979,7 @@ const App: React.FC = () => {
                             distinguishingFeatures: ''
                         };
                         finalProfiles.push(blankProfile);
-                        store.setCharacterProfile(char.id, blankProfile);
+                        // Note: Profile will be saved via batch setAllProfiles() at the end
                     }
                 }
             }
@@ -1491,6 +1493,9 @@ Create a powerful, memorable conclusion that honors the user's story path.
                       isDecisionPage: currentFace?.isDecisionPage
                   });
               }
+          })
+          .catch((error) => {
+              console.error(`Reroll failed for page ${pageIndex}:`, error);
           })
           .finally(() => {
               // Restore original profiles after regeneration

@@ -691,7 +691,7 @@ export const WizardMode: React.FC<WizardModeProps> = ({
                         )}
                         <button
                             onClick={onClose}
-                            className="comic-btn bg-red-600 text-white min-w-[44px] min-h-[44px] w-11 h-11 flex items-center justify-center font-bold text-xl border-[3px] border-black hover:bg-red-500 touch-manipulation"
+                            className="comic-btn bg-red-600 text-white min-w-[48px] min-h-[48px] w-11 h-11 flex items-center justify-center font-bold text-xl border-[3px] border-black hover:bg-red-500 touch-manipulation"
                             aria-label="Close wizard"
                         >
                             ✕

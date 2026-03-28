@@ -612,7 +612,7 @@ export const SFXEditor: React.FC<SFXEditorProps> = ({
             )}
             <button
               onClick={handleCancel}
-              className="p-2 min-w-[44px] min-h-[44px] text-2xl text-gray-600 hover:text-gray-900 hover:bg-yellow-200 rounded transition-colors"
+              className="p-2 min-w-[48px] min-h-[48px] text-2xl text-gray-600 hover:text-gray-900 hover:bg-yellow-200 rounded transition-colors"
               aria-label="Close editor"
             >
               &times;

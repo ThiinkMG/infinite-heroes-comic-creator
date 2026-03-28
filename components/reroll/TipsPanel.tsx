@@ -16,7 +16,7 @@ export const TipsPanel: React.FC<TipsPanelProps> = ({ onClose }) => {
                 <h3 className="font-comic text-base sm:text-lg font-bold text-green-800 uppercase">💡 Tips</h3>
                 <button
                     onClick={onClose}
-                    className="text-gray-500 hover:text-black active:text-black text-xl min-w-[44px] min-h-[44px] flex items-center justify-center touch-manipulation -mr-2"
+                    className="text-gray-500 hover:text-black active:text-black text-xl min-w-[48px] min-h-[48px] flex items-center justify-center touch-manipulation -mr-2"
                     aria-label="Close tips panel"
                 >
                     ✕

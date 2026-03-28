@@ -4,6 +4,7 @@
 */
 
 import React, { useState } from 'react';
+import { Z_INDEX } from './types';
 
 // Page size presets in inches
 export const PAGE_SIZES = {
@@ -82,7 +83,7 @@ export const ExportDialog: React.FC<ExportDialogProps> = ({ onClose, onExport })
 
     return (
         <div className="fixed inset-0 z-[500] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
-            <div className="max-w-[480px] w-full bg-white border-[6px] border-black p-6 shadow-[12px_12px_0px_rgba(0,0,0,0.5)] rotate-1 max-h-[90vh] overflow-y-auto">
+            <div className="max-w-[480px] w-full bg-white border-[6px] border-black p-6 shadow-[6px_6px_0px_rgba(0,0,0,0.5)] sm:shadow-[12px_12px_0px_rgba(0,0,0,0.5)] rotate-0 sm:rotate-1 max-h-[90vh] overflow-y-auto">
                 <h2 className="font-comic text-3xl text-red-600 mb-4 uppercase tracking-tighter" style={{ textShadow: '2px 2px 0px rgba(0,0,0,0.1)' }}>Export Adventure</h2>
 
                 <p className="font-comic text-lg mb-6 text-gray-700">Choose your preferred format to save your comic book:</p>

@@ -163,7 +163,7 @@ export const ProfileDrawer: React.FC<ProfileDrawerProps> = ({
           </h2>
           <button
             onClick={handleCancel}
-            className="p-2 min-w-[44px] min-h-[44px] text-2xl text-gray-600 hover:text-gray-900 hover:bg-orange-200 rounded transition-colors touch-manipulation"
+            className="p-2 min-w-[48px] min-h-[48px] text-2xl text-gray-600 hover:text-gray-900 hover:bg-orange-200 rounded transition-colors touch-manipulation"
             aria-label="Close drawer"
           >
             &times;

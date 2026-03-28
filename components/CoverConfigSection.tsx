@@ -38,7 +38,7 @@ export const CoverConfigSection: React.FC<CoverConfigSectionProps> = ({
         <>
             <div className="font-comic text-xl text-black border-b-4 border-black mb-2 mt-2">3. COVER CONFIG</div>
 
-            <div className="grid grid-cols-2 gap-2 mb-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-3">
                 <div className="col-span-2">
                     <p className="font-comic text-xs mb-1 font-bold text-gray-800 uppercase">Series Title</p>
                     <input

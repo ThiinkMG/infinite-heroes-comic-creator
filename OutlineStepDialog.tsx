@@ -75,7 +75,7 @@ const PageCard: React.FC<{ plan: PageCharacterPlan }> = ({ plan }) => {
             </div>
 
             {/* Scene description */}
-            <p className="font-comic text-xs sm:text-sm text-gray-700 line-clamp-3 mb-2 leading-relaxed" title={plan.sceneDescription}>
+            <p className="font-comic text-[13px] sm:text-sm text-gray-700 line-clamp-3 mb-2 leading-relaxed" title={plan.sceneDescription}>
                 {plan.sceneDescription || 'No description'}
             </p>
 
