@@ -33,12 +33,18 @@ export const TutorialModal: React.FC<TutorialModalProps> = ({ show, onClose }) =
 
                 <h2 className="font-comic text-4xl text-blue-600 mb-6 uppercase tracking-tighter text-center">How To Use</h2>
 
-                <div className="space-y-3 font-comic text-sm md:text-base mb-6 max-h-[60vh] overflow-y-auto pr-2">
+                <div className="space-y-4 font-comic text-sm md:text-base mb-6 max-h-[60vh] overflow-y-auto pr-2">
                     <div className="flex gap-3 items-start">
                         <span className="bg-yellow-400 text-black px-2 py-1 font-bold border-2 border-black flex-shrink-0">1</span>
                         <div>
                             <p className="font-bold text-lg leading-tight uppercase">Build Your Cast</p>
-                            <p className="text-gray-700">Upload <strong>portraits</strong> (required) and <strong>reference images</strong> for your Hero and Co-Star. Add emblems, weapons, and detailed descriptions to help the AI maintain character consistency!</p>
+                            <p className="text-gray-700 mb-1">Upload <strong>portraits</strong> (required) for your Hero and Co-Star. Click the portrait to add more reference images.</p>
+                            <ul className="text-gray-600 text-xs list-disc list-inside space-y-0.5">
+                                <li><strong>Portrait:</strong> Clear face shot, front-facing works best</li>
+                                <li><strong>Emblem:</strong> Upload logo/symbol images (like Superman's S)</li>
+                                <li><strong>Weapon:</strong> Add weapon references for consistency</li>
+                                <li><strong>Backstory:</strong> Write detailed descriptions - the AI uses this!</li>
+                            </ul>
                         </div>
                     </div>
 
@@ -46,7 +52,13 @@ export const TutorialModal: React.FC<TutorialModalProps> = ({ show, onClose }) =
                         <span className="bg-yellow-400 text-black px-2 py-1 font-bold border-2 border-black flex-shrink-0">2</span>
                         <div>
                             <p className="font-bold text-lg leading-tight uppercase">Set The Scene</p>
-                            <p className="text-gray-700">Pick a <strong>genre</strong>, <strong>art style</strong>, and write a detailed premise. Upload scripts or backstory documents to give the AI rich context!</p>
+                            <p className="text-gray-700 mb-1">Configure your story settings - these affect every page generated.</p>
+                            <ul className="text-gray-600 text-xs list-disc list-inside space-y-0.5">
+                                <li><strong>Genre:</strong> Sets narrative tone (superhero, horror, romance, etc.)</li>
+                                <li><strong>Art Style:</strong> Visual style for all panels (manga, golden age, etc.)</li>
+                                <li><strong>Premise:</strong> Write a detailed setup - more detail = better story!</li>
+                                <li><strong>Page Length:</strong> Short (8-12), Standard (16-20), or Long (24-32)</li>
+                            </ul>
                         </div>
                     </div>
 
@@ -54,7 +66,12 @@ export const TutorialModal: React.FC<TutorialModalProps> = ({ show, onClose }) =
                         <span className="bg-yellow-400 text-black px-2 py-1 font-bold border-2 border-black flex-shrink-0">3</span>
                         <div>
                             <p className="font-bold text-lg leading-tight uppercase">Review Character Profiles</p>
-                            <p className="text-gray-700">After clicking Start, review and edit AI-generated visual profiles for each character. Edit face, clothing, emblem, mask, and weapon descriptions to ensure consistency!</p>
+                            <p className="text-gray-700 mb-1">After clicking Start, the AI analyzes your portraits and creates visual profiles.</p>
+                            <ul className="text-gray-600 text-xs list-disc list-inside space-y-0.5">
+                                <li><strong>Edit profiles</strong> if the AI gets features wrong (hair color, skin tone)</li>
+                                <li><strong>Hard Negatives:</strong> Add things to NEVER include (glasses, beard, etc.)</li>
+                                <li>Profiles are saved and reused - edit once, affects all pages!</li>
+                            </ul>
                         </div>
                     </div>
 
@@ -62,7 +79,12 @@ export const TutorialModal: React.FC<TutorialModalProps> = ({ show, onClose }) =
                         <span className="bg-yellow-400 text-black px-2 py-1 font-bold border-2 border-black flex-shrink-0">4</span>
                         <div>
                             <p className="font-bold text-lg leading-tight uppercase">Choose A Mode</p>
-                            <p className="text-gray-700"><strong>🎲 Novel Mode:</strong> Generates pages in batches, pauses for your narrative choices. Your decisions shape the story!<br/><strong>📖 Outline Mode:</strong> Generates a full story outline for review, then automates the entire comic.</p>
+                            <div className="bg-gradient-to-r from-purple-50 to-blue-50 p-2 rounded border border-purple-200 mb-1">
+                                <p className="text-purple-800 text-xs"><strong>🎲 Novel Mode:</strong> Interactive! Story pauses at key moments for YOU to make choices. Great for exploring "what if" scenarios. Pages generate in batches.</p>
+                            </div>
+                            <div className="bg-gradient-to-r from-amber-50 to-orange-50 p-2 rounded border border-amber-200">
+                                <p className="text-amber-800 text-xs"><strong>📖 Outline Mode:</strong> AI creates a full story outline first - you review and edit it before generation. Then the entire comic generates automatically. Best for planned stories.</p>
+                            </div>
                         </div>
                     </div>
 
@@ -70,7 +92,13 @@ export const TutorialModal: React.FC<TutorialModalProps> = ({ show, onClose }) =
                         <span className="bg-yellow-400 text-black px-2 py-1 font-bold border-2 border-black flex-shrink-0">5</span>
                         <div>
                             <p className="font-bold text-lg leading-tight uppercase">Reroll & Refine</p>
-                            <p className="text-gray-700">Not happy with a page? Use the <strong>reroll system</strong> to regenerate with custom instructions. Add <strong>negative prompts</strong> to exclude unwanted elements!</p>
+                            <p className="text-gray-700 mb-1">Click any page to open the <strong>Reroll panel</strong> and regenerate it.</p>
+                            <ul className="text-gray-600 text-xs list-disc list-inside space-y-0.5">
+                                <li><strong>Modes:</strong> Full Reroll, Characters Only, Outfit Only, Expression, Emblem, Weapon</li>
+                                <li><strong>Instructions:</strong> Tell the AI exactly what to change</li>
+                                <li><strong>AI Improve:</strong> One-click to enhance your instructions</li>
+                                <li><strong>History:</strong> Each page keeps 10 versions - revert anytime!</li>
+                            </ul>
                         </div>
                     </div>
 
@@ -78,18 +106,32 @@ export const TutorialModal: React.FC<TutorialModalProps> = ({ show, onClose }) =
                         <span className="bg-yellow-400 text-black px-2 py-1 font-bold border-2 border-black flex-shrink-0">6</span>
                         <div>
                             <p className="font-bold text-lg leading-tight uppercase">Read & Export</p>
-                            <p className="text-gray-700">Read your comic in the built-in reader with page-flip animations! Export as <strong>PDF</strong> or individual <strong>PNG/WEBP/JPEG</strong> images.</p>
+                            <p className="text-gray-700 mb-1">Your comic has a built-in reader with page-flip animations!</p>
+                            <ul className="text-gray-600 text-xs list-disc list-inside space-y-0.5">
+                                <li><strong>Gallery:</strong> View all pages, drag to reorder, replace with your own images</li>
+                                <li><strong>Export PDF:</strong> High-quality print-ready comic book</li>
+                                <li><strong>Export Images:</strong> Individual pages as PNG, WEBP, or JPEG</li>
+                                <li><strong>Save Draft:</strong> Download your work to continue later</li>
+                            </ul>
                         </div>
                     </div>
 
                     <div className="border-t-2 border-dashed border-gray-300 pt-3 mt-3">
-                        <p className="font-bold text-sm text-purple-700 uppercase">Pro Tips</p>
-                        <ul className="text-gray-600 text-xs space-y-1 mt-1 list-disc list-inside">
-                            <li>More reference images = better character consistency</li>
-                            <li>Upload emblem/logo images for iconic symbols (like Superman's S)</li>
-                            <li>Use the Gallery to replace individual pages with your own images</li>
-                            <li>Save your draft often - you can reload and continue later!</li>
-                        </ul>
+                        <p className="font-bold text-sm text-purple-700 uppercase mb-2">Pro Tips</p>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
+                            <div className="bg-purple-50 p-2 rounded border border-purple-200">
+                                <p className="text-purple-800"><strong>🎯 Consistency:</strong> More reference images = better character accuracy. Upload 2-3 angles of your character's face.</p>
+                            </div>
+                            <div className="bg-green-50 p-2 rounded border border-green-200">
+                                <p className="text-green-800"><strong>💾 Save Often:</strong> Click "Save Draft" before closing. Your presets, profiles, and pages are all saved!</p>
+                            </div>
+                            <div className="bg-blue-50 p-2 rounded border border-blue-200">
+                                <p className="text-blue-800"><strong>🖼️ Gallery Power:</strong> Drag pages to reorder. Click to replace with your own art. Mix AI + hand-drawn!</p>
+                            </div>
+                            <div className="bg-amber-50 p-2 rounded border border-amber-200">
+                                <p className="text-amber-800"><strong>⚡ Quick Fix:</strong> Wrong colors? Edit the character profile's "Hard Negatives" to ban unwanted features permanently.</p>
+                            </div>
+                        </div>
                     </div>
                 </div>
 

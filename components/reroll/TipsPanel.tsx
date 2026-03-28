@@ -23,91 +23,91 @@ export const TipsPanel: React.FC<TipsPanelProps> = ({ onClose }) => {
                 </button>
             </div>
 
-            {/* Mobile: Show only most important tips in accordion style */}
+            {/* How Reroll Works - Quick Start */}
             <div className="space-y-3 text-sm font-comic">
-                {/* Pro Tips - Most Important, shown first on mobile */}
-                <div className="bg-yellow-100 border-2 border-yellow-400 p-3 sm:p-4 rounded sm:order-last">
-                    <p className="font-bold text-yellow-800 mb-2 text-sm sm:text-base">⚡ Quick Tips</p>
+                <div className="bg-blue-100 border-2 border-blue-400 p-3 sm:p-4 rounded">
+                    <p className="font-bold text-blue-800 mb-2 text-sm sm:text-base">🚀 How Reroll Works</p>
+                    <ol className="list-decimal ml-4 text-blue-900 space-y-1 text-xs sm:text-sm">
+                        <li><strong>Write instructions</strong> describing what you want changed</li>
+                        <li><strong>Select a mode</strong> to focus on specific elements</li>
+                        <li><strong>Enable references</strong> for better character accuracy</li>
+                        <li>Click <strong>Regenerate</strong> and wait ~15 seconds</li>
+                    </ol>
+                </div>
+
+                {/* Pro Tips - Most Important */}
+                <div className="bg-yellow-100 border-2 border-yellow-400 p-3 sm:p-4 rounded">
+                    <p className="font-bold text-yellow-800 mb-2 text-sm sm:text-base">⚡ Pro Tips</p>
                     <ul className="list-disc ml-4 text-yellow-900 space-y-2 text-xs sm:text-sm">
-                        <li><strong>Combine modes</strong> for targeted fixes</li>
-                        <li><strong>Be specific</strong> in instructions</li>
-                        <li>Use <strong>AI Improve</strong> button</li>
-                        <li>Edit profiles if AI gets features wrong</li>
+                        <li><strong>Click "AI Improve"</strong> to auto-enhance your instructions</li>
+                        <li><strong>Combine modes:</strong> "Characters Only" + "Update Emblem" = fix emblem without changing background</li>
+                        <li><strong>Be specific:</strong> "shorter brown hair" works better than "fix hair"</li>
+                        <li><strong>Edit Hard Negatives</strong> in profiles to permanently exclude unwanted features</li>
                     </ul>
                 </div>
 
-                {/* Collapsible sections on mobile */}
-                <details className="bg-white border-2 border-green-300 rounded group">
+                {/* Common Fixes - Collapsible */}
+                <details className="bg-white border-2 border-green-300 rounded group" open>
                     <summary className="p-3 sm:p-4 cursor-pointer font-bold text-green-700 text-sm sm:text-base list-none flex justify-between items-center touch-manipulation min-h-[48px]">
-                        <span>🎭 Fix Characters (Keep Scene)</span>
+                        <span>🔧 Common Fixes</span>
                         <span className="group-open:rotate-180 transition-transform text-green-500">▼</span>
                     </summary>
-                    <ul className="list-disc ml-6 text-gray-700 space-y-2 px-3 sm:px-4 pb-3 sm:pb-4 text-xs sm:text-sm">
-                        <li>Select <strong>"Characters Only"</strong> mode</li>
-                        <li>Enable reference images</li>
-                        <li>Describe what's wrong in instructions</li>
-                    </ul>
-                </details>
-
-                <details className="bg-white border-2 border-amber-300 rounded group">
-                    <summary className="p-3 sm:p-4 cursor-pointer font-bold text-amber-700 text-sm sm:text-base list-none flex justify-between items-center touch-manipulation min-h-[48px]">
-                        <span>⭐ Fix Emblem / ⚔️ Weapon</span>
-                        <span className="group-open:rotate-180 transition-transform text-amber-500">▼</span>
-                    </summary>
-                    <ul className="list-disc ml-6 text-gray-700 space-y-2 px-3 sm:px-4 pb-3 sm:pb-4 text-xs sm:text-sm">
-                        <li>Select <strong>"Update Emblem"</strong> or <strong>"Update Weapon"</strong></li>
-                        <li>Upload reference image if needed</li>
-                        <li>Combine with "Characters Only" to keep background</li>
-                    </ul>
+                    <div className="px-3 sm:px-4 pb-3 sm:pb-4 text-xs sm:text-sm space-y-3">
+                        <div className="border-l-4 border-green-400 pl-3">
+                            <p className="font-bold text-gray-800">Wrong face/hair/skin tone?</p>
+                            <p className="text-gray-600">Mode: <strong>Characters Only</strong> + Enable all references + Instruction: "Match the hero's face exactly from reference"</p>
+                        </div>
+                        <div className="border-l-4 border-amber-400 pl-3">
+                            <p className="font-bold text-gray-800">Emblem missing or wrong?</p>
+                            <p className="text-gray-600">Mode: <strong>Update Emblem</strong> + Upload emblem reference + Instruction: "Add [emblem name] on chest"</p>
+                        </div>
+                        <div className="border-l-4 border-purple-400 pl-3">
+                            <p className="font-bold text-gray-800">Wrong outfit/costume?</p>
+                            <p className="text-gray-600">Mode: <strong>Outfit Only</strong> + Instruction: "Change to [describe outfit], no cape" (use negatives!)</p>
+                        </div>
+                        <div className="border-l-4 border-blue-400 pl-3">
+                            <p className="font-bold text-gray-800">Bad composition/pose?</p>
+                            <p className="text-gray-600">Mode: <strong>Full Reroll</strong> + Use Camera Shot Override (e.g., "medium shot", "wide establishing shot")</p>
+                        </div>
+                    </div>
                 </details>
 
                 <details className="bg-white border-2 border-purple-300 rounded group">
                     <summary className="p-3 sm:p-4 cursor-pointer font-bold text-purple-700 text-sm sm:text-base list-none flex justify-between items-center touch-manipulation min-h-[48px]">
-                        <span>👕 Change Outfit</span>
+                        <span>🎛️ Expert Mode Features</span>
                         <span className="group-open:rotate-180 transition-transform text-purple-500">▼</span>
                     </summary>
-                    <ul className="list-disc ml-6 text-gray-700 space-y-2 px-3 sm:px-4 pb-3 sm:pb-4 text-xs sm:text-sm">
-                        <li>Select <strong>"Outfit Only"</strong> mode</li>
-                        <li>Describe the change</li>
-                        <li>Use negative prompt: "no cape, no mask"</li>
-                    </ul>
+                    <div className="px-3 sm:px-4 pb-3 sm:pb-4 text-xs sm:text-sm space-y-2">
+                        <p className="text-gray-700"><strong>Camera Shot Override:</strong> Force specific framing - "extreme close-up", "over-the-shoulder shot", "bird's eye view"</p>
+                        <p className="text-gray-700"><strong>Negative Prompts:</strong> Add things to avoid - "no beard, no glasses, no background characters"</p>
+                        <p className="text-gray-700"><strong>Style Override:</strong> Change art style for this panel only - "watercolor style", "noir with heavy shadows"</p>
+                        <p className="text-gray-700"><strong>Temperature:</strong> Higher = more creative/varied, Lower = more consistent/predictable</p>
+                    </div>
                 </details>
 
                 <details className="bg-white border-2 border-blue-300 rounded group">
                     <summary className="p-3 sm:p-4 cursor-pointer font-bold text-blue-700 text-sm sm:text-base list-none flex justify-between items-center touch-manipulation min-h-[48px]">
-                        <span>🖼️ Use Panels as References</span>
+                        <span>🖼️ Reference Images</span>
                         <span className="group-open:rotate-180 transition-transform text-blue-500">▼</span>
                     </summary>
-                    <ul className="list-disc ml-6 text-gray-700 space-y-2 px-3 sm:px-4 pb-3 sm:pb-4 text-xs sm:text-sm">
-                        <li>Download a good panel and upload as reference</li>
-                        <li>Helps maintain consistent poses & lighting</li>
-                        <li>Great for keeping scene composition</li>
-                    </ul>
-                </details>
-
-                <details className="bg-white border-2 border-pink-300 rounded group">
-                    <summary className="p-3 sm:p-4 cursor-pointer font-bold text-pink-700 text-sm sm:text-base list-none flex justify-between items-center touch-manipulation min-h-[48px]">
-                        <span>😊 Change Expression</span>
-                        <span className="group-open:rotate-180 transition-transform text-pink-500">▼</span>
-                    </summary>
-                    <ul className="list-disc ml-6 text-gray-700 space-y-2 px-3 sm:px-4 pb-3 sm:pb-4 text-xs sm:text-sm">
-                        <li>Select <strong>"Expression Only"</strong> mode</li>
-                        <li>Describe the emotion clearly</li>
-                        <li>Best for subtle changes</li>
-                    </ul>
+                    <div className="px-3 sm:px-4 pb-3 sm:pb-4 text-xs sm:text-sm space-y-2">
+                        <p className="text-gray-700"><strong>Portrait:</strong> Always enable for face consistency. More portraits = better accuracy.</p>
+                        <p className="text-gray-700"><strong>Emblem/Logo:</strong> Upload clear, isolated emblem images for iconic symbols.</p>
+                        <p className="text-gray-700"><strong>Weapon:</strong> Reference images help maintain weapon design across panels.</p>
+                        <p className="text-gray-700"><strong>Good panel as reference:</strong> Download a panel you like and upload it to maintain style/composition.</p>
+                    </div>
                 </details>
 
                 <details className="bg-white border-2 border-gray-300 rounded group">
                     <summary className="p-3 sm:p-4 cursor-pointer font-bold text-gray-700 text-sm sm:text-base list-none flex justify-between items-center touch-manipulation min-h-[48px]">
-                        <span>🎲 Full Reroll Tips</span>
+                        <span>📜 History & Undo</span>
                         <span className="group-open:rotate-180 transition-transform text-gray-500">▼</span>
                     </summary>
-                    <ul className="list-disc ml-6 text-gray-700 space-y-2 px-3 sm:px-4 pb-3 sm:pb-4 text-xs sm:text-sm">
-                        <li>Always enable reference images</li>
-                        <li>Use camera shot override</li>
-                        <li>Edit character profiles if needed</li>
-                        <li>Use negative prompts for unwanted elements</li>
-                    </ul>
+                    <div className="px-3 sm:px-4 pb-3 sm:pb-4 text-xs sm:text-sm space-y-2">
+                        <p className="text-gray-700">Each page keeps up to <strong>10 previous versions</strong>. Click any thumbnail in History to revert.</p>
+                        <p className="text-gray-700">History shows what instructions were used for each version - learn what works!</p>
+                        <p className="text-gray-700">Use <strong>"Clear History"</strong> to free memory if needed.</p>
+                    </div>
                 </details>
             </div>
         </div>

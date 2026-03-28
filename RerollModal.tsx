@@ -193,6 +193,14 @@ export const RerollModal: React.FC<RerollModalProps> = ({
     };
 
     const handlePresetSelect = (preset: QuickPreset) => {
+        // Toggle off if clicking the same preset
+        if (selectedPresetId === preset.id) {
+            setSelectedPresetId(undefined);
+            setRegenerationModes(new Set(['full'])); // Reset to default
+            setInstruction(''); // Clear preset instruction
+            return;
+        }
+
         setSelectedPresetId(preset.id);
         // Apply preset's regeneration modes
         setRegenerationModes(new Set(preset.modes));
