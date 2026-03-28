@@ -175,9 +175,12 @@ export const useRerollHistoryStore = create<RerollHistoryStore>()((set, get) => 
 // SELECTOR HOOKS (for optimized re-renders)
 // ============================================================================
 
+/** Stable empty array to avoid creating new references */
+const EMPTY_HISTORY: RerollHistoryEntry[] = [];
+
 /** Select history entries for a specific page */
 export const usePageHistory = (pageIndex: number) =>
-  useRerollHistoryStore((state) => state.historyByPage[pageIndex] ?? []);
+  useRerollHistoryStore((state) => state.historyByPage[pageIndex] ?? EMPTY_HISTORY);
 
 /** Select whether a page has any history */
 export const useHasPageHistory = (pageIndex: number) =>
