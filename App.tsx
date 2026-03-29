@@ -29,6 +29,12 @@ import { createImageContent, createTextContent, extractJsonFromResponse, getText
 import { useCharacterStore } from './stores/useCharacterStore';
 import { useComicStore } from './stores/useComicStore';
 import { useSettingsStore } from './stores/useSettingsStore';
+import { useSessionHistoryStore } from './stores/useSessionHistoryStore';
+
+// --- Feature imports ---
+import { GlobalGalleryModal } from './components/GlobalGalleryModal';
+import { SingleImageMode, SingleImageGenerateParams } from './SingleImageMode';
+import { galleryAdd, GalleryImage } from './hooks/useGalleryDB';
 
 // --- Generation Hooks ---
 import { useGenerateBeat } from './hooks/useGenerateBeat';
@@ -268,6 +274,38 @@ const App: React.FC = () => {
     useComicStore.getState().setComicFaces(comicFaces);
   }, [comicFaces]);
 
+  // --- Auto-save generated images to Global Gallery ---
+  const savedGalleryIdsRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    comicFaces.forEach(face => {
+      if (!face.imageUrl || !face.id || savedGalleryIdsRef.current.has(face.id)) return;
+      if (face.isLoading) return;
+      savedGalleryIdsRef.current.add(face.id);
+      const mode = generateFromOutlineRef.current ? 'outline' : 'novel';
+      saveToGlobalGallery(face.imageUrl, face.type as GalleryImage['type'], storyContext.title || 'Untitled', mode, face.narrative?.scene);
+    });
+  }, [comicFaces]);
+
+  // --- Auto-save session metadata when comic generation progresses ---
+  useEffect(() => {
+    if (!isStarted || comicFaces.length === 0) return;
+    const readyFaces = comicFaces.filter(f => f.imageUrl && !f.isLoading);
+    if (readyFaces.length === 0) return;
+    const thumbnail = readyFaces[0]?.imageUrl;
+    const mode = generateFromOutlineRef.current ? 'outline' : 'novel';
+    upsertSession({
+      id: sessionIdRef.current,
+      title: storyContext.title || 'Untitled',
+      mode,
+      genre: selectedGenre !== 'Custom' ? selectedGenre : undefined,
+      artStyle: storyContext.artStyle,
+      pageCount: readyFaces.length,
+      thumbnail: thumbnail ? thumbnail.slice(0, 200) + '...' : undefined, // tiny ref, not full data
+      createdAt: parseInt(sessionIdRef.current, 36),
+      updatedAt: Date.now()
+    });
+  }, [comicFaces, isStarted]);
+
   // --- Sync currentSheetIndex to Zustand store ---
   useEffect(() => {
     // Convert sheet index to page index (sheet 0 = cover, sheet 1 = pages 1-2, etc.)
@@ -316,6 +354,19 @@ const App: React.FC = () => {
   const [globalRerollPageInput, setGlobalRerollPageInput] = useState<string>('1');
   const [showPageNav, setShowPageNav] = useState(true);
   const [pageNavInput, setPageNavInput] = useState<string>('Cover');
+
+  // --- Feature C: Global Gallery ---
+  const [showGlobalGallery, setShowGlobalGallery] = useState(false);
+
+  // --- Feature D: Single Image Mode ---
+  const [showSingleImageMode, setShowSingleImageMode] = useState(false);
+
+  // --- Feature A: AI Surprise Me ---
+  const [isSurprisingMe, setIsSurprisingMe] = useState(false);
+
+  // --- Feature E: Session tracking ---
+  const sessionIdRef = useRef<string>(Date.now().toString(36));
+  const upsertSession = useSessionHistoryStore(s => s.upsert);
 
   useEffect(() => {
      if (currentSheetIndex === 0) {
@@ -2106,7 +2157,7 @@ Create a powerful, memorable conclusion that honors the user's story path.
     const title = `${randomAdjectives[Math.floor(Math.random()*randomAdjectives.length)]} ${randomNouns[Math.floor(Math.random()*randomNouns.length)]}`;
     const genre = GENRES[Math.floor(Math.random()*GENRES.length)];
     const style = ART_STYLES[Math.floor(Math.random()*ART_STYLES.length)];
-    
+
     setStoryContext(prev => ({
       ...prev,
       title: title,
@@ -2116,6 +2167,152 @@ Create a powerful, memorable conclusion that honors the user's story path.
     }));
     setSelectedGenre(genre);
     if(genre === 'Custom') setCustomPremise("A mysterious anomaly forces unusual heroes to team up.");
+  };
+
+  const handleAISurpriseMe = async (options: {
+    useCharContext: boolean;
+    selectedCharIds: string[];
+    useCurrentSettings: boolean;
+    extraInput: string;
+  }) => {
+    setIsSurprisingMe(true);
+    try {
+      const contextParts: string[] = [];
+
+      if (options.useCharContext && options.selectedCharIds.length > 0) {
+        const chars = [
+          hero ? { id: 'hero', name: hero.name, backstory: hero.backstoryText } : null,
+          friend ? { id: 'friend', name: friend.name, backstory: friend.backstoryText } : null,
+          ...additionalCharacters.map(c => ({ id: c.id, name: c.name, backstory: c.backstoryText }))
+        ].filter(Boolean) as any[];
+        chars
+          .filter((c: any) => options.selectedCharIds.includes(c.id))
+          .forEach((c: any) => {
+            if (c.name) contextParts.push(`Character: ${c.name}${c.backstory ? `\nBackstory: ${c.backstory}` : ''}`);
+          });
+      }
+
+      if (options.extraInput.trim()) {
+        contextParts.push(`User direction: ${options.extraInput.trim()}`);
+      }
+
+      const nonCustomGenres = GENRES.filter(g => g !== 'Custom');
+      const genreConstraint = options.useCurrentSettings
+        ? `Genre must be exactly: "${selectedGenre}"`
+        : `Choose one genre from this list: ${nonCustomGenres.join(', ')}`;
+      const styleConstraint = options.useCurrentSettings
+        ? `Art style must be exactly: "${storyContext.artStyle}"`
+        : `Choose one art style from this list: ${ART_STYLES.join(', ')}`;
+
+      const systemPrompt = `You are a creative comic book writer. Generate a fresh, original comic story concept. Respond with ONLY valid JSON in this exact format:
+{"title":"Story title (2-5 punchy words)","description":"Story description (2-3 vivid, visual sentences)","genre":"<genre from list>","artStyle":"<artStyle from list>"}`;
+      const userPrompt = [
+        contextParts.length > 0 ? `CONTEXT:\n${contextParts.join('\n\n')}` : '',
+        genreConstraint,
+        styleConstraint,
+        'Create an exciting, visually compelling comic concept. Title should be memorable and punchy.'
+      ].filter(Boolean).join('\n\n');
+
+      const claude = getClaude();
+      let responseText = '';
+
+      if (claude) {
+        const response = await claude.messages.create({
+          model: MODEL_TEXT_NAME_CLAUDE,
+          max_tokens: 512,
+          system: systemPrompt,
+          messages: [{ role: 'user', content: userPrompt }]
+        });
+        responseText = getTextFromClaudeResponse(response.content).trim();
+      } else {
+        const ai = getAI();
+        const result = await ai.models.generateContent({
+          model: MODEL_TEXT_NAME,
+          contents: [{ role: 'user', parts: [{ text: `${systemPrompt}\n\n${userPrompt}` }] }]
+        });
+        responseText = result.text?.trim() || '';
+      }
+
+      let parsed: any = null;
+      try { parsed = JSON.parse(extractJsonFromResponse(responseText)); } catch { /* ignored */ }
+      if (parsed && parsed.title) {
+        const title = String(parsed.title);
+        const description = String(parsed.description || '');
+        const genre = nonCustomGenres.includes(parsed.genre) ? parsed.genre : (options.useCurrentSettings ? selectedGenre : nonCustomGenres[0]);
+        const artStyle = ART_STYLES.includes(parsed.artStyle) ? parsed.artStyle : (options.useCurrentSettings ? storyContext.artStyle : ART_STYLES[0]);
+
+        setStoryContext(prev => ({
+          ...prev,
+          title,
+          seriesTitle: title.toUpperCase(),
+          artStyle,
+          descriptionText: description
+        }));
+        setSelectedGenre(genre);
+      }
+    } catch (e) {
+      console.error('AI Surprise Me failed:', e);
+      handleSurpriseMe(); // fallback to static
+    } finally {
+      setIsSurprisingMe(false);
+    }
+  };
+
+  // Helper: save a generated image to the global gallery
+  const saveToGlobalGallery = async (
+    imageUrl: string,
+    type: GalleryImage['type'],
+    sessionTitle: string,
+    mode?: GalleryImage['mode'],
+    prompt?: string
+  ) => {
+    try {
+      await galleryAdd({
+        id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+        imageUrl,
+        type,
+        title: sessionTitle || storyContext.title || 'Untitled',
+        genre: selectedGenre !== 'Custom' ? selectedGenre : undefined,
+        artStyle: storyContext.artStyle,
+        mode,
+        prompt,
+        sessionId: sessionIdRef.current,
+        createdAt: Date.now()
+      });
+    } catch (e) {
+      console.error('Gallery save failed (non-critical):', e);
+    }
+  };
+
+  // Feature D: Single image generation handler
+  const handleSingleImageGenerate = async (params: SingleImageGenerateParams): Promise<string> => {
+    const ai = getAI();
+
+    const tabPrompts: Record<string, string> = {
+      main: `Create a high-quality comic book ${params.genre ? `${params.genre} ` : ''}character or scene illustration in ${params.artStyle} style. ${params.description}`,
+      emblem: `Create a detailed emblem/logo design for a comic book character in ${params.artStyle} style. ${params.description}. Clean isolated design on transparent/white background.`,
+      weapon: `Create a detailed weapon or equipment asset for a comic book in ${params.artStyle} style. ${params.description}. Clean isolated design on white background, showing the full weapon clearly.`,
+      reference: `Create a character reference sheet in ${params.artStyle} style, ${params.pose || 'front view'}.${params.whiteBackground ? ' Solid white background.' : ''} ${params.description}. Full body visible, clear lighting.`
+    };
+
+    const prompt = tabPrompts[params.tab] || params.description;
+    const result = await ai.models.generateImages({
+      model: MODEL_IMAGE_GEN_NAME,
+      prompt,
+      config: { numberOfImages: 1, outputMimeType: 'image/png' }
+    });
+
+    const imgData = result.generatedImages?.[0]?.image?.imageBytes;
+    if (!imgData) throw new Error('No image data returned');
+    const imageUrl = `data:image/png;base64,${imgData}`;
+    return imageUrl;
+  };
+
+  const handleSingleImageSaveToGallery = (imageUrl: string, params: SingleImageGenerateParams) => {
+    const typeMap: Record<string, GalleryImage['type']> = {
+      main: 'main', emblem: 'emblem', weapon: 'weapon', reference: 'reference'
+    };
+    saveToGlobalGallery(imageUrl, typeMap[params.tab] || 'main', params.description.slice(0, 60), 'single', params.description);
   };
 
   // Pan/Zoom State
@@ -2229,6 +2426,17 @@ Create a powerful, memorable conclusion that honors the user's story path.
         </div>
       )}
 
+      {/* Global Gallery Button — floating, always accessible */}
+      <button
+          onClick={() => setShowGlobalGallery(true)}
+          className={`fixed z-[249] items-center justify-center border-[3px] border-black rounded-full bg-white/90 hover:bg-white shadow-[3px_3px_0px_rgba(0,0,0,1)] hover:shadow-[5px_5px_0px_rgba(0,0,0,1)] hover:-translate-y-0.5 transition-all cursor-pointer touch-manipulation
+              ${showSetup ? 'hidden md:flex w-12 h-12 bottom-20 left-20' : 'flex w-10 h-10 top-3 right-14 md:w-12 md:h-12 md:top-auto md:right-auto md:bottom-20 md:left-20'}`}
+          title="Global Image Gallery"
+          aria-label="Open global gallery"
+      >
+          <span className={showSetup ? 'text-2xl' : 'text-xl md:text-2xl'}>🖼️</span>
+      </button>
+
       {/* Settings Gear — always visible on desktop; hidden on mobile only when setup screen is showing
           (mobile/tablet setup screen has its own in-card gear via Setup.tsx) */}
       <button
@@ -2249,6 +2457,20 @@ Create a powerful, memorable conclusion that honors the user's story path.
               adminPasswordHash={process.env.ADMIN_PASSWORD || ''}
               onClose={() => setShowSettings(false)}
               onKeyChange={handleSettingsKeyChange}
+          />
+      )}
+
+      {/* Global Image Gallery */}
+      {showGlobalGallery && (
+          <GlobalGalleryModal onClose={() => setShowGlobalGallery(false)} />
+      )}
+
+      {/* Single Image Mode */}
+      {showSingleImageMode && (
+          <SingleImageMode
+              onClose={() => setShowSingleImageMode(false)}
+              onGenerate={handleSingleImageGenerate}
+              onSaveToGallery={handleSingleImageSaveToGallery}
           />
       )}
       
@@ -2289,6 +2511,9 @@ Create a powerful, memorable conclusion that honors the user's story path.
           onRichModeChange={setRichMode}
           onLaunch={handleStartAdventure}
           onSurpriseMe={handleSurpriseMe}
+          onAISurpriseMe={handleAISurpriseMe}
+          isSurprisingMe={isSurprisingMe}
+          onOpenSingleImageMode={() => setShowSingleImageMode(true)}
           onExportDraft={exportDraft}
           onImportDraft={importDraft}
           onClearSetup={handleClearSetup}

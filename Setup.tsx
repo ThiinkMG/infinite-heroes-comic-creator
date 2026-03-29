@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { Persona, StoryContext } from './types';
+import { Persona, StoryContext, ART_STYLES, GENRES } from './types';
 import { ComicPreset } from './data/comicPresets';
 import {
     Tooltip,
@@ -20,6 +20,9 @@ import {
     CostEstimator
 } from './components';
 import { HelpTooltip } from './components/HelpTooltip';
+import { UndoRedoButtons } from './components/UndoRedoButtons';
+import { useUndoHistory } from './hooks/useUndoHistory';
+import { useSessionHistoryStore, SessionEntry } from './stores/useSessionHistoryStore';
 
 /**
  * Props for the Setup component.
@@ -61,6 +64,14 @@ interface SetupProps {
     onRichModeChange: (val: boolean) => void;
     onLaunch: () => void;
     onSurpriseMe: () => void;
+    onAISurpriseMe?: (options: {
+        useCharContext: boolean;
+        selectedCharIds: string[];
+        useCurrentSettings: boolean;
+        extraInput: string;
+    }) => Promise<void>;
+    isSurprisingMe?: boolean;
+    onOpenSingleImageMode?: () => void;
     onExportDraft: () => void;
     onImportDraft: (file: File) => void;
     onClearSetup: () => void;
@@ -115,6 +126,22 @@ export const Setup: React.FC<SetupProps> = (props) => {
     const [showExpandedStory, setShowExpandedStory] = useState(false);
     const [showSavePresetModal, setShowSavePresetModal] = useState(false);
     const [customPresets, setCustomPresets] = useState<CustomPreset[]>(loadCustomPresets);
+
+    // AI Surprise Me options panel state
+    const [showSurprisePanel, setShowSurprisePanel] = useState(false);
+    const [surpriseUseCharContext, setSurpriseUseCharContext] = useState(true);
+    const [surpriseSelectedChars, setSurpriseSelectedChars] = useState<Set<string>>(new Set());
+    const [surpriseUseCurrentSettings, setSurpriseUseCurrentSettings] = useState(false);
+    const [surpriseExtraInput, setSurpriseExtraInput] = useState('');
+
+    // Undo/redo for story description (tracks pre-AI-improve states)
+    const storyDescHistory = useUndoHistory<string>(props.storyContext.descriptionText);
+
+    // Session history store for Feature E
+    const { sessions, remove: removeSession } = useSessionHistoryStore();
+    const [showSessionHistory, setShowSessionHistory] = useState(false);
+    const [sessionSortKey, setSessionSortKey] = useState<'date_desc' | 'date_asc' | 'mode'>('date_desc');
+    const [sessionFilterMode, setSessionFilterMode] = useState<'all' | 'novel' | 'outline' | 'single'>('all');
 
     // Responsive collapsible sections for mobile
     const [castExpanded, setCastExpanded] = useState(true);
@@ -221,18 +248,29 @@ export const Setup: React.FC<SetupProps> = (props) => {
                 }
             }
 
+            const original = props.storyContext.descriptionText;
             const improved = await props.onImproveText(
                 props.storyContext.descriptionText,
                 context || undefined,
                 'story_description'
             );
+            storyDescHistory.push(original); // save pre-improve state for undo
             props.onStoryContextUpdate({ descriptionText: improved });
         } catch (e) {
             console.error('Failed to improve story:', e);
-            console.error('Failed to improve text. Please try again.');
         } finally {
             setIsImprovingStory(false);
         }
+    };
+
+    const handleUndoStoryDesc = () => {
+        const prev = storyDescHistory.undo();
+        if (prev !== null) props.onStoryContextUpdate({ descriptionText: prev });
+    };
+
+    const handleRedoStoryDesc = () => {
+        const next = storyDescHistory.redo();
+        if (next !== null) props.onStoryContextUpdate({ descriptionText: next });
     };
 
     const toggleContextChar = (id: string) => {
@@ -243,6 +281,38 @@ export const Setup: React.FC<SetupProps> = (props) => {
             return next;
         });
     };
+
+    const toggleSurpriseChar = (id: string) => {
+        setSurpriseSelectedChars(prev => {
+            const next = new Set(prev);
+            if (next.has(id)) next.delete(id);
+            else next.add(id);
+            return next;
+        });
+    };
+
+    const handleAISurpriseMe = async () => {
+        if (!props.onAISurpriseMe) {
+            props.onSurpriseMe();
+            return;
+        }
+        setShowSurprisePanel(false);
+        await props.onAISurpriseMe({
+            useCharContext: surpriseUseCharContext,
+            selectedCharIds: Array.from(surpriseSelectedChars),
+            useCurrentSettings: surpriseUseCurrentSettings,
+            extraInput: surpriseExtraInput
+        });
+    };
+
+    // Sorted/filtered session history
+    const filteredSessions = sessions
+        .filter(s => sessionFilterMode === 'all' || s.mode === sessionFilterMode)
+        .sort((a, b) => {
+            if (sessionSortKey === 'date_desc') return b.updatedAt - a.updatedAt;
+            if (sessionSortKey === 'date_asc') return a.updatedAt - b.updatedAt;
+            return a.mode.localeCompare(b.mode);
+        });
 
     const handleSavePreset = (name: string, description: string) => {
         const newPreset: CustomPreset = {
@@ -456,12 +526,103 @@ export const Setup: React.FC<SetupProps> = (props) => {
                                 <span className="md:hidden text-gray-500">{storyExpanded ? '▼' : '▶'}</span>
                                 2. THE STORY
                             </span>
-                            <button
-                                onClick={(e) => { e.stopPropagation(); props.onSurpriseMe(); }}
-                                className="bg-yellow-400 text-black text-[10px] sm:text-xs px-2 py-1 sm:py-1.5 hover:bg-yellow-300 border-2 border-black flex items-center gap-1 font-bold touch-manipulation"
-                            >
-                                🎲 SURPRISE ME!
-                            </button>
+                            <div className="relative">
+                                <button
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        if (props.onAISurpriseMe) setShowSurprisePanel(!showSurprisePanel);
+                                        else props.onSurpriseMe();
+                                    }}
+                                    disabled={props.isSurprisingMe}
+                                    className="bg-yellow-400 text-black text-[10px] sm:text-xs px-2 py-1 sm:py-1.5 hover:bg-yellow-300 border-2 border-black flex items-center gap-1 font-bold touch-manipulation disabled:opacity-60"
+                                >
+                                    {props.isSurprisingMe ? '⏳ GENERATING...' : '🎲 SURPRISE ME!'}
+                                </button>
+
+                                {/* AI Surprise Me options panel */}
+                                {showSurprisePanel && !props.isSurprisingMe && (
+                                    <>
+                                        <div className="fixed inset-0 z-[49]" onClick={() => setShowSurprisePanel(false)} />
+                                        <div className="absolute right-0 top-full mt-1 bg-white border-2 border-black shadow-[4px_4px_0px_rgba(0,0,0,0.3)] z-50 w-64">
+                                            <div className="p-2 bg-yellow-400 border-b-2 border-black">
+                                                <p className="font-comic text-xs font-bold uppercase">✨ AI Story Generator</p>
+                                                <p className="font-comic text-[10px] text-yellow-900">AI will create title, story, genre &amp; art style</p>
+                                            </div>
+
+                                            {/* Use character context */}
+                                            <div className="p-2 border-b border-gray-200">
+                                                <label className="flex items-center gap-2 cursor-pointer mb-1">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={surpriseUseCharContext}
+                                                        onChange={e => { setSurpriseUseCharContext(e.target.checked); if (!e.target.checked) setSurpriseSelectedChars(new Set()); }}
+                                                        className="w-4 h-4 accent-yellow-600"
+                                                    />
+                                                    <span className="font-comic text-xs font-bold">Use Character Context</span>
+                                                </label>
+                                                {surpriseUseCharContext && allCharacters.length > 0 && (
+                                                    <div className="ml-5 max-h-20 overflow-y-auto">
+                                                        {allCharacters.map(c => (
+                                                            <label key={c.id} className="flex items-center gap-2 py-0.5 hover:bg-yellow-50 cursor-pointer">
+                                                                <input
+                                                                    type="checkbox"
+                                                                    checked={surpriseSelectedChars.has(c.id)}
+                                                                    onChange={() => toggleSurpriseChar(c.id)}
+                                                                    className="w-3 h-3 accent-yellow-600"
+                                                                />
+                                                                <span className="font-comic text-[10px] truncate">{c.name}</span>
+                                                            </label>
+                                                        ))}
+                                                    </div>
+                                                )}
+                                                {surpriseUseCharContext && allCharacters.length === 0 && (
+                                                    <p className="text-[10px] text-gray-400 ml-5 italic">No characters added yet</p>
+                                                )}
+                                            </div>
+
+                                            {/* Keep current settings */}
+                                            <div className="p-2 border-b border-gray-200">
+                                                <label className="flex items-center gap-2 cursor-pointer">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={surpriseUseCurrentSettings}
+                                                        onChange={e => setSurpriseUseCurrentSettings(e.target.checked)}
+                                                        className="w-4 h-4 accent-yellow-600"
+                                                    />
+                                                    <span className="font-comic text-xs font-bold">Keep Current Genre &amp; Style</span>
+                                                </label>
+                                            </div>
+
+                                            {/* Extra input */}
+                                            <div className="p-2 border-b border-gray-200">
+                                                <p className="font-comic text-[10px] text-gray-600 uppercase mb-1">Extra direction (optional):</p>
+                                                <textarea
+                                                    value={surpriseExtraInput}
+                                                    onChange={e => setSurpriseExtraInput(e.target.value)}
+                                                    placeholder="e.g. Make it a heist story set in space..."
+                                                    className="w-full p-1.5 border-2 border-black font-comic text-[10px] resize-none h-12"
+                                                    onClick={e => e.stopPropagation()}
+                                                />
+                                            </div>
+
+                                            <div className="p-2 flex gap-2">
+                                                <button
+                                                    onClick={handleAISurpriseMe}
+                                                    className="flex-1 comic-btn bg-yellow-500 text-black text-xs px-2 py-1.5 border-2 border-black hover:bg-yellow-400 font-bold"
+                                                >
+                                                    🎲 GENERATE
+                                                </button>
+                                                <button
+                                                    onClick={() => setShowSurprisePanel(false)}
+                                                    className="comic-btn bg-gray-400 text-white text-xs px-2 py-1.5 border-2 border-black hover:bg-gray-300"
+                                                >
+                                                    ✕
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </>
+                                )}
+                            </div>
                         </div>
 
                         <div
@@ -491,7 +652,18 @@ export const Setup: React.FC<SetupProps> = (props) => {
                                             position="right"
                                         />
                                     </p>
-                                    <div className="flex gap-1 self-end sm:self-auto">
+                                    <div className="flex gap-1 self-end sm:self-auto items-center">
+                                        {props.onImproveText && (storyDescHistory.canUndo || storyDescHistory.canRedo) && (
+                                            <UndoRedoButtons
+                                                onUndo={handleUndoStoryDesc}
+                                                onRedo={handleRedoStoryDesc}
+                                                canUndo={storyDescHistory.canUndo}
+                                                canRedo={storyDescHistory.canRedo}
+                                                undoDescription="Revert story description"
+                                                redoDescription="Redo story description"
+                                                size="small"
+                                            />
+                                        )}
                                         {props.onImproveText && (
                                             <div className="relative">
                                                 <button
@@ -733,6 +905,28 @@ export const Setup: React.FC<SetupProps> = (props) => {
                 </div>
 
 
+                {/* Extra Mode Buttons */}
+                {(props.onOpenSingleImageMode || sessions.length > 0) && (
+                    <div className="flex gap-2 mb-2 flex-wrap">
+                        {props.onOpenSingleImageMode && (
+                            <button
+                                onClick={props.onOpenSingleImageMode}
+                                className="comic-btn bg-green-600 text-white text-sm px-3 py-2 font-bold border-[3px] border-black hover:bg-green-500 uppercase touch-manipulation flex items-center gap-1"
+                            >
+                                🎨 Single Image Mode
+                            </button>
+                        )}
+                        {sessions.length > 0 && (
+                            <button
+                                onClick={() => setShowSessionHistory(true)}
+                                className="comic-btn bg-indigo-600 text-white text-sm px-3 py-2 font-bold border-[3px] border-black hover:bg-indigo-500 uppercase touch-manipulation flex items-center gap-1"
+                            >
+                                📋 Recent Sessions ({sessions.length})
+                            </button>
+                        )}
+                    </div>
+                )}
+
                 {/* Action Buttons */}
                 <ActionButtons
                     isTransitioning={props.isTransitioning}
@@ -762,6 +956,93 @@ export const Setup: React.FC<SetupProps> = (props) => {
               show={showTutorial}
               onClose={() => setShowTutorial(false)}
           />
+
+          {/* Session History Modal */}
+          {showSessionHistory && (
+              <div
+                  className="fixed inset-0 z-[600] bg-black/80 flex items-center justify-center p-4"
+                  onClick={() => setShowSessionHistory(false)}
+              >
+                  <div
+                      className="bg-white border-[6px] border-black max-w-xl w-full max-h-[80vh] flex flex-col shadow-[10px_10px_0px_rgba(0,0,0,0.5)]"
+                      onClick={e => e.stopPropagation()}
+                  >
+                      <div className="bg-indigo-600 p-4 flex items-center justify-between border-b-4 border-black">
+                          <h3 className="font-comic text-white text-xl font-bold uppercase">📋 Recent Sessions</h3>
+                          <button onClick={() => setShowSessionHistory(false)} className="text-white hover:text-gray-200 text-xl font-bold">✕</button>
+                      </div>
+
+                      {/* Controls */}
+                      <div className="flex gap-2 flex-wrap px-3 pt-2 pb-2 border-b-2 border-gray-200 bg-gray-50">
+                          <select
+                              value={sessionSortKey}
+                              onChange={e => setSessionSortKey(e.target.value as any)}
+                              className="border-2 border-black font-comic text-xs p-1"
+                          >
+                              <option value="date_desc">Newest first</option>
+                              <option value="date_asc">Oldest first</option>
+                              <option value="mode">By mode</option>
+                          </select>
+                          <select
+                              value={sessionFilterMode}
+                              onChange={e => setSessionFilterMode(e.target.value as any)}
+                              className="border-2 border-black font-comic text-xs p-1"
+                          >
+                              <option value="all">All modes</option>
+                              <option value="novel">Novel</option>
+                              <option value="outline">Outline</option>
+                              <option value="single">Single Image</option>
+                          </select>
+                          <span className="text-xs text-gray-400 font-comic ml-auto self-center">
+                              {filteredSessions.length} session{filteredSessions.length !== 1 ? 's' : ''}
+                          </span>
+                      </div>
+
+                      <div className="overflow-y-auto flex-1">
+                          {filteredSessions.length === 0 ? (
+                              <p className="text-center font-comic text-gray-400 p-8">No sessions found.</p>
+                          ) : (
+                              filteredSessions.map(session => (
+                                  <div key={session.id} className="flex items-center gap-3 p-3 border-b border-gray-200 hover:bg-gray-50">
+                                      {/* Thumbnail */}
+                                      {session.thumbnail ? (
+                                          <img src={session.thumbnail} alt="" className="w-10 h-14 object-cover border-2 border-gray-300 shrink-0" />
+                                      ) : (
+                                          <div className="w-10 h-14 bg-gray-200 border-2 border-gray-300 shrink-0 flex items-center justify-center text-gray-400 text-xs">📄</div>
+                                      )}
+                                      <div className="flex-1 min-w-0">
+                                          <p className="font-comic text-sm font-bold truncate">{session.title || 'Untitled'}</p>
+                                          <div className="flex items-center gap-2 flex-wrap">
+                                              <span className={`text-white text-[10px] px-1.5 py-0.5 font-comic font-bold ${session.mode === 'novel' ? 'bg-blue-600' : session.mode === 'outline' ? 'bg-purple-600' : 'bg-green-600'}`}>
+                                                  {session.mode}
+                                              </span>
+                                              {session.genre && <span className="text-[10px] text-gray-500 font-comic">{session.genre}</span>}
+                                              <span className="text-[10px] text-gray-400 font-comic">{session.pageCount} page{session.pageCount !== 1 ? 's' : ''}</span>
+                                          </div>
+                                          <p className="text-[10px] text-gray-400 font-comic">
+                                              {new Date(session.updatedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+                                          </p>
+                                      </div>
+                                      <button
+                                          onClick={() => removeSession(session.id)}
+                                          className="text-red-400 hover:text-red-600 text-sm font-bold shrink-0 p-1"
+                                          title="Delete session"
+                                          aria-label="Delete session"
+                                      >
+                                          🗑
+                                      </button>
+                                  </div>
+                              ))
+                          )}
+                      </div>
+
+                      <div className="p-3 border-t-2 border-gray-200 flex justify-between items-center">
+                          <p className="font-comic text-xs text-gray-500">Sessions are logged when you generate a comic. Load a draft file to restore full session state.</p>
+                          <button onClick={() => setShowSessionHistory(false)} className="comic-btn bg-gray-400 text-white text-sm px-3 py-1.5 border-2 border-black hover:bg-gray-300 font-bold">Close</button>
+                      </div>
+                  </div>
+              </div>
+          )}
         </div>
 
         {/* Footer is only visible when setup is active */}

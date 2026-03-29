@@ -3,6 +3,14 @@ import { CharacterProfile } from './types';
 import { validateProfileCompleteness } from './utils/profileValidation';
 import { ProfileQualityIndicator } from './components/ProfileQualityIndicator';
 
+// Bulk import match result
+interface BulkMatch {
+    uploadedProfile: CharacterProfile;
+    localIndex: number | null; // index in profiles[] if matched, null if unmatched
+    localName: string | null;
+    selected: boolean;
+}
+
 interface Props {
     profiles: CharacterProfile[];
     onUpdate: (index: number, updated: CharacterProfile) => void;
@@ -13,6 +21,9 @@ interface Props {
 
 export const ProfilesDialog: React.FC<Props> = ({ profiles, onUpdate, onAnalyze, onConfirm, onCancel }) => {
     const [analyzingIdx, setAnalyzingIdx] = useState<number | null>(null);
+    const [bulkMatches, setBulkMatches] = useState<BulkMatch[] | null>(null);
+    const [bulkError, setBulkError] = useState<string | null>(null);
+    const bulkFileRef = useRef<HTMLInputElement>(null);
     
     const handleDownloadIndividual = (profile: CharacterProfile) => {
         const data = JSON.stringify(profile, null, 2);
@@ -48,6 +59,64 @@ export const ProfilesDialog: React.FC<Props> = ({ profiles, onUpdate, onAnalyze,
         reader.readAsText(file);
         e.target.value = '';
     };
+    const handleBulkUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        setBulkError(null);
+        const reader = new FileReader();
+        reader.onload = () => {
+            try {
+                const parsed = JSON.parse(reader.result as string);
+                // Support both: { profiles: [...] } and raw array [...]
+                const uploaded: CharacterProfile[] = Array.isArray(parsed)
+                    ? parsed
+                    : Array.isArray(parsed.profiles)
+                        ? parsed.profiles
+                        : null;
+
+                if (!uploaded || uploaded.length === 0) {
+                    setBulkError('No profiles found in the uploaded file.');
+                    return;
+                }
+
+                // Try to match uploaded profiles to current profiles by name
+                const normalize = (n: string) => String(n || '').toLowerCase().trim();
+                const matches: BulkMatch[] = uploaded.map(up => {
+                    const localIdx = profiles.findIndex(p => normalize(p.name) === normalize(up.name));
+                    return {
+                        uploadedProfile: up,
+                        localIndex: localIdx >= 0 ? localIdx : null,
+                        localName: localIdx >= 0 ? profiles[localIdx].name : null,
+                        selected: localIdx >= 0 // auto-select matched ones
+                    };
+                });
+                setBulkMatches(matches);
+            } catch {
+                setBulkError('Invalid JSON file. Please upload a valid profiles export.');
+            }
+        };
+        reader.readAsText(file);
+        e.target.value = '';
+    };
+
+    const applyBulkImport = () => {
+        if (!bulkMatches) return;
+        bulkMatches.forEach(match => {
+            if (!match.selected) return;
+            if (match.localIndex !== null) {
+                // Matched: update existing profile, preserve id and name
+                onUpdate(match.localIndex, {
+                    ...profiles[match.localIndex],
+                    ...match.uploadedProfile,
+                    id: profiles[match.localIndex].id,
+                    name: profiles[match.localIndex].name
+                });
+            }
+            // Unmatched profiles (localIndex === null) cannot be applied since there's no target slot
+        });
+        setBulkMatches(null);
+    };
+
     return (
         <div className="fixed inset-0 z-[500] bg-black/90 backdrop-blur-md flex items-center justify-center p-4">
             <div className="max-w-[800px] w-full max-h-[90vh] bg-white border-[6px] border-black p-6 shadow-[12px_12px_0px_rgba(0,0,0,0.5)] flex flex-col">
@@ -56,29 +125,46 @@ export const ProfilesDialog: React.FC<Props> = ({ profiles, onUpdate, onAnalyze,
                         <h2 className="font-comic text-4xl text-purple-600 uppercase tracking-tighter">Character Profiles</h2>
                         <p className="font-comic text-sm text-gray-600 mt-1">Review and heavily edit the AI's understanding of your characters before generating!</p>
                     </div>
-                    <button
-                        onClick={() => {
-                            const exportData = {
-                                exportDate: new Date().toISOString(),
-                                profiles: profiles.map(p => ({
-                                    ...p,
-                                    // Exclude large base64 data if present
-                                    referenceImages: undefined
-                                }))
-                            };
-                            const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
-                            const url = URL.createObjectURL(blob);
-                            const a = document.createElement('a');
-                            a.href = url;
-                            a.download = `character-profiles-debug-${Date.now()}.json`;
-                            a.click();
-                            URL.revokeObjectURL(url);
-                        }}
-                        className="comic-btn bg-gray-700 text-white text-xs px-3 py-2 font-bold border-2 border-black hover:bg-gray-600 uppercase flex items-center gap-1 shrink-0"
-                        title="Export all profiles as JSON for debugging character consistency issues"
-                    >
-                        <span>Export All</span>
-                    </button>
+                    <div className="flex items-center gap-2">
+                        {/* Import All */}
+                        <label
+                            className="comic-btn bg-blue-600 text-white text-xs px-3 py-2 font-bold border-2 border-black hover:bg-blue-500 uppercase flex items-center gap-1 shrink-0 cursor-pointer"
+                            title="Import all profiles from a previously exported JSON file"
+                        >
+                            ⬆️ Import All
+                            <input
+                                ref={bulkFileRef}
+                                type="file"
+                                accept=".json,application/json"
+                                className="hidden"
+                                onChange={handleBulkUpload}
+                            />
+                        </label>
+
+                        {/* Export All */}
+                        <button
+                            onClick={() => {
+                                const exportData = {
+                                    exportDate: new Date().toISOString(),
+                                    profiles: profiles.map(p => ({
+                                        ...p,
+                                        referenceImages: undefined
+                                    }))
+                                };
+                                const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+                                const url = URL.createObjectURL(blob);
+                                const a = document.createElement('a');
+                                a.href = url;
+                                a.download = `character-profiles-debug-${Date.now()}.json`;
+                                a.click();
+                                URL.revokeObjectURL(url);
+                            }}
+                            className="comic-btn bg-gray-700 text-white text-xs px-3 py-2 font-bold border-2 border-black hover:bg-gray-600 uppercase flex items-center gap-1 shrink-0"
+                            title="Export all profiles as JSON"
+                        >
+                            <span>⬇️ Export All</span>
+                        </button>
+                    </div>
                 </div>
 
                 {profiles.some(p => validateProfileCompleteness(p).score < 50) && (
@@ -283,13 +369,13 @@ export const ProfilesDialog: React.FC<Props> = ({ profiles, onUpdate, onAnalyze,
                 </div>
 
                 <div className="mt-6 flex flex-col sm:flex-row gap-3">
-                    <button 
+                    <button
                         onClick={onCancel}
                         className="comic-btn bg-red-600 text-white px-6 py-3 font-bold border-[3px] border-black hover:bg-red-500 uppercase flex-none"
                     >
                         CANCEL
                     </button>
-                    <button 
+                    <button
                         onClick={onConfirm}
                         className="comic-btn flex-1 bg-green-600 text-white px-6 py-3 font-bold border-[3px] border-black hover:bg-green-500 uppercase text-xl"
                     >
@@ -297,6 +383,90 @@ export const ProfilesDialog: React.FC<Props> = ({ profiles, onUpdate, onAnalyze,
                     </button>
                 </div>
             </div>
+
+            {/* Bulk Import Selection Modal */}
+            {bulkMatches && (
+                <div className="fixed inset-0 z-[600] bg-black/80 flex items-center justify-center p-4">
+                    <div className="bg-white border-[6px] border-black max-w-lg w-full max-h-[80vh] flex flex-col shadow-[10px_10px_0px_rgba(0,0,0,0.5)]">
+                        <div className="bg-blue-600 border-b-4 border-black px-4 py-3 flex items-center justify-between">
+                            <div>
+                                <h3 className="font-comic text-white text-xl font-bold uppercase">Import Profiles</h3>
+                                <p className="font-comic text-blue-100 text-xs">Select which profiles to import. Matched profiles will overwrite existing data.</p>
+                            </div>
+                            <button onClick={() => setBulkMatches(null)} className="text-white hover:text-gray-200 text-xl font-bold ml-2">✕</button>
+                        </div>
+
+                        <div className="overflow-y-auto flex-1 p-4 space-y-3">
+                            {bulkMatches.map((match, idx) => (
+                                <div
+                                    key={idx}
+                                    className={`border-2 p-3 ${match.localIndex !== null ? 'border-green-400 bg-green-50' : 'border-orange-400 bg-orange-50'}`}
+                                >
+                                    <label className="flex items-start gap-3 cursor-pointer">
+                                        <input
+                                            type="checkbox"
+                                            checked={match.selected}
+                                            disabled={match.localIndex === null}
+                                            onChange={e => {
+                                                setBulkMatches(prev => prev!.map((m, i) =>
+                                                    i === idx ? { ...m, selected: e.target.checked } : m
+                                                ));
+                                            }}
+                                            className="w-5 h-5 mt-0.5 accent-blue-600 shrink-0"
+                                        />
+                                        <div className="flex-1 min-w-0">
+                                            <div className="flex items-center gap-2 flex-wrap">
+                                                <span className="font-comic text-sm font-bold">{match.uploadedProfile.name || 'Unnamed'}</span>
+                                                {match.localIndex !== null ? (
+                                                    <span className="text-[10px] font-comic bg-green-500 text-white px-1.5 py-0.5 rounded">
+                                                        ✓ Matches &ldquo;{match.localName}&rdquo;
+                                                    </span>
+                                                ) : (
+                                                    <span className="text-[10px] font-comic bg-orange-500 text-white px-1.5 py-0.5 rounded">
+                                                        ⚠ No matching character
+                                                    </span>
+                                                )}
+                                            </div>
+                                            {match.uploadedProfile.faceDescription && (
+                                                <p className="font-comic text-xs text-gray-500 mt-0.5 truncate">{match.uploadedProfile.faceDescription}</p>
+                                            )}
+                                            {match.localIndex === null && (
+                                                <p className="font-comic text-xs text-orange-600 mt-0.5">
+                                                    Cannot import — no character named &ldquo;{match.uploadedProfile.name}&rdquo; in the current session.
+                                                </p>
+                                            )}
+                                        </div>
+                                    </label>
+                                </div>
+                            ))}
+                        </div>
+
+                        <div className="border-t-2 border-gray-200 p-4 flex gap-3">
+                            <button
+                                onClick={applyBulkImport}
+                                disabled={!bulkMatches.some(m => m.selected && m.localIndex !== null)}
+                                className="flex-1 comic-btn bg-green-600 text-white px-4 py-2.5 font-bold border-[3px] border-black hover:bg-green-500 uppercase disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                ✓ Apply Selected ({bulkMatches.filter(m => m.selected && m.localIndex !== null).length})
+                            </button>
+                            <button
+                                onClick={() => setBulkMatches(null)}
+                                className="comic-btn bg-gray-400 text-white px-4 py-2.5 font-bold border-[3px] border-black hover:bg-gray-300"
+                            >
+                                Cancel
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Bulk upload error toast */}
+            {bulkError && (
+                <div className="fixed bottom-4 right-4 z-[700] bg-red-600 text-white font-comic text-sm px-4 py-3 border-2 border-black shadow-lg max-w-xs">
+                    ❌ {bulkError}
+                    <button onClick={() => setBulkError(null)} className="ml-2 font-bold hover:text-red-200">✕</button>
+                </div>
+            )}
         </div>
     );
 };

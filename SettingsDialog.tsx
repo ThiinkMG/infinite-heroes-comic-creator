@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { galleryDeleteAll } from './hooks/useGalleryDB';
 
 interface Props {
     serverKeyExists: boolean;
@@ -165,6 +166,25 @@ export const SettingsDialog: React.FC<Props> = ({ serverKeyExists, anthropicServ
         setTimeout(() => setSaveMsg(''), 2000);
     };
 
+    const [showResetConfirm, setShowResetConfirm] = useState(false);
+    const [isResetting, setIsResetting] = useState(false);
+
+    const handleResetApp = async () => {
+        setIsResetting(true);
+        try {
+            // Clear all localStorage keys
+            localStorage.clear();
+            // Clear IndexedDB gallery
+            await galleryDeleteAll();
+            // Reload the app cleanly
+            window.location.reload();
+        } catch (e) {
+            console.error('Reset failed:', e);
+            localStorage.clear();
+            window.location.reload();
+        }
+    };
+
     return (
         <div className="fixed inset-0 z-[600] bg-black/85 backdrop-blur-md flex items-center justify-center p-4" onClick={onClose}>
             <div 
@@ -312,12 +332,63 @@ export const SettingsDialog: React.FC<Props> = ({ serverKeyExists, anthropicServ
                         </div>
                     )}
 
+                    {/* Reset App */}
+                    <div className="border-[3px] border-red-400 bg-red-50 p-4">
+                        <p className="font-comic text-sm font-bold uppercase text-red-800 mb-1">🗑️ Reset App</p>
+                        <p className="font-comic text-xs text-gray-600 mb-3">
+                            Clears all saved data: API keys, characters, presets, session history, and the image gallery. The app will reload.
+                        </p>
+                        <button
+                            onClick={() => setShowResetConfirm(true)}
+                            className="comic-btn bg-red-600 text-white px-4 py-2 font-bold text-sm border-[2px] border-black hover:bg-red-500"
+                        >
+                            Reset Everything
+                        </button>
+                    </div>
+
                     {/* Feedback */}
                     {saveMsg && (
                         <p className="font-comic text-center text-sm font-bold animate-pulse">{saveMsg}</p>
                     )}
                 </div>
             </div>
+
+            {/* Reset confirmation modal */}
+            {showResetConfirm && (
+                <div className="fixed inset-0 z-[700] bg-black/80 flex items-center justify-center p-4">
+                    <div className="bg-white border-[6px] border-red-600 max-w-sm w-full p-6 text-center shadow-[8px_8px_0_rgba(0,0,0,0.5)]">
+                        <div className="text-5xl mb-3">⚠️</div>
+                        <h3 className="font-comic text-2xl font-bold text-red-700 mb-2 uppercase">Reset Everything?</h3>
+                        <p className="font-comic text-sm text-gray-700 mb-2">
+                            This will permanently delete:
+                        </p>
+                        <ul className="text-left font-comic text-xs text-gray-600 mb-4 space-y-1 list-disc list-inside">
+                            <li>All API keys</li>
+                            <li>All saved characters &amp; presets</li>
+                            <li>All session history</li>
+                            <li>The entire image gallery</li>
+                            <li>All app settings</li>
+                        </ul>
+                        <p className="font-comic text-sm font-bold text-red-700 mb-4">This cannot be undone.</p>
+                        <div className="flex gap-3 justify-center">
+                            <button
+                                onClick={handleResetApp}
+                                disabled={isResetting}
+                                className="comic-btn bg-red-600 text-white px-5 py-2.5 font-bold border-[3px] border-black hover:bg-red-500 disabled:opacity-60"
+                            >
+                                {isResetting ? 'Resetting...' : 'Yes, Reset Everything'}
+                            </button>
+                            <button
+                                onClick={() => setShowResetConfirm(false)}
+                                disabled={isResetting}
+                                className="comic-btn bg-gray-400 text-white px-5 py-2.5 font-bold border-[3px] border-black hover:bg-gray-300"
+                            >
+                                Cancel
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

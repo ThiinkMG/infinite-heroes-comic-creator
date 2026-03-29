@@ -8,6 +8,8 @@ import { CHARACTER_ROLES, CharacterRole, Persona, CharacterProfile, EMBLEM_PLACE
 import { Tooltip } from './Tooltip';
 import { HelpTooltip } from './HelpTooltip';
 import { useCharacterLibraryStore } from '../stores/useCharacterLibraryStore';
+import { useUndoHistory } from '../hooks/useUndoHistory';
+import { UndoRedoButtons } from './UndoRedoButtons';
 
 /**
  * Props for the CharacterCard component.
@@ -101,6 +103,9 @@ export const CharacterCard: React.FC<CharacterCardProps> = ({
     const [showContextDropdown, setShowContextDropdown] = useState(false);
     const [selectedContextChars, setSelectedContextChars] = useState<Set<string>>(new Set());
     const [extraContext, setExtraContext] = useState('');
+
+    // Undo/redo for backstory text (tracks pre-AI-improve states)
+    const backstoryHistory = useUndoHistory<string>(persona?.backstoryText || '');
     const [librarySaveStatus, setLibrarySaveStatus] = useState<'idle' | 'saved'>('idle');
     const [showPortraitOptions, setShowPortraitOptions] = useState(false);
     const [showEmblemOptions, setShowEmblemOptions] = useState(false);
@@ -151,13 +156,25 @@ export const CharacterCard: React.FC<CharacterCardProps> = ({
             }
             const context = contextParts.length > 0 ? contextParts.join('\n\n') : undefined;
 
+            const original = persona.backstoryText;
             const improved = await onImproveText(persona.backstoryText, context, 'backstory');
+            backstoryHistory.push(original); // save pre-improve state
             onUpdate({ backstoryText: improved });
         } catch (e) {
             console.error('Failed to improve backstory:', e);
         } finally {
             setIsImprovingBackstory(false);
         }
+    };
+
+    const handleUndoBackstory = () => {
+        const prev = backstoryHistory.undo();
+        if (prev !== null) onUpdate({ backstoryText: prev });
+    };
+
+    const handleRedoBackstory = () => {
+        const next = backstoryHistory.redo();
+        if (next !== null) onUpdate({ backstoryText: next });
     };
 
     return (
@@ -433,6 +450,17 @@ export const CharacterCard: React.FC<CharacterCardProps> = ({
                             <Tooltip text="Add character details, backstory, powers, personality, appearance notes, or any information to help the AI understand this character better." />
                         </p>
                         <div className="flex flex-col gap-1 shrink-0">
+                            {onImproveText && (backstoryHistory.canUndo || backstoryHistory.canRedo) && (
+                                <UndoRedoButtons
+                                    onUndo={handleUndoBackstory}
+                                    onRedo={handleRedoBackstory}
+                                    canUndo={backstoryHistory.canUndo}
+                                    canRedo={backstoryHistory.canRedo}
+                                    undoDescription="Revert backstory"
+                                    redoDescription="Redo backstory"
+                                    size="small"
+                                />
+                            )}
                             {onImproveText && (
                                 <div className="relative">
                                     <button
