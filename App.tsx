@@ -35,6 +35,8 @@ import { useSessionHistoryStore } from './stores/useSessionHistoryStore';
 import { GlobalGalleryModal } from './components/GlobalGalleryModal';
 import { SingleImageMode, SingleImageGenerateParams } from './SingleImageMode';
 import { galleryAdd, GalleryImage } from './hooks/useGalleryDB';
+import { TutorialModal } from './components/TutorialModal';
+import { TutorialPage } from './components/TutorialPage';
 
 // --- Generation Hooks ---
 import { useGenerateBeat } from './hooks/useGenerateBeat';
@@ -322,6 +324,8 @@ const App: React.FC = () => {
   const [showOutlineDialog, setShowOutlineDialog] = useState(false);
   const [showGallery, setShowGallery] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [showHelpModal, setShowHelpModal] = useState(false);
+  const [showFullTutorial, setShowFullTutorial] = useState(false);
   const [isAdmin, setIsAdmin] = useState(localStorage.getItem('is_admin') === 'true');
   const [userApiKey, setUserApiKey] = useState(localStorage.getItem('user_api_key') || '');
   const [userAnthropicKey, setUserAnthropicKey] = useState(localStorage.getItem('user_anthropic_api_key') || '');
@@ -2461,8 +2465,21 @@ Create a powerful, memorable conclusion that honors the user's story path.
               adminPasswordHash={process.env.ADMIN_PASSWORD || ''}
               onClose={() => setShowSettings(false)}
               onKeyChange={handleSettingsKeyChange}
+              onOpenHelp={() => setShowHelpModal(true)}
+              onOpenFullGuide={() => setShowFullTutorial(true)}
           />
       )}
+
+      {/* Help modals (triggered from Settings) */}
+      <TutorialModal
+          show={showHelpModal}
+          onClose={() => setShowHelpModal(false)}
+          onOpenFullGuide={() => { setShowHelpModal(false); setShowFullTutorial(true); }}
+      />
+      <TutorialPage
+          show={showFullTutorial}
+          onBack={() => setShowFullTutorial(false)}
+      />
 
       {/* Global Image Gallery */}
       {showGlobalGallery && (

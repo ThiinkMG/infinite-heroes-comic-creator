@@ -9,7 +9,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { RegenerationMode, ShotType, BalloonShape, RerollOptions, CharacterProfile } from './types';
 import {
-    RegenerationModeSelector,
     ReferenceImageGallery,
     ProfileSelector,
     InstructionInput,
@@ -18,10 +17,8 @@ import {
     CurrentImagePreview,
     QuickPresets,
     StrengthSlider,
-    FocusAreaSelector,
     QUICK_PRESETS,
     getStrengthPrompt,
-    getFocusAreaPrompt,
     type RefImage,
     type QuickPreset
 } from './components/reroll';
@@ -91,7 +88,6 @@ export const RerollModal: React.FC<RerollModalProps> = ({
     // === PHASE 1 NEW STATE (V2 Batch Plan) ===
     const [selectedPresetId, setSelectedPresetId] = useState<string | undefined>(undefined);
     const [strengthValue, setStrengthValue] = useState(1.0); // Full by default
-    const [focusAreas, setFocusAreas] = useState<Set<string>>(new Set());
 
     // === SELECTION STATE ===
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set(allRefImages.map(r => r.id)));
@@ -172,27 +168,6 @@ export const RerollModal: React.FC<RerollModalProps> = ({
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [selectedProfileIds]);
 
-    const handleToggleMode = (mode: RegenerationMode) => {
-        setRegenerationModes((prev: Set<RegenerationMode>) => {
-            const next = new Set(prev);
-            if (next.has(mode)) {
-                next.delete(mode);
-            } else {
-                next.add(mode);
-            }
-            return next;
-        });
-    };
-
-    const toggleFocusArea = (areaId: string) => {
-        setFocusAreas(prev => {
-            const next = new Set(prev);
-            if (next.has(areaId)) next.delete(areaId);
-            else next.add(areaId);
-            return next;
-        });
-    };
-
     const handlePresetSelect = (preset: QuickPreset) => {
         // Toggle off if clicking the same preset
         if (selectedPresetId === preset.id) {
@@ -227,12 +202,6 @@ export const RerollModal: React.FC<RerollModalProps> = ({
         if (strengthValue < 1.0) {
             const strengthPrompt = getStrengthPrompt(strengthValue);
             finalInstruction = `${strengthPrompt} the following: ${finalInstruction}`;
-        }
-
-        // Append focus area instruction
-        if (focusAreas.size > 0) {
-            const focusPrompt = getFocusAreaPrompt(focusAreas);
-            finalInstruction = `${finalInstruction}\n\n${focusPrompt}`;
         }
 
         const options: RerollOptions = {
@@ -445,14 +414,7 @@ export const RerollModal: React.FC<RerollModalProps> = ({
                         onChange={setStrengthValue}
                     />
 
-                    {/* 4. FOCUS AREA (Targeting) */}
-                    <FocusAreaSelector
-                        selectedAreas={focusAreas}
-                        onToggleArea={toggleFocusArea}
-                        multiSelect={true}
-                    />
-
-                    {/* 5. REFERENCE IMAGES (Moved up) */}
+                    {/* 4. REFERENCE IMAGES */}
                     <ReferenceImageGallery
                         allRefImages={allRefImages}
                         selectedIds={selectedIds}
@@ -475,12 +437,6 @@ export const RerollModal: React.FC<RerollModalProps> = ({
                                 <span className="text-purple-600 group-open:rotate-180 transition-transform">▼</span>
                             </summary>
                             <div className="px-3 sm:px-4 pb-3 sm:pb-4 border-t-2 border-purple-200 space-y-4 mt-3">
-                                {/* Regeneration Mode Selector */}
-                                <RegenerationModeSelector
-                                    selectedModes={regenerationModes}
-                                    onToggleMode={handleToggleMode}
-                                />
-
                                 {/* Comic Fundamentals Overrides */}
                                 <ComicFundamentalsOverrides
                                     shotTypeOverride={shotTypeOverride}

@@ -8,9 +8,11 @@ interface Props {
     adminPasswordHash: string; // The compiled ADMIN_PASSWORD from .env
     onClose: () => void;
     onKeyChange: (geminiKey: string | null, anthropicKey: string | null, isAdmin: boolean) => void;
+    onOpenHelp?: () => void;
+    onOpenFullGuide?: () => void;
 }
 
-export const SettingsDialog: React.FC<Props> = ({ serverKeyExists, anthropicServerKeyExists, adminPasswordHash, onClose, onKeyChange }) => {
+export const SettingsDialog: React.FC<Props> = ({ serverKeyExists, anthropicServerKeyExists, adminPasswordHash, onClose, onKeyChange, onOpenHelp, onOpenFullGuide }) => {
     const [userKey, setUserKey] = useState(localStorage.getItem('user_api_key') || '');
     const [anthropicKey, setAnthropicKey] = useState(localStorage.getItem('user_anthropic_api_key') || '');
     const [adminPassword, setAdminPassword] = useState('');
@@ -376,6 +378,25 @@ export const SettingsDialog: React.FC<Props> = ({ serverKeyExists, anthropicServ
                         ) : (
                             <p className="font-comic text-xs text-gray-500">No API calls made yet this session.</p>
                         )}
+                    </div>
+
+                    {/* Help & Resources */}
+                    <div className="border-[3px] border-gray-400 bg-gray-50 p-4">
+                        <p className="font-comic text-sm font-bold uppercase text-gray-800 mb-2">📖 Help & Resources</p>
+                        <div className="flex gap-2">
+                            <button
+                                onClick={() => { onClose(); onOpenHelp?.(); }}
+                                className="comic-btn flex-1 bg-blue-600 text-white px-3 py-2 font-bold text-sm border-[2px] border-black hover:bg-blue-500 font-comic"
+                            >
+                                ❓ Quick Help
+                            </button>
+                            <button
+                                onClick={() => { onClose(); onOpenFullGuide?.(); }}
+                                className="comic-btn flex-1 bg-purple-600 text-white px-3 py-2 font-bold text-sm border-[2px] border-black hover:bg-purple-500 font-comic"
+                            >
+                                📖 Full Tutorial
+                            </button>
+                        </div>
                     </div>
 
                     {/* Reset App */}
