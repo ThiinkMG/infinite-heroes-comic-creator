@@ -2222,15 +2222,18 @@ Create a powerful, memorable conclusion that honors the user's story path.
         </div>
       )}
 
-      {/* Settings Gear — top-right on mobile/tablet, bottom-left on desktop */}
-      <button
-          onClick={() => setShowSettings(true)}
-          className="fixed top-3 right-3 md:top-auto md:right-auto md:bottom-20 md:left-6 z-[250] w-10 h-10 md:w-12 md:h-12 bg-white/80 hover:bg-white md:bg-white/90 border-[3px] border-black rounded-full flex items-center justify-center shadow-[2px_2px_0px_rgba(0,0,0,1)] hover:shadow-[4px_4px_0px_rgba(0,0,0,1)] hover:-translate-y-0.5 transition-all cursor-pointer touch-manipulation"
-          title="Settings"
-          aria-label="Open settings"
-      >
-          <span className="text-xl md:text-2xl">⚙️</span>
-      </button>
+      {/* Settings Gear — always on desktop; on mobile/tablet only when NOT on setup screen (book view) */}
+      {(!showSetup || isStarted) && (
+          <button
+              onClick={() => setShowSettings(true)}
+              className={`fixed z-[250] flex items-center justify-center border-[3px] border-black rounded-full bg-white/90 hover:bg-white shadow-[3px_3px_0px_rgba(0,0,0,1)] hover:shadow-[5px_5px_0px_rgba(0,0,0,1)] hover:-translate-y-0.5 transition-all cursor-pointer touch-manipulation
+                  ${showSetup ? 'hidden md:flex w-12 h-12 bottom-20 left-6' : 'w-10 h-10 top-3 right-3 md:w-12 md:h-12 md:top-auto md:right-auto md:bottom-20 md:left-6'}`}
+              title="Settings"
+              aria-label="Open settings"
+          >
+              <span className={showSetup ? 'text-2xl' : 'text-xl md:text-2xl'}>⚙️</span>
+          </button>
+      )}
 
       {/* Settings Dialog */}
       {showSettings && (
@@ -2289,6 +2292,7 @@ Create a powerful, memorable conclusion that honors the user's story path.
           useSavedProfiles={useSavedProfiles}
           onUseSavedProfilesChange={setUseSavedProfiles}
           onPresetSelect={handlePresetSelect}
+          onSettingsOpen={() => setShowSettings(true)}
       />
 
       {/* Mode Selection Screen */}

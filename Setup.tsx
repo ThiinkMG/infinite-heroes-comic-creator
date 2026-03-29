@@ -70,6 +70,7 @@ interface SetupProps {
     useSavedProfiles?: boolean;
     onUseSavedProfilesChange?: (val: boolean) => void;
     onPresetSelect?: (preset: ComicPreset) => void;
+    onSettingsOpen?: () => void;
 }
 
 // LocalStorage key for custom presets
@@ -321,6 +322,18 @@ export const Setup: React.FC<SetupProps> = (props) => {
           <div className="min-h-full flex items-center justify-center p-2 sm:p-4 pb-24 sm:pb-32 md:pb-24">
             {/* Compacted width and internal spacing - responsive padding */}
             <div className="max-w-[900px] w-full bg-white p-3 sm:p-4 md:p-5 border-4 sm:border-[6px] border-black shadow-[6px_6px_0px_rgba(0,0,0,0.6)] sm:shadow-[12px_12px_0px_rgba(0,0,0,0.6)] text-center relative">
+
+                {/* Settings gear — inside card on mobile/tablet, hidden on desktop (floating gear handles desktop) */}
+                {props.onSettingsOpen && (
+                    <button
+                        onClick={props.onSettingsOpen}
+                        className="absolute top-3 right-3 md:hidden w-9 h-9 bg-white border-[3px] border-black rounded-full flex items-center justify-center shadow-[2px_2px_0px_rgba(0,0,0,1)] hover:shadow-[3px_3px_0px_rgba(0,0,0,1)] active:shadow-[1px_1px_0px_rgba(0,0,0,1)] transition-all touch-manipulation z-10"
+                        title="Settings"
+                        aria-label="Open settings"
+                    >
+                        <span className="text-lg leading-none">⚙️</span>
+                    </button>
+                )}
 
                 <h1 className="font-comic text-3xl sm:text-4xl md:text-5xl text-red-600 leading-none mb-1 tracking-wide inline-block mr-2 sm:mr-3" style={{textShadow: '2px 2px 0px black'}}>INFINITE</h1>
                 <h1 className="font-comic text-3xl sm:text-4xl md:text-5xl text-yellow-400 leading-none mb-3 sm:mb-4 tracking-wide inline-block" style={{textShadow: '2px 2px 0px black'}}>HEROES</h1>
