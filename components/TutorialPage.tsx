@@ -298,25 +298,29 @@ export const TutorialPage: React.FC<TutorialPageProps> = ({ show, onBack }) => {
                     <section className="space-y-3">
                         <SectionHeader id="reroll" icon="🔄" title="Rerolling & Refinement" color="bg-red-400" />
 
-                        <p className="font-comic text-sm text-gray-700">Click any panel in the comic reader to open the Reroll panel. You can regenerate any page with different instructions, modes, or settings.</p>
+                        <p className="font-comic text-sm text-gray-700">Click any panel in the comic reader to open the Reroll panel. You can regenerate any page with different modes, instructions, and visual style overrides.</p>
 
                         <div>
-                            <h3 className="font-comic font-bold text-base uppercase border-b-2 border-black pb-1 mb-2">Reroll Modes</h3>
+                            <h3 className="font-comic font-bold text-base uppercase border-b-2 border-black pb-1 mb-2">Quick Presets — Pick Your Mode</h3>
+                            <p className="font-comic text-sm text-gray-700 mb-2">The top row of the Reroll panel has one-click presets. Each preset selects the right regeneration mode and pre-fills an instruction for you.</p>
                             <Table
-                                headers={['Mode', 'What changes', 'Best used when']}
+                                headers={['Preset', 'Mode used', 'What it does']}
                                 rows={[
-                                    ['Full Reroll', 'Everything — characters, scene, composition', 'The whole panel is wrong'],
-                                    ['Characters Only', 'Character appearance only, keeps background/scene', 'Wrong character look but good scene'],
-                                    ['Expression Only', 'Facial expressions only', 'Right scene, wrong emotions'],
-                                    ['Outfit Only', 'Costumes and clothing only', 'Right person, wrong costume'],
-                                    ['Emblem Only', 'Emblem/logo on costume', 'Emblem missing or wrong'],
-                                    ['Weapon Only', 'Weapon or equipment', 'Wrong weapon or missing weapon'],
+                                    ['Full Reroll', 'Full', 'Regenerates everything — characters, scene, composition'],
+                                    ['Fix Character', 'Characters Only', 'Keeps background, fixes character appearance'],
+                                    ['Fix Expression', 'Expression Only', 'Fixes facial expressions only'],
+                                    ['Fix Outfit', 'Outfit Only', 'Fixes costumes and clothing only'],
+                                    ['Fix Emblem', 'Emblem Only', 'Corrects the logo or emblem on the costume'],
+                                    ['Fix Weapon', 'Weapon Only', 'Corrects the weapon or equipment'],
                                 ]}
                             />
+                            <Tip color="bg-yellow-50 border-yellow-400">
+                                <strong>Tip:</strong> Tap a preset to apply it instantly. Tap it again to deselect and go back to Full Reroll. You can still edit the instruction text after selecting a preset.
+                            </Tip>
                         </div>
 
                         <div>
-                            <h3 className="font-comic font-bold text-base uppercase border-b-2 border-black pb-1 mb-2">Reroll Instructions</h3>
+                            <h3 className="font-comic font-bold text-base uppercase border-b-2 border-black pb-1 mb-2">Instructions & Negative Prompt</h3>
                             <p className="font-comic text-sm text-gray-700">Write specific instructions telling the AI what to change. The more specific, the better results.</p>
                             <div className="mt-2 grid grid-cols-1 md:grid-cols-2 gap-2">
                                 <div className="bg-red-50 border border-red-200 p-2 rounded font-comic text-xs">
@@ -325,24 +329,49 @@ export const TutorialPage: React.FC<TutorialPageProps> = ({ show, onBack }) => {
                                 </div>
                                 <div className="bg-green-50 border border-green-200 p-2 rounded font-comic text-xs">
                                     <p className="font-bold text-green-700 mb-1">Specific (more effective):</p>
-                                    <p className="text-gray-700">"Show the hero landing on the rooftop with cape billowing, city skyline visible, dramatic low angle shot"</p>
+                                    <p className="text-gray-700">"Hero landing on rooftop, cape billowing, city skyline visible, dramatic low-angle shot"</p>
                                 </div>
                             </div>
-                            <div className="mt-2">
+                            <div className="mt-2 space-y-2">
                                 <Tip color="bg-purple-50 border-purple-400">
-                                    <strong>AI Improve on Instructions:</strong> Type a rough idea and click "AI Improve" — the AI expands it into a detailed, production-ready instruction.
+                                    <strong>AI Improve:</strong> Type a rough idea and click "AI Improve" — the AI expands it into a detailed, production-ready instruction.
+                                </Tip>
+                                <Tip color="bg-red-50 border-red-400">
+                                    <strong>Exclude from Image:</strong> Use the red "Exclude" field to list things you don't want — e.g. "no mask, no helmet, no cape". Applied on top of your instructions.
                                 </Tip>
                             </div>
                         </div>
 
                         <div>
+                            <h3 className="font-comic font-bold text-base uppercase border-b-2 border-black pb-1 mb-2">Strength Slider</h3>
+                            <p className="font-comic text-sm text-gray-700">Controls how aggressively the AI changes the panel. Lower strength = subtle adjustments (good for minor fixes). Full strength = complete regeneration.</p>
+                        </div>
+
+                        <div>
+                            <h3 className="font-comic font-bold text-base uppercase border-b-2 border-black pb-1 mb-2">Expert Mode — Visual Style Overrides</h3>
+                            <p className="font-comic text-sm text-gray-700 mb-2">Toggle Expert Mode (🔧 button in the header) to access visual style controls and character profile editing.</p>
+                            <Table
+                                headers={['Control', 'What it does']}
+                                rows={[
+                                    ['📷 Camera Shot', 'Override the panel framing — XCU, Close-up, Medium, Full, Wide, Establishing'],
+                                    ['💬 Dialogue Style', 'Change speech balloon shape — Normal, Shouting, Whisper, Radio, Robot, etc.'],
+                                    ['📜 Flashback Styling', 'Apply sepia tones and soft vignette for memory/flashback scenes'],
+                                    ['Character Profiles', 'Edit the AI\'s visual description of each character directly in the reroll panel'],
+                                ]}
+                            />
+                            <Tip color="bg-blue-50 border-blue-400">
+                                <strong>Pose & Location:</strong> Inside the instruction area, expand "Pose & Location" to pick from a library of predefined character poses and scene locations. Selecting one appends the prompt text automatically.
+                            </Tip>
+                        </div>
+
+                        <div>
                             <h3 className="font-comic font-bold text-base uppercase border-b-2 border-black pb-1 mb-2">Version History</h3>
-                            <p className="font-comic text-sm text-gray-700">Every reroll creates a new version. Each panel stores up to 10 versions. Use the History view in the Reroll panel to browse previous versions and revert to any of them.</p>
+                            <p className="font-comic text-sm text-gray-700">Every reroll creates a new version. Each panel stores up to 10 versions. Click 📜 History in the header to browse previous versions and revert to any of them.</p>
                         </div>
 
                         <div>
                             <h3 className="font-comic font-bold text-base uppercase border-b-2 border-black pb-1 mb-2">Quick Reroll (🎲 button)</h3>
-                            <p className="font-comic text-sm text-gray-700">Each panel has a 🎲 button in the corner. Tap it for a one-click Full Reroll using the same settings as the original generation (no configuration needed).</p>
+                            <p className="font-comic text-sm text-gray-700">Each panel has a 🎲 button in the corner. Tap it for a one-click Full Reroll with no configuration needed. On mobile it shows at reduced opacity — tap the panel area to open the full Reroll panel instead.</p>
                         </div>
                     </section>
 
