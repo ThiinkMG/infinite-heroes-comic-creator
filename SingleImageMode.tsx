@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useRef } from 'react';
 import { ART_STYLES, GENRES } from './types';
 
 // ============================================================================
@@ -43,6 +43,8 @@ export interface SingleImageGenerateParams {
     whiteBackground?: boolean;
     useMainAsRef?: boolean;
     mainImageUrl?: string;
+    /** Base64-encoded reference images to send to the AI */
+    refImages?: string[];
 }
 
 // ============================================================================
@@ -73,10 +75,32 @@ export const SingleImageMode: React.FC<SingleImageModeProps> = ({ onClose, onGen
     const [whiteBackground, setWhiteBackground] = useState(true);
     const [useMainAsRef, setUseMainAsRef] = useState(false);
 
+    const [refImages, setRefImages] = useState<string[]>([]);
+    const refInputRef = useRef<HTMLInputElement>(null);
+
     const [isGenerating, setIsGenerating] = useState(false);
     const [generatedImages, setGeneratedImages] = useState<GeneratedSingleImage[]>([]);
     const [expandedIdx, setExpandedIdx] = useState<number | null>(null);
     const [error, setError] = useState<string | null>(null);
+
+    const handleRefUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+        const files = Array.from(e.target.files || []);
+        files.forEach(file => {
+            const reader = new FileReader();
+            reader.onload = ev => {
+                const result = ev.target?.result as string;
+                const base64 = result.split(',')[1];
+                if (base64) setRefImages(prev => prev.length < 5 ? [...prev, base64] : prev);
+            };
+            reader.readAsDataURL(file as Blob);
+        });
+        // Reset so same file can be re-uploaded if removed
+        if (refInputRef.current) refInputRef.current.value = '';
+    }, []);
+
+    const removeRefImage = useCallback((idx: number) => {
+        setRefImages(prev => prev.filter((_, i) => i !== idx));
+    }, []);
 
     const handleGenerate = useCallback(async () => {
         if (!description.trim()) return;
@@ -91,7 +115,8 @@ export const SingleImageMode: React.FC<SingleImageModeProps> = ({ onClose, onGen
                 pose: activeTab === 'reference' ? pose : undefined,
                 whiteBackground: activeTab === 'reference' ? whiteBackground : undefined,
                 useMainAsRef: (activeTab === 'emblem' || activeTab === 'weapon') ? useMainAsRef : undefined,
-                mainImageUrl: useMainAsRef && generatedImages.find(i => i.tab === 'main')?.imageUrl
+                mainImageUrl: useMainAsRef ? generatedImages.find(i => i.tab === 'main')?.imageUrl : undefined,
+                refImages: refImages.length > 0 ? refImages : undefined,
             };
 
             const imageUrl = await onGenerate(params);
@@ -242,6 +267,52 @@ export const SingleImageMode: React.FC<SingleImageModeProps> = ({ onClose, onGen
                                 <span className="font-comic text-sm">Use Main Image as reference</span>
                             </label>
                         )}
+
+                        {/* Reference Images */}
+                        <div>
+                            <div className="flex items-center justify-between mb-1">
+                                <label className="font-comic text-xs font-bold text-gray-700 uppercase">
+                                    Reference Images <span className="text-gray-400 font-normal normal-case">({refImages.length}/5)</span>
+                                </label>
+                                <button
+                                    onClick={() => refInputRef.current?.click()}
+                                    disabled={refImages.length >= 5}
+                                    className="comic-btn bg-blue-600 text-white text-xs px-2 py-1 border border-black hover:bg-blue-500 disabled:opacity-40 disabled:cursor-not-allowed font-comic font-bold"
+                                >
+                                    + Add
+                                </button>
+                            </div>
+                            <input
+                                ref={refInputRef}
+                                type="file"
+                                accept="image/*"
+                                multiple
+                                onChange={handleRefUpload}
+                                className="hidden"
+                            />
+                            {refImages.length > 0 ? (
+                                <div className="flex flex-wrap gap-1.5">
+                                    {refImages.map((img, idx) => (
+                                        <div key={idx} className="relative w-14 h-14 border-2 border-black rounded overflow-hidden group">
+                                            <img
+                                                src={`data:image/jpeg;base64,${img}`}
+                                                alt={`Ref ${idx + 1}`}
+                                                className="w-full h-full object-cover"
+                                            />
+                                            <button
+                                                onClick={() => removeRefImage(idx)}
+                                                className="absolute inset-0 bg-black/60 text-white text-xs font-bold opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"
+                                                aria-label={`Remove reference image ${idx + 1}`}
+                                            >✕</button>
+                                        </div>
+                                    ))}
+                                </div>
+                            ) : (
+                                <p className="font-comic text-xs text-gray-400 italic">
+                                    Upload images for the AI to use as visual references
+                                </p>
+                            )}
+                        </div>
 
                         {/* Description */}
                         <div className="flex-1 flex flex-col">

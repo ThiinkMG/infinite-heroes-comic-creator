@@ -2304,6 +2304,36 @@ Create a powerful, memorable conclusion that honors the user's story path.
     };
 
     const prompt = tabPrompts[params.tab] || params.description;
+
+    // Collect all reference images (explicit uploads + main image as ref if requested)
+    const allRefs: string[] = [];
+    if (params.refImages?.length) allRefs.push(...params.refImages);
+    if (params.useMainAsRef && params.mainImageUrl) {
+      const mainBase64 = params.mainImageUrl.split(',')[1];
+      if (mainBase64) allRefs.push(mainBase64);
+    }
+
+    if (allRefs.length > 0) {
+      // Multimodal path: interleave reference images with the text prompt
+      type ContentPart = { text: string } | { inlineData: { mimeType: string; data: string } };
+      const contents: ContentPart[] = [];
+      allRefs.forEach((base64, i) => {
+        contents.push({ text: `[REFERENCE IMAGE ${i + 1} — use as visual reference]:` });
+        contents.push({ inlineData: { mimeType: detectImageMimeType(base64), data: base64 } });
+      });
+      contents.push({ text: prompt });
+
+      const res = await ai.models.generateContent({
+        model: MODEL_IMAGE_GEN_NAME,
+        contents,
+        config: { imageConfig: { aspectRatio: '2:3' } }
+      });
+      const part = res.candidates?.[0]?.content?.parts?.find((p: any) => p.inlineData);
+      if (!part?.inlineData?.data) throw new Error('No image data returned');
+      return `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`;
+    }
+
+    // Text-only path: simpler generateImages call
     const result = await ai.models.generateImages({
       model: MODEL_IMAGE_GEN_NAME,
       prompt,
@@ -2312,8 +2342,7 @@ Create a powerful, memorable conclusion that honors the user's story path.
 
     const imgData = result.generatedImages?.[0]?.image?.imageBytes;
     if (!imgData) throw new Error('No image data returned');
-    const imageUrl = `data:image/png;base64,${imgData}`;
-    return imageUrl;
+    return `data:image/png;base64,${imgData}`;
   };
 
   const handleSingleImageSaveToGallery = (imageUrl: string, params: SingleImageGenerateParams) => {
