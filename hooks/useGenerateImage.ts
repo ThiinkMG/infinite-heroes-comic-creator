@@ -239,8 +239,10 @@ export const useGenerateImage = (config: GenerateImageConfig) => {
       return { image: p.weaponImage, description: p.weaponDescriptionText || 'signature weapon' };
     };
 
-    // Max costume ref images per character — more than this dilutes the portrait signal
-    const MAX_COSTUME_REFS = 2;
+    // Max costume ref images per character — more than 1 dilutes the portrait signal.
+    // Users can upload many refs for profile analysis (more = better profile),
+    // but for image generation fewer focused refs work better than many.
+    const MAX_COSTUME_REFS = 1;
 
     // Helper to get inline identity from profile — all 5 fields to minimize guessing
     const getInlineIdentity = (name: string, role: 'HERO' | 'CO-STAR' | 'CHARACTER' = 'CHARACTER'): string => {
@@ -361,10 +363,18 @@ export const useGenerateImage = (config: GenerateImageConfig) => {
     };
 
     // STEP 1: Character Summary (compact, text-only header)
-    let preImageText = buildCharacterSummary();
+    const preImageText = buildCharacterSummary();
     contents.push({ text: preImageText });
 
-    // STEP 2: CHARACTER IMAGES WITH INLINE IDENTITY (Task 5.2.1 - images BEFORE long text)
+    // STEP 2: Previous page image goes FIRST — before character portraits.
+    // Gemini weights later images more heavily, so character portraits must be
+    // the LAST images the model sees. Previous page = scene context only, not face reference.
+    if (prevImage && prevBeat) {
+      contents.push({ text: "\n[SCENE CONTEXT — previous page. For background/lighting/pose continuity ONLY.]\n⚠️ Do NOT copy face, hair, or skin from this. Faces come from the CHARACTER PORTRAITS below." });
+      contents.push(createInlineImage(prevImage.split(',')[1] || prevImage));
+    }
+
+    // STEP 3: CHARACTER PORTRAITS (last images — highest weight in model's visual context)
     if (useOnlySelectedRefs && extraRefImages && extraRefImages.length > 0) {
       contents.push({ text: "\n=== SELECTED REFERENCES (Use ONLY these) ===" });
       extraRefImages.forEach((ref, i) => {
@@ -374,11 +384,10 @@ export const useGenerateImage = (config: GenerateImageConfig) => {
     } else {
       pushCharacterReferences();
 
-      // RE-ANCHOR every 2 pages to fight cumulative drift.
-      // Short message — verbose anchors were being ignored; concise is more effective.
+      // Re-anchor every 2 pages — remind model to read portraits, not previous page
       if (pageIndex !== undefined && pageIndex >= 2 && pageIndex % 2 === 0) {
         const charList = profiles.map(p => p.name.toUpperCase()).join(', ');
-        contents.push({ text: `\n[RE-ANCHOR — Page ${pageIndex}] Drift check: re-read the PORTRAIT images above now. The portraits are the ONLY source of truth for ${charList}. The previous-page image is for pose/scene continuity ONLY — do not copy any face details from it.` });
+        contents.push({ text: `\n[RE-ANCHOR — Page ${pageIndex}] Faces MUST match the PORTRAIT images immediately above for ${charList}.` });
       }
 
       if (extraRefImages && extraRefImages.length > 0) {
@@ -397,13 +406,6 @@ export const useGenerateImage = (config: GenerateImageConfig) => {
       contents.push({ text: "\n=== CURRENT PANEL (PRESERVE SCENE) ===" });
       contents.push({ text: "[PRESERVE] Keep background, lighting, composition. Only modify as specified." });
       contents.push(createInlineImage(preserveData));
-    }
-
-    // Previous page visual context (image reference)
-    // IMPORTANT: Labeled as CONTINUITY ONLY to prevent facial drift compounding
-    if (prevImage && prevBeat) {
-      contents.push({ text: "\n[PREVIOUS PAGE — POSE/ACTION CONTINUITY ONLY]\n⚠️ DO NOT copy face or hair appearance from this image. Use ONLY for scene continuity (poses, backgrounds, lighting, action flow). For character faces, ALWAYS use the portrait references above." });
-      contents.push(createInlineImage(prevImage.split(',')[1] || prevImage));
     }
 
     // Publisher logo for cover (if applicable, add near other images)
@@ -525,9 +527,9 @@ export const useGenerateImage = (config: GenerateImageConfig) => {
     if (type !== 'back_cover') {
       promptText += buildCriticalDirectivesV2(profiles);
 
-      // Face drift prevention for pages 2+ (both Novel and Outline mode)
+      // Face drift prevention reminder (reinforces the scene-context warning already in the image block)
       if (prevImage && pageIndex !== undefined && pageIndex >= 2) {
-        promptText += `\n[FACE DRIFT PREVENTION — Page ${pageIndex}]\nThe PORTRAIT images in the reference section above are the ONLY ground truth for each character's face, eyes, hair, and skin tone. The "PREVIOUS PAGE" image is provided ONLY for action/pose continuity. NEVER copy facial features from the previous page — it may have drifted from the original portrait. Always match the original portrait exactly.\n`;
+        promptText += `\n[FACE ANCHOR — Page ${pageIndex}] The scene-context image shown at the start is for background/pose ONLY. All character faces MUST match the portrait images shown last in the reference block above.\n`;
       }
 
       // Layer 2/4 blocks only in non-compact mode (Task 5.2.4)
