@@ -32,7 +32,7 @@ export interface SingleImageModeProps {
     onClose: () => void;
     onGenerate: (params: SingleImageGenerateParams) => Promise<string>;
     onSaveToGallery?: (imageUrl: string, params: SingleImageGenerateParams) => void;
-    onImproveDescription?: (description: string, tab: SingleImageTab, artStyle: string, refImages: string[]) => Promise<string>;
+    onImproveDescription?: (description: string, tab: SingleImageTab, artStyle: string, refImages: string[], subContext?: { genre?: string; pose?: ReferencePose; whiteBackground?: boolean }) => Promise<string>;
 }
 
 export interface SingleImageGenerateParams {
@@ -142,14 +142,19 @@ export const SingleImageMode: React.FC<SingleImageModeProps> = ({ onClose, onGen
         if (!onImproveDescription || isImprovingDescription) return;
         setIsImprovingDescription(true);
         try {
-            const improved = await onImproveDescription(description, activeTab, artStyle, refImages);
+            const subContext = {
+                genre: activeTab === 'main' ? genre : undefined,
+                pose: activeTab === 'reference' ? pose : undefined,
+                whiteBackground: activeTab === 'reference' ? whiteBackground : undefined,
+            };
+            const improved = await onImproveDescription(description, activeTab, artStyle, refImages, subContext);
             setDescription(improved);
         } catch (e) {
             setError(String(e));
         } finally {
             setIsImprovingDescription(false);
         }
-    }, [onImproveDescription, description, activeTab, artStyle, refImages, isImprovingDescription]);
+    }, [onImproveDescription, description, activeTab, artStyle, refImages, isImprovingDescription, genre, pose, whiteBackground]);
 
     const downloadImage = (url: string, name: string) => {
         const a = document.createElement('a');

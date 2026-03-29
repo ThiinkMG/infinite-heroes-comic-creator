@@ -2356,7 +2356,8 @@ Create a powerful, memorable conclusion that honors the user's story path.
     description: string,
     tab: SingleImageGenerateParams['tab'],
     artStyle: string,
-    refImages: string[]
+    refImages: string[],
+    subContext?: { genre?: string; pose?: string; whiteBackground?: boolean }
   ): Promise<string> => {
     const modeContext: Record<string, string> = {
       main: 'standalone character or scene illustration for a comic book',
@@ -2377,6 +2378,16 @@ Return ONLY the improved description text. No explanations, no markdown, no quot
     const userLines: string[] = [];
     userLines.push(`Art style: ${artStyle}`);
     userLines.push(`Mode: ${tab} (${modeContext[tab]})`);
+    // Inject sub-context details specific to each mode
+    if (subContext?.genre) {
+      userLines.push(`Genre / tone: ${subContext.genre} — the image should feel like it belongs in a ${subContext.genre} comic.`);
+    }
+    if (subContext?.pose) {
+      userLines.push(`Required pose: ${subContext.pose} — the description must specify this exact camera angle/pose for the reference sheet.`);
+    }
+    if (subContext?.whiteBackground !== undefined) {
+      userLines.push(`Background: ${subContext.whiteBackground ? 'solid white background — emphasize clean isolated figure on white' : 'stylized background appropriate for the scene'}.`);
+    }
     if (hasText) {
       userLines.push(`\nExisting description to expand/improve:\n${description.trim()}`);
     } else {
