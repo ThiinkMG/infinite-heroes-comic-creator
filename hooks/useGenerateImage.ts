@@ -138,27 +138,34 @@ const findProfileByName = (name: string, profiles: CharacterProfile[]): Characte
 // ============================================================================
 
 /**
- * Generate focused critical directives (replaces verbose 4-paragraph version).
- * Includes hardNegatives from all profiles.
+ * Generate per-character critical directives with specific face anchors.
+ * More targeted than generic "copy EXACT" — gives the model the actual values to lock onto.
  */
 const buildCriticalDirectivesV2 = (profiles: CharacterProfile[]): string => {
   // Collect all hardNegatives from all profiles
   const allNegatives: string[] = [];
   profiles.forEach(p => {
-    if (p.hardNegatives?.length) {
-      allNegatives.push(...p.hardNegatives);
-    }
+    if (p.hardNegatives?.length) allNegatives.push(...p.hardNegatives);
   });
   const uniqueNegatives = [...new Set(allNegatives)];
   const negativesList = uniqueNegatives.length > 0 ? uniqueNegatives.join(', ') : 'nothing specific';
 
-  return `
-[CRITICAL - CHARACTER CONSISTENCY]
-1. FACE: Copy EXACT facial features from each character's PORTRAIT image. Same face shape, eye color, hair style, skin tone. The portrait is the SOURCE OF TRUTH.
-2. COSTUME: Copy EXACT outfit from reference images. Same colors, emblems, accessories. Do not simplify or change the design.
+  let result = '\n[CHARACTER CONSISTENCY — CRITICAL]\n';
 
-DO NOT ADD: ${negativesList}
-`;
+  // Per-character face anchor: specific values give the model something concrete to lock onto
+  profiles.forEach(p => {
+    const ih = p.identityHeader;
+    if (ih) {
+      result += `• ${p.name.toUpperCase()}: ${ih.face} | eyes: ${ih.eyes} | hair: ${ih.hair} | skin: ${ih.skin} → copy from PORTRAIT above.\n`;
+    } else if (p.faceDescription) {
+      result += `• ${p.name.toUpperCase()}: ${p.faceDescription} → copy from PORTRAIT above.\n`;
+    }
+  });
+
+  result += `• COSTUME: Match reference images exactly — same colors, emblems, accessories, no simplification.\n`;
+  result += `\nNEVER DRAW: ${negativesList}\n`;
+
+  return result;
 };
 
 // ============================================================================
@@ -232,20 +239,24 @@ export const useGenerateImage = (config: GenerateImageConfig) => {
       return { image: p.weaponImage, description: p.weaponDescriptionText || 'signature weapon' };
     };
 
-    // Helper to get inline identity from profile (Task 5.2.3 - enhanced inline identity)
+    // Max costume ref images per character — more than this dilutes the portrait signal
+    const MAX_COSTUME_REFS = 2;
+
+    // Helper to get inline identity from profile — all 5 fields to minimize guessing
     const getInlineIdentity = (name: string, role: 'HERO' | 'CO-STAR' | 'CHARACTER' = 'CHARACTER'): string => {
       const profile = findProfileByName(name, profiles);
       if (profile) {
         const ih = profile.identityHeader;
         if (ih) {
-          return `[${role}: ${profile.name.toUpperCase()}]\nFace: ${ih.face}\nHair: ${ih.hair}\nSkin: ${ih.skin}\n[PORTRAIT - COPY THIS FACE EXACTLY]:`;
+          const sigStr = ih.signature?.length ? `\nSignature: ${ih.signature.slice(0, 2).join(', ')}` : '';
+          return `[${role}: ${profile.name.toUpperCase()}]\nFace: ${ih.face} | Eyes: ${ih.eyes} | Hair: ${ih.hair} | Skin: ${ih.skin} | Build: ${ih.build}${sigStr}\n[PORTRAIT — COPY THIS FACE EXACTLY]:`;
         }
         const hairInfo = profile.hairDetails
           ? `${profile.hairDetails.style} ${profile.hairDetails.color} hair`
           : 'match portrait';
-        return `[${role}: ${profile.name.toUpperCase()}]\nFace: ${profile.faceDescription || 'match portrait'}\nHair: ${hairInfo}\nSkin: match portrait\n[PORTRAIT - COPY THIS FACE EXACTLY]:`;
+        return `[${role}: ${profile.name.toUpperCase()}]\nFace: ${profile.faceDescription || 'match portrait'} | Hair: ${hairInfo} | Skin: match portrait\n[PORTRAIT — COPY THIS FACE EXACTLY]:`;
       }
-      return `[${role}: ${name.toUpperCase()}]\nFace: match portrait\nHair: match portrait\nSkin: match portrait\n[PORTRAIT - COPY THIS FACE EXACTLY]:`;
+      return `[${role}: ${name.toUpperCase()}]\n[PORTRAIT — COPY THIS FACE EXACTLY]:`;
     };
 
     // Push character references with inline identity headers (Task 5.2.3 - identity immediately before each image)
@@ -256,7 +267,7 @@ export const useGenerateImage = (config: GenerateImageConfig) => {
         // Inline identity immediately before portrait image (Task 5.2.3)
         contents.push({ text: `\n${getInlineIdentity(hero.name, 'HERO')}` });
         contents.push(createInlineImage(hero.base64));
-        getAllRefs(hero).forEach((ref, i) => {
+        getAllRefs(hero).slice(0, MAX_COSTUME_REFS).forEach((ref, i) => {
           contents.push({ text: `[${hero.name.toUpperCase()} COSTUME REF ${i + 1}]:` });
           contents.push(createInlineImage(ref));
         });
@@ -276,7 +287,7 @@ export const useGenerateImage = (config: GenerateImageConfig) => {
         // Inline identity immediately before portrait image (Task 5.2.3)
         contents.push({ text: `\n${getInlineIdentity(friend.name, 'CO-STAR')}` });
         contents.push(createInlineImage(friend.base64));
-        getAllRefs(friend).forEach((ref, i) => {
+        getAllRefs(friend).slice(0, MAX_COSTUME_REFS).forEach((ref, i) => {
           contents.push({ text: `[${friend.name.toUpperCase()} COSTUME REF ${i + 1}]:` });
           contents.push(createInlineImage(ref));
         });
@@ -298,7 +309,7 @@ export const useGenerateImage = (config: GenerateImageConfig) => {
           contents.push({ text: `\n${getInlineIdentity(c.name, 'CHARACTER')}` });
           contents.push(createInlineImage(c.base64));
         }
-        getAllRefs(c).forEach((ref, ri) => {
+        getAllRefs(c).slice(0, MAX_COSTUME_REFS).forEach((ref, ri) => {
           contents.push({ text: `[${c.name.toUpperCase()} COSTUME REF ${ri + 1}]:` });
           contents.push(createInlineImage(ref));
         });
@@ -331,20 +342,21 @@ export const useGenerateImage = (config: GenerateImageConfig) => {
     const styleEra = selectedGenre === 'Custom' ? "Modern American" : selectedGenre;
     const artStyleTag = storyContext.artStyle ? `, ${storyContext.artStyle}` : '';
 
-    // Build compact character identity summary for front-loading (most critical info first)
+    // Build compact character identity summary for front-loading (most critical info first).
+    // Include all 5 identity fields so the model has specific values to lock onto before seeing images.
     const buildCharacterSummary = (): string => {
       const summaries: string[] = [];
       profiles.forEach(profile => {
         const ih = profile.identityHeader;
         if (ih) {
-          const negatives = profile.hardNegatives?.length ? ` NEVER: ${profile.hardNegatives.slice(0, 3).join(', ')}` : '';
-          summaries.push(`[${profile.name.toUpperCase()}]: ${ih.face}, ${ih.hair}, ${ih.skin}.${negatives}`);
+          const negatives = profile.hardNegatives?.length ? ` | NEVER: ${profile.hardNegatives.slice(0, 3).join(', ')}` : '';
+          summaries.push(`[${profile.name.toUpperCase()}] face: ${ih.face} | eyes: ${ih.eyes} | hair: ${ih.hair} | skin: ${ih.skin} | build: ${ih.build}${negatives}`);
         } else {
           summaries.push(`[${profile.name.toUpperCase()}]: ${profile.faceDescription || 'standard'}, ${profile.colorPalette || 'standard colors'}`);
         }
       });
       return summaries.length > 0
-        ? `=== CHARACTER IDENTITIES ===\n${summaries.join('\n')}\n===\n`
+        ? `=== CHARACTER IDENTITIES (memorize before drawing) ===\n${summaries.join('\n')}\n===\n`
         : '';
     };
 
@@ -362,9 +374,11 @@ export const useGenerateImage = (config: GenerateImageConfig) => {
     } else {
       pushCharacterReferences();
 
-      // MILESTONE RE-ANCHORING: At pages 3, 6, 9 explicitly reset to portraits to prevent drift
-      if (pageIndex !== undefined && (pageIndex === 3 || pageIndex === 6 || pageIndex === 9)) {
-        contents.push({ text: `\n[MILESTONE RE-ANCHOR - Page ${pageIndex}]\n⚠️ CHARACTER FACE RESET REQUIRED: Multiple pages have been generated. Visual drift may have occurred. You MUST refer ONLY to the portrait images above for each character's face, hair, skin tone, and eye color. Ignore any visual changes seen in the previous page — the ORIGINAL PORTRAITS above are the single source of truth. Re-read them now before drawing.` });
+      // RE-ANCHOR every 2 pages to fight cumulative drift.
+      // Short message — verbose anchors were being ignored; concise is more effective.
+      if (pageIndex !== undefined && pageIndex >= 2 && pageIndex % 2 === 0) {
+        const charList = profiles.map(p => p.name.toUpperCase()).join(', ');
+        contents.push({ text: `\n[RE-ANCHOR — Page ${pageIndex}] Drift check: re-read the PORTRAIT images above now. The portraits are the ONLY source of truth for ${charList}. The previous-page image is for pose/scene continuity ONLY — do not copy any face details from it.` });
       }
 
       if (extraRefImages && extraRefImages.length > 0) {
