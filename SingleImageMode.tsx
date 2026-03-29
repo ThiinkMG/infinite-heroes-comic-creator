@@ -32,6 +32,7 @@ export interface SingleImageModeProps {
     onClose: () => void;
     onGenerate: (params: SingleImageGenerateParams) => Promise<string>;
     onSaveToGallery?: (imageUrl: string, params: SingleImageGenerateParams) => void;
+    onImproveDescription?: (description: string, tab: SingleImageTab, artStyle: string, refImages: string[]) => Promise<string>;
 }
 
 export interface SingleImageGenerateParams {
@@ -66,7 +67,7 @@ const POSES: ReferencePose[] = [
 // COMPONENT
 // ============================================================================
 
-export const SingleImageMode: React.FC<SingleImageModeProps> = ({ onClose, onGenerate, onSaveToGallery }) => {
+export const SingleImageMode: React.FC<SingleImageModeProps> = ({ onClose, onGenerate, onSaveToGallery, onImproveDescription }) => {
     const [activeTab, setActiveTab] = useState<SingleImageTab>('main');
     const [description, setDescription] = useState('');
     const [artStyle, setArtStyle] = useState(ART_STYLES[0]);
@@ -79,6 +80,7 @@ export const SingleImageMode: React.FC<SingleImageModeProps> = ({ onClose, onGen
     const refInputRef = useRef<HTMLInputElement>(null);
 
     const [isGenerating, setIsGenerating] = useState(false);
+    const [isImprovingDescription, setIsImprovingDescription] = useState(false);
     const [generatedImages, setGeneratedImages] = useState<GeneratedSingleImage[]>([]);
     const [expandedIdx, setExpandedIdx] = useState<number | null>(null);
     const [error, setError] = useState<string | null>(null);
@@ -135,6 +137,19 @@ export const SingleImageMode: React.FC<SingleImageModeProps> = ({ onClose, onGen
             setIsGenerating(false);
         }
     }, [activeTab, description, artStyle, genre, pose, whiteBackground, useMainAsRef, generatedImages, onGenerate, onSaveToGallery]);
+
+    const handleImproveDescription = useCallback(async () => {
+        if (!onImproveDescription || isImprovingDescription) return;
+        setIsImprovingDescription(true);
+        try {
+            const improved = await onImproveDescription(description, activeTab, artStyle, refImages);
+            setDescription(improved);
+        } catch (e) {
+            setError(String(e));
+        } finally {
+            setIsImprovingDescription(false);
+        }
+    }, [onImproveDescription, description, activeTab, artStyle, refImages, isImprovingDescription]);
 
     const downloadImage = (url: string, name: string) => {
         const a = document.createElement('a');
@@ -316,9 +331,21 @@ export const SingleImageMode: React.FC<SingleImageModeProps> = ({ onClose, onGen
 
                         {/* Description */}
                         <div className="flex-1 flex flex-col">
-                            <label className="font-comic text-xs font-bold text-gray-700 uppercase block mb-1">
-                                Description <span className="text-red-600">*</span>
-                            </label>
+                            <div className="flex items-center justify-between mb-1">
+                                <label className="font-comic text-xs font-bold text-gray-700 uppercase">
+                                    Description <span className="text-red-600">*</span>
+                                </label>
+                                {onImproveDescription && (
+                                    <button
+                                        onClick={handleImproveDescription}
+                                        disabled={isImprovingDescription}
+                                        className="comic-btn bg-purple-600 text-white text-xs px-2 py-1 border border-black hover:bg-purple-500 disabled:opacity-50 disabled:cursor-not-allowed font-comic font-bold flex items-center gap-1"
+                                        title={refImages.length > 0 ? 'AI analyzes your reference images and improves the description' : 'AI generates or improves description for this mode'}
+                                    >
+                                        {isImprovingDescription ? '⏳' : '✨'} {isImprovingDescription ? 'Thinking...' : 'AI Expand'}
+                                    </button>
+                                )}
+                            </div>
                             <textarea
                                 value={description}
                                 onChange={e => setDescription(e.target.value)}

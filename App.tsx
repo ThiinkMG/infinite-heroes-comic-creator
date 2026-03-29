@@ -2352,6 +2352,96 @@ Create a powerful, memorable conclusion that honors the user's story path.
     saveToGlobalGallery(imageUrl, typeMap[params.tab] || 'main', params.description.slice(0, 60), 'single', params.description);
   };
 
+  const handleSingleImageImproveDescription = async (
+    description: string,
+    tab: SingleImageGenerateParams['tab'],
+    artStyle: string,
+    refImages: string[]
+  ): Promise<string> => {
+    const modeContext: Record<string, string> = {
+      main: 'standalone character or scene illustration for a comic book',
+      emblem: 'emblem, logo, or chest symbol design for a comic book character (clean isolated design)',
+      weapon: 'weapon or equipment asset for a comic book character (clean isolated design on white background)',
+      reference: 'full-body character reference sheet showing the character clearly for art reference purposes',
+    };
+
+    const hasImages = refImages.length > 0;
+    const hasText = description.trim().length > 0;
+
+    const systemPrompt = `You are a creative assistant specializing in comic book art direction.
+Your job is to write concise, vivid image generation prompts for a ${modeContext[tab]}.
+${hasImages ? 'You will be given reference images — analyze them and incorporate what you see (colors, style, design elements, character features) into your description.' : ''}
+Write a description that works as a direct prompt for an AI image generator.
+Return ONLY the improved description text. No explanations, no markdown, no quotes.`;
+
+    const userLines: string[] = [];
+    userLines.push(`Art style: ${artStyle}`);
+    userLines.push(`Mode: ${tab} (${modeContext[tab]})`);
+    if (hasText) {
+      userLines.push(`\nExisting description to expand/improve:\n${description.trim()}`);
+    } else {
+      userLines.push(`\nNo description provided yet${hasImages ? ' — generate one based on the reference image(s)' : ' — generate a compelling description for this mode'}.`);
+    }
+    userLines.push(`\nWrite a detailed, specific prompt optimized for AI image generation. Be concise but vivid.`);
+    const userPrompt = userLines.join('\n');
+
+    const claude = getClaude();
+
+    try {
+      if (claude && hasImages) {
+        // Claude with vision — analyze ref images
+        const imageBlocks = refImages.map(base64 => ({
+          type: 'image' as const,
+          source: {
+            type: 'base64' as const,
+            media_type: detectImageMimeType(base64) as 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp',
+            data: base64,
+          }
+        }));
+        const response = await claude.messages.create({
+          model: MODEL_TEXT_NAME_CLAUDE,
+          max_tokens: 512,
+          system: systemPrompt,
+          messages: [{ role: 'user', content: [...imageBlocks, { type: 'text' as const, text: userPrompt }] }]
+        });
+        return getTextFromClaudeResponse(response.content).trim();
+      } else if (claude) {
+        // Claude text-only
+        const response = await claude.messages.create({
+          model: MODEL_TEXT_NAME_CLAUDE,
+          max_tokens: 512,
+          system: systemPrompt,
+          messages: [{ role: 'user', content: userPrompt }]
+        });
+        return getTextFromClaudeResponse(response.content).trim();
+      } else {
+        // Gemini fallback — multimodal if images present
+        const ai = getAI();
+        if (hasImages) {
+          type Part = { text: string } | { inlineData: { mimeType: string; data: string } };
+          const parts: Part[] = refImages.map(base64 => ({
+            inlineData: { mimeType: detectImageMimeType(base64), data: base64 }
+          }));
+          parts.push({ text: `${systemPrompt}\n\n${userPrompt}` });
+          const res = await ai.models.generateContent({
+            model: MODEL_TEXT_NAME,
+            contents: [{ role: 'user', parts }]
+          });
+          return res.text?.trim() || description;
+        } else {
+          const res = await ai.models.generateContent({
+            model: MODEL_TEXT_NAME,
+            contents: [{ role: 'user', parts: [{ text: `${systemPrompt}\n\n${userPrompt}` }] }]
+          });
+          return res.text?.trim() || description;
+        }
+      }
+    } catch (e) {
+      console.error('Single image AI expand failed:', e);
+      throw new Error('AI expand failed. Please try again.');
+    }
+  };
+
   // Pan/Zoom State
   const containerRef = useRef<HTMLDivElement>(null);
   const [isDragging, setIsDragging] = useState(false);
@@ -2521,6 +2611,7 @@ Create a powerful, memorable conclusion that honors the user's story path.
               onClose={() => setShowSingleImageMode(false)}
               onGenerate={handleSingleImageGenerate}
               onSaveToGallery={handleSingleImageSaveToGallery}
+              onImproveDescription={handleSingleImageImproveDescription}
           />
       )}
       
