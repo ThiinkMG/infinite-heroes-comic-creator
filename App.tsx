@@ -728,7 +728,7 @@ const App: React.FC = () => {
       // where the React state closure may be stale from the render that created the caller.
       const isNovelMode = !generateFromOutlineRef.current;
       const config = getComicConfig(storyContext.pageLength, extraPages, isNovelMode);
-      const isDecision = isNovelMode ? (type === 'story') : config.DECISION_PAGES.includes(pageNum);
+      const isDecision = config.DECISION_PAGES.includes(pageNum);
       let beat: Beat = { scene: "", choices: [], focus_char: 'other' };
 
       if (type === 'cover') {
@@ -1137,10 +1137,14 @@ const App: React.FC = () => {
             driftSummary: undefined
         }));
         cachedChoicesRef.current.clear();
-        // Both modes now use batching to reduce hallucination/character drift
-        // Outline mode just doesn't have decision pauses
+        // Generate the initial batch of pages.
+        // Novel Mode: generates NOVEL_MODE_BATCH_SIZE pages (a full spread) before showing any decision.
+        // Outline Mode: generates 1 page then kicks off the batch pipeline.
         await generateBatch(1, config.INITIAL_PAGES);
-        generateBatch(config.INITIAL_PAGES + 1, config.BATCH_SIZE);
+        if (!isNovelMode) {
+            // Outline Mode only: kick off next batch immediately (Novel Mode waits for user's choice)
+            generateBatch(config.INITIAL_PAGES + 1, config.BATCH_SIZE);
+        }
     }, 1100);
   };
 
@@ -1252,41 +1256,44 @@ const App: React.FC = () => {
               setNovelModeState(prev => ({ ...prev, hasExceededTarget: true }));
           }
 
-          // Generate exactly 1 page in Novel Mode (page-by-page flow)
-          if (nextPage <= config.TOTAL_PAGES) {
-              // Create placeholder face
-              const faceId = `page-${nextPage}`;
-              const type: ComicFace['type'] = nextPage === config.BACK_COVER_PAGE ? 'back_cover' : 'story';
-              const isExtra = nextPage > novelModeState.originalTargetPages;
+          // Generate NOVEL_MODE_BATCH_SIZE pages after each choice (one full spread)
+          const batchEnd = Math.min(nextPage + NOVEL_MODE_BATCH_SIZE - 1, config.TOTAL_PAGES);
+          const pagesToGen: number[] = [];
+          for (let p = nextPage; p <= batchEnd; p++) {
+              if (!generatingPages.current.has(p)) pagesToGen.push(p);
+          }
 
-              const newFace: ComicFace = {
-                  id: faceId,
-                  type,
-                  choices: [],
-                  isLoading: true,
-                  pageIndex: nextPage,
-                  isExtraPage: isExtra,
-                  isDecisionPage: type === 'story' // Every story page is a decision page in Novel Mode
-              };
-
-              setComicFaces(prev => {
-                  const existing = prev.find(f => f.id === faceId);
-                  if (existing) return prev;
-                  return [...prev, newFace];
+          if (pagesToGen.length > 0) {
+              // Create all placeholder faces upfront
+              pagesToGen.forEach(pageNum => {
+                  const faceId = `page-${pageNum}`;
+                  const type: ComicFace['type'] = pageNum === config.BACK_COVER_PAGE ? 'back_cover' : 'story';
+                  const isExtra = pageNum > novelModeState.originalTargetPages;
+                  const newFace: ComicFace = {
+                      id: faceId, type, choices: [], isLoading: true,
+                      pageIndex: pageNum, isExtraPage: isExtra,
+                      isDecisionPage: false // will be resolved by generateSinglePage via config.DECISION_PAGES
+                  };
+                  setComicFaces(prev => prev.find(f => f.id === faceId) ? prev : [...prev, newFace]);
+                  if (!historyRef.current.find(h => h.id === faceId)) historyRef.current.push(newFace);
+                  generatingPages.current.add(pageNum);
               });
-              historyRef.current.push(newFace);
-              generatingPages.current.add(nextPage);
 
-              // Generate single page with the user's choice as context
-              await generateSinglePage(faceId, nextPage, type, `User chose: "${choice}". Continue the story based on this choice.`);
-              generatingPages.current.delete(nextPage);
+              // Generate pages sequentially; only the first carries the user's choice as instruction
+              for (let i = 0; i < pagesToGen.length; i++) {
+                  const pageNum = pagesToGen[i];
+                  const faceId = `page-${pageNum}`;
+                  const type: ComicFace['type'] = pageNum === config.BACK_COVER_PAGE ? 'back_cover' : 'story';
+                  const instruction = i === 0 ? `User chose: "${choice}". Continue the story based on this choice.` : undefined;
+                  await generateSinglePage(faceId, pageNum, type, instruction);
+                  generatingPages.current.delete(pageNum);
 
-              // Cache choices for reroll preservation after generation
-              const generatedFace = historyRef.current.find(f => f.pageIndex === nextPage);
-              if (generatedFace?.choices && generatedFace.choices.length > 0) {
-                  cachedChoicesRef.current.set(nextPage, [...generatedFace.choices]);
-                  // Also update face state with originalChoices for reroll
-                  updateFaceState(faceId, { originalChoices: [...generatedFace.choices] });
+                  // Cache choices for reroll preservation
+                  const generatedFace = historyRef.current.find(f => f.pageIndex === pageNum);
+                  if (generatedFace?.choices && generatedFace.choices.length > 0) {
+                      cachedChoicesRef.current.set(pageNum, [...generatedFace.choices]);
+                      updateFaceState(faceId, { originalChoices: [...generatedFace.choices] });
+                  }
               }
           }
       } else {

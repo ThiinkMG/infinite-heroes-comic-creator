@@ -5,8 +5,9 @@
 
 import { ensureString } from './claudeHelpers';
 
-// Novel Mode batch size - now 1 for page-by-page interactive flow
-export const NOVEL_MODE_BATCH_SIZE = 1;
+// Novel Mode batch size: pages generated per "act" before a decision point.
+// 2 = one spread (left + right) before each choice — feels natural in spread view.
+export const NOVEL_MODE_BATCH_SIZE = 2;
 
 // Z-Index Constants for consistent modal stacking
 export const Z_INDEX = {
@@ -25,8 +26,15 @@ export const getComicConfig = (storyLength: number, extraPages: number = 0, isNo
     // In Outline Mode, fixed intervals based on story length
     const getDecisionPages = (pages: number, novelMode: boolean): number[] => {
         if (novelMode) {
-            // Novel Mode: Every story page (1 to MAX_STORY_PAGES) is a decision page
-            return Array.from({ length: pages }, (_, i) => i + 1);
+            // Novel Mode: decision every NOVEL_MODE_BATCH_SIZE pages.
+            // e.g. with batch=2: pages 2, 4, 6, 8... — the right page of each spread.
+            const decisions: number[] = [];
+            for (let p = NOVEL_MODE_BATCH_SIZE; p <= pages; p += NOVEL_MODE_BATCH_SIZE) {
+                decisions.push(p);
+            }
+            // Ensure the last story page is always a decision (wrap-up prompt)
+            if (pages > 0 && !decisions.includes(pages)) decisions.push(pages);
+            return decisions;
         }
         // Outline Mode: Fixed intervals, filtered to valid range
         let decisionPages: number[];
@@ -42,7 +50,8 @@ export const getComicConfig = (storyLength: number, extraPages: number = 0, isNo
         MAX_STORY_PAGES: storyLength + extraPages,
         BACK_COVER_PAGE: storyLength + extraPages + 1,
         TOTAL_PAGES: storyLength + extraPages + 1,
-        INITIAL_PAGES: 1, // Start with just 1 page in Novel Mode for immediate interactivity
+        // Novel Mode: pre-generate one full spread before any decision is shown
+        INITIAL_PAGES: isNovelMode ? NOVEL_MODE_BATCH_SIZE : 1,
         GATE_PAGE: 1,
         BATCH_SIZE: isNovelMode ? NOVEL_MODE_BATCH_SIZE : 3,
         DECISION_PAGES: getDecisionPages(storyLength + extraPages, isNovelMode)
