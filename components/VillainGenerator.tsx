@@ -58,7 +58,7 @@ const THREAT_LEVEL_OPTIONS: { value: ThreatLevel; label: string; description: st
  * Generate a unique ID for the villain
  */
 function generateId(): string {
-  return `villain_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  return `villain_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;
 }
 
 /**

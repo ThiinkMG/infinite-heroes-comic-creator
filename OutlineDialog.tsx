@@ -90,6 +90,8 @@ export const OutlineDialog: React.FC<OutlineDialogProps> = ({ outline, title, on
                     <button
                         onClick={onClose}
                         className="comic-btn bg-red-600 text-white w-10 h-10 flex items-center justify-center font-bold text-xl border-[3px] border-black hover:bg-red-500"
+                        aria-label="Close story outline dialog"
+                        title="Close"
                     >✕</button>
                 </div>
 

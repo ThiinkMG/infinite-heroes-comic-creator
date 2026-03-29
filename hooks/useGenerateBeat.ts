@@ -25,6 +25,7 @@ import {
 import { createTextContent, createImageContent, extractJsonFromResponse, getTextFromClaudeResponse, ClaudeContentBlock } from '../claudeHelpers';
 import { useCharacterStore } from '../stores/useCharacterStore';
 import { useSettingsStore } from '../stores/useSettingsStore';
+import { useMetricsStore } from '../stores/useMetricsStore';
 
 // ============================================================================
 // TYPES
@@ -146,6 +147,7 @@ export const useGenerateBeat = (config: GenerateBeatConfig) => {
    * Uses Claude as primary, falls back to Gemini.
    */
   const generateBeat = async (params: GenerateBeatParams): Promise<Beat> => {
+    const beatStartTime = Date.now();
     const {
       history,
       pageNum,
@@ -408,6 +410,9 @@ OUTPUT STRICT JSON ONLY (No markdown formatting):
         const rawText = extractJsonFromResponse(responseText);
         const parsed = JSON.parse(rawText);
 
+        useMetricsStore.getState().recordGeneration('beat', true, Date.now() - beatStartTime, 'claude',
+          response.usage ? { input: response.usage.input_tokens, output: response.usage.output_tokens } : undefined
+        );
         return cleanBeatResponse(parsed, isDecisionPage, isFinalPage);
       } catch (e) {
         console.error("Claude beat generation failed, falling back to Gemini", e);
@@ -441,10 +446,12 @@ OUTPUT STRICT JSON ONLY (No markdown formatting):
       rawText = rawText.replace(/```json/g, '').replace(/```/g, '').trim();
 
       const parsed = JSON.parse(rawText);
+      useMetricsStore.getState().recordGeneration('beat', true, Date.now() - beatStartTime, 'gemini');
       return cleanBeatResponse(parsed, isDecisionPage, isFinalPage);
     } catch (e) {
       console.error("Beat generation failed", e);
       onAPIError(e);
+      useMetricsStore.getState().recordGeneration('beat', false, Date.now() - beatStartTime, 'gemini');
       return {
         caption: pageNum === 1 ? "It began..." : "...",
         scene: `Generic scene for page ${pageNum}.`,

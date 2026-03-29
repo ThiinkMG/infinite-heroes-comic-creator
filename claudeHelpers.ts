@@ -42,6 +42,7 @@ export function detectImageMimeType(base64Data: string): 'image/jpeg' | 'image/p
     if (cleanData.startsWith('UklGR')) return 'image/webp';
 
     // Default to jpeg if unknown
+    console.warn('[detectImageMimeType] Could not detect MIME type from base64 header — falling back to image/jpeg. This may cause 400 errors if the image is PNG/WebP. First 20 chars:', cleanData.substring(0, 20));
     return 'image/jpeg';
 }
 
@@ -65,9 +66,11 @@ export function createImageContent(base64Data: string, mimeType: string = 'auto'
     if (mimeType === 'auto' || !validMimeTypes.includes(mimeType)) {
         finalMimeType = detectedMimeType;
     } else {
-        // Use detected type to prevent mime type mismatch errors
-        finalMimeType = detectedMimeType;
+        // Caller explicitly specified a valid MIME type — trust it
+        finalMimeType = mimeType as ClaudeImageContent['source']['media_type'];
     }
+
+    console.debug('[createImageContent] MIME type resolved:', finalMimeType, '(requested:', mimeType, ')');
 
     return {
         type: 'image',

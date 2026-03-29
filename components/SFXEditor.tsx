@@ -97,7 +97,7 @@ function placedSFXToElement(placed: PlacedSFX, isSelected: boolean): SFXElement 
  * Generate unique ID for placed SFX
  */
 function generatePlacedId(): string {
-  return `placed-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  return `placed-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`;
 }
 
 // ============================================================================

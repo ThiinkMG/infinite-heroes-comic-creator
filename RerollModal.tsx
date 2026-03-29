@@ -124,6 +124,7 @@ export const RerollModal: React.FC<RerollModalProps> = ({
     const [showTips, setShowTips] = useState(false);
     const [expertMode, setExpertMode] = useState(false);
     const [showHistory, setShowHistory] = useState(false);
+    const [copied, setCopied] = useState(false);
 
     // === SMART BEHAVIOR: Auto-select all refs when preset uses them (1.3.1) ===
     useEffect(() => {
@@ -364,7 +365,8 @@ export const RerollModal: React.FC<RerollModalProps> = ({
                             <button
                                 onClick={() => setShowHistory(false)}
                                 className="text-amber-700 hover:text-amber-900 text-xl"
-                                aria-label="Close history"
+                                aria-label="Close history panel"
+                                title="Close history panel"
                             >✕</button>
                         </div>
                         <div className="flex gap-2 overflow-x-auto pb-2 -webkit-overflow-scrolling-touch">
@@ -538,10 +540,14 @@ export const RerollModal: React.FC<RerollModalProps> = ({
                                                         navigator.clipboard.writeText(outline);
                                                     }}
                                                     className="text-xs px-2 py-1 bg-blue-500 text-white border border-black rounded hover:bg-blue-400"
+                                                    aria-label="Copy outline to clipboard"
+                                                    title="Copy outline to clipboard"
                                                 >📋</button>
                                                 <button
                                                     onClick={handleDownloadOutline}
                                                     className="text-xs px-2 py-1 bg-blue-600 text-white border border-black rounded hover:bg-blue-500"
+                                                    aria-label="Download outline as text file"
+                                                    title="Download outline as text file"
                                                 >⬇</button>
                                             </div>
                                         </div>
@@ -558,11 +564,20 @@ export const RerollModal: React.FC<RerollModalProps> = ({
                                             <p className="font-comic text-sm font-bold text-gray-700">🔧 Original Prompt</p>
                                             <div className="flex gap-2">
                                                 <button
-                                                    onClick={() => {
-                                                        navigator.clipboard.writeText(originalPrompt);
+                                                    onClick={async () => {
+                                                        try {
+                                                            await navigator.clipboard.writeText(originalPrompt);
+                                                            setCopied(true);
+                                                            console.debug('[RerollModal] Original prompt copied to clipboard, length:', originalPrompt.length);
+                                                            setTimeout(() => setCopied(false), 2000);
+                                                        } catch (e) {
+                                                            console.warn('[RerollModal] Clipboard copy failed:', e);
+                                                        }
                                                     }}
-                                                    className="text-xs px-2 py-1 bg-gray-500 text-white border border-black rounded hover:bg-gray-400"
-                                                >📋</button>
+                                                    className="comic-btn bg-gray-700 text-white px-2 py-1 text-xs border border-gray-500 hover:bg-gray-600"
+                                                    aria-label="Copy original prompt to clipboard"
+                                                    title="Copy to clipboard"
+                                                >{copied ? '✓ Copied' : '📋 Copy'}</button>
                                                 <button
                                                     onClick={() => {
                                                         const blob = new Blob([originalPrompt], { type: 'text/plain' });
@@ -574,6 +589,8 @@ export const RerollModal: React.FC<RerollModalProps> = ({
                                                         URL.revokeObjectURL(url);
                                                     }}
                                                     className="text-xs px-2 py-1 bg-gray-600 text-white border border-black rounded hover:bg-gray-500"
+                                                    aria-label="Download original prompt as text file"
+                                                    title="Download original prompt as text file"
                                                 >⬇</button>
                                             </div>
                                         </div>

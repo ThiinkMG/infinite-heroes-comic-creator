@@ -132,7 +132,7 @@ function getEmblemDesc(p: Persona): { image: string; placement: string } | null 
  * Generate a unique ID for a cover variant
  */
 function generateVariantId(style: CoverStyleType): string {
-  return `cover-${style}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  return `cover-${style}-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`;
 }
 
 /**

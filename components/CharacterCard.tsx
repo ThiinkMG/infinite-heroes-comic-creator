@@ -100,6 +100,7 @@ export const CharacterCard: React.FC<CharacterCardProps> = ({
 }) => {
     const [showExpandedBackstory, setShowExpandedBackstory] = useState(false);
     const [isImprovingBackstory, setIsImprovingBackstory] = useState(false);
+    const [improveBackstoryError, setImproveBackstoryError] = useState('');
     const [showContextDropdown, setShowContextDropdown] = useState(false);
     const [selectedContextChars, setSelectedContextChars] = useState<Set<string>>(new Set());
     const [extraContext, setExtraContext] = useState('');
@@ -162,6 +163,8 @@ export const CharacterCard: React.FC<CharacterCardProps> = ({
             onUpdate({ backstoryText: improved });
         } catch (e) {
             console.error('Failed to improve backstory:', e);
+            setImproveBackstoryError('AI Improve failed. Please try again.');
+            setTimeout(() => setImproveBackstoryError(''), 5000);
         } finally {
             setIsImprovingBackstory(false);
         }
@@ -578,6 +581,8 @@ export const CharacterCard: React.FC<CharacterCardProps> = ({
                             <button
                                 onClick={() => setShowExpandedBackstory(false)}
                                 className="shrink-0 bg-red-600 text-white w-8 h-8 sm:w-10 sm:h-10 border-2 sm:border-4 border-black font-bold text-lg sm:text-xl flex items-center justify-center hover:scale-110 hover:bg-red-500"
+                                aria-label="Close character description editor"
+                                title="Close"
                             >×</button>
                         </div>
                         <textarea
@@ -591,6 +596,9 @@ export const CharacterCard: React.FC<CharacterCardProps> = ({
                             <p className="font-comic text-[10px] sm:text-xs text-gray-500">
                                 {(persona?.backstoryText || '').length} chars
                             </p>
+                            {improveBackstoryError && (
+                                <p className="font-comic text-xs text-red-600 font-bold">{improveBackstoryError}</p>
+                            )}
                             <div className="flex gap-2">
                                 {onImproveText && (
                                     <div className="relative">

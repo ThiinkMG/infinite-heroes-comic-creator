@@ -22,6 +22,9 @@ export type ViewMode = 'spread' | 'single';
 /** localStorage key for swipe hint dismissal */
 const SWIPE_HINT_DISMISSED_KEY = 'infiniteHeroes_swipeHintDismissed';
 
+/** localStorage key for keyboard nav hint dismissal */
+const NAV_HINT_DISMISSED_KEY = 'nav-hint-dismissed';
+
 /** localStorage key for view mode preference */
 const VIEW_MODE_PREFERENCE_KEY = 'infiniteHeroes_viewModePreference';
 
@@ -120,6 +123,30 @@ export const Book: React.FC<BookProps> = (props) => {
     const totalSheets = config ? Math.ceil((config.TOTAL_PAGES + 1) / 2) : 1;
     const totalPages = config ? config.TOTAL_PAGES + 2 : 1; // +2 for cover and back cover
 
+    // Generation progress tracking
+    const generatingCount = props.comicFaces.filter(f => f.isLoading).length;
+    const doneCount = props.comicFaces.filter(f => !f.isLoading && !!f.imageUrl).length;
+    const totalExpected = props.comicFaces.length;
+    const isGenerating = generatingCount > 0;
+
+    // Novel Mode: detect unresolved decision pages to lock navigation
+    const unresolvedDecisionPage = useMemo(() => {
+        if (props.generateFromOutline) return -1;
+        const pages = props.comicFaces.filter(
+            f => f.isDecisionPage && !f.resolvedChoice && f.choices && f.choices.length > 0
+                 && !f.isLoading && f.pageIndex != null
+        );
+        return pages.length > 0 ? pages.reduce((max, f) => Math.max(max, f.pageIndex!), 0) : -1;
+    }, [props.comicFaces, props.generateFromOutline]);
+    const hasUnresolvedDecision = unresolvedDecisionPage !== -1;
+
+    // Toast state for when user tries to navigate away from an unresolved decision
+    const [showDecisionLockToast, setShowDecisionLockToast] = useState(false);
+    const showDecisionToast = useCallback(() => {
+        setShowDecisionLockToast(true);
+        setTimeout(() => setShowDecisionLockToast(false), 2500);
+    }, []);
+
     // Portrait mode detection
     const isPortraitMobile = useIsPortraitMobile();
 
@@ -186,6 +213,26 @@ export const Book: React.FC<BookProps> = (props) => {
         }
     }, []);
 
+    // State for keyboard navigation hint (desktop only — shown on first ever visit)
+    const [showNavHint, setShowNavHint] = useState<boolean>(() => {
+        return localStorage.getItem(NAV_HINT_DISMISSED_KEY) !== 'true';
+    });
+
+    const dismissNavHint = useCallback(() => {
+        setShowNavHint(false);
+        localStorage.setItem(NAV_HINT_DISMISSED_KEY, 'true');
+    }, []);
+
+    // Auto-dismiss nav hint after 5 seconds
+    useEffect(() => {
+        if (!showNavHint) return;
+        const timer = setTimeout(() => {
+            dismissNavHint();
+            console.debug('[Book] Nav hint auto-dismissed after 5s');
+        }, 5000);
+        return () => clearTimeout(timer);
+    }, [showNavHint, dismissNavHint]);
+
     // Dismiss the swipe hint and remember in localStorage
     const dismissSwipeHint = useCallback(() => {
         setShowSwipeHint(false);
@@ -195,6 +242,7 @@ export const Book: React.FC<BookProps> = (props) => {
     // Navigation handlers for both modes
     const goToNextPage = useCallback(() => {
         if (props.isSetupVisible) return;
+        if (hasUnresolvedDecision) { showDecisionToast(); return; }
 
         if (effectiveViewMode === 'single') {
             // Single-page mode: increment by 1
@@ -210,12 +258,14 @@ export const Book: React.FC<BookProps> = (props) => {
             }
         }
 
-        // Dismiss hint on first successful swipe
+        // Dismiss hints on first successful navigation
         if (showSwipeHint) dismissSwipeHint();
-    }, [effectiveViewMode, currentSinglePage, totalPages, props, totalSheets, showSwipeHint, dismissSwipeHint]);
+        if (showNavHint) { dismissNavHint(); console.debug('[Book] Nav hint dismissed on navigation'); }
+    }, [effectiveViewMode, currentSinglePage, totalPages, props, totalSheets, showSwipeHint, dismissSwipeHint, showNavHint, dismissNavHint, hasUnresolvedDecision, showDecisionToast]);
 
     const goToPreviousPage = useCallback(() => {
         if (props.isSetupVisible) return;
+        if (hasUnresolvedDecision) { showDecisionToast(); return; }
 
         if (effectiveViewMode === 'single') {
             // Single-page mode: decrement by 1
@@ -231,16 +281,17 @@ export const Book: React.FC<BookProps> = (props) => {
             }
         }
 
-        // Dismiss hint on first successful swipe
+        // Dismiss hints on first successful navigation
         if (showSwipeHint) dismissSwipeHint();
-    }, [effectiveViewMode, currentSinglePage, props, showSwipeHint, dismissSwipeHint]);
+        if (showNavHint) { dismissNavHint(); console.debug('[Book] Nav hint dismissed on navigation'); }
+    }, [effectiveViewMode, currentSinglePage, props, showSwipeHint, dismissSwipeHint, showNavHint, dismissNavHint, hasUnresolvedDecision, showDecisionToast]);
 
     // Swipe gesture handlers for mobile navigation
     const { handlers: swipeHandlers, swipeOffset, isSwiping } = useSwipeGesture({
         onSwipeLeft: goToNextPage,
         onSwipeRight: goToPreviousPage,
         threshold: 50,
-        enabled: !props.isSetupVisible && props.comicFaces.length > 0,
+        enabled: !props.isSetupVisible && props.comicFaces.length > 0 && !hasUnresolvedDecision,
     });
 
     // Keyboard navigation handler
@@ -300,6 +351,13 @@ export const Book: React.FC<BookProps> = (props) => {
         };
     }, [handleKeyDown]);
 
+    // Debug: log generation progress whenever it changes
+    useEffect(() => {
+        if (isGenerating) {
+            console.debug('[Book] Generation progress:', doneCount, '/', totalExpected, '- still loading:', generatingCount);
+        }
+    }, [doneCount, totalExpected, generatingCount, isGenerating]);
+
     // Build sheets to render (for spread mode)
     const sheetsToRender = useMemo(() => {
         const sheets: { front: ComicFace | undefined; back: ComicFace | undefined }[] = [];
@@ -356,6 +414,14 @@ export const Book: React.FC<BookProps> = (props) => {
                         </button>
                     )}
 
+                    {/* Generation progress indicator */}
+                    {isGenerating && (
+                        <div className="absolute -top-10 left-0 z-40 hidden sm:flex items-center gap-1.5 text-xs font-comic text-purple-300 animate-pulse">
+                            <span className="inline-block w-2 h-2 rounded-full bg-purple-400 animate-ping" />
+                            <span>Generating {doneCount}/{totalExpected} pages…</span>
+                        </div>
+                    )}
+
                     {/* Page indicator */}
                     <div className="absolute -bottom-8 left-1/2 -translate-x-1/2 z-40 bg-black/70 text-white px-4 py-1.5 rounded-full text-sm font-bold whitespace-nowrap">
                         {isCover ? 'Cover' :
@@ -409,6 +475,13 @@ export const Book: React.FC<BookProps> = (props) => {
                     </div>
                 </div>
 
+                {/* Keyboard/swipe nav hint — shown on first visit, hidden on touch devices via CSS */}
+                {showNavHint && !isTouchDevice() && (
+                    <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-black/80 text-white font-comic text-xs px-4 py-2 rounded-full z-50 pointer-events-none flex items-center gap-2 animate-pulse">
+                        <span>← → Arrow keys to flip pages</span>
+                    </div>
+                )}
+
                 {/* Swipe hint for single-page mode */}
                 {showSwipeHint && (
                     <div
@@ -428,6 +501,16 @@ export const Book: React.FC<BookProps> = (props) => {
                             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                                 <polyline points="9 18 15 12 9 6"></polyline>
                             </svg>
+                        </div>
+                    </div>
+                )}
+
+                {/* Decision lock toast for single-page mode */}
+                {showDecisionLockToast && (
+                    <div className="fixed bottom-20 left-1/2 -translate-x-1/2 z-50 pointer-events-none">
+                        <div className="bg-yellow-400 text-black font-comic font-bold text-sm px-5 py-2.5 rounded-full shadow-lg border-2 border-black flex items-center gap-2">
+                            <span>⚡</span>
+                            <span>Make your choice to continue!</span>
                         </div>
                     </div>
                 )}
@@ -475,6 +558,14 @@ export const Book: React.FC<BookProps> = (props) => {
                     </button>
                 )}
 
+                {/* Generation progress indicator */}
+                {!props.isSetupVisible && isGenerating && (
+                    <div className="absolute -top-10 left-0 z-40 hidden sm:flex items-center gap-1.5 text-xs font-comic text-purple-300 animate-pulse">
+                        <span className="inline-block w-2 h-2 rounded-full bg-purple-400 animate-ping" />
+                        <span>Generating {doneCount}/{totalExpected} pages…</span>
+                    </div>
+                )}
+
                 {sheetsToRender.map((sheet, i) => (
                     <div
                         key={i}
@@ -491,6 +582,13 @@ export const Book: React.FC<BookProps> = (props) => {
                     </div>
                 ))}
             </div>
+
+            {/* Keyboard navigation hint — desktop only, shown on first visit */}
+            {showNavHint && !isTouchDevice() && !props.isSetupVisible && props.comicFaces.length > 0 && (
+                <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-black/80 text-white font-comic text-xs px-4 py-2 rounded-full z-50 pointer-events-none flex items-center gap-2 animate-pulse">
+                    <span>← → Arrow keys to flip pages</span>
+                </div>
+            )}
 
             {/* Mobile swipe hint - shown on first visit for touch devices */}
             {showSwipeHint && !props.isSetupVisible && props.comicFaces.length > 0 && (
@@ -515,6 +613,16 @@ export const Book: React.FC<BookProps> = (props) => {
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                             <polyline points="9 18 15 12 9 6"></polyline>
                         </svg>
+                    </div>
+                </div>
+            )}
+
+            {/* Decision lock toast — shown when user tries to navigate away from an unresolved choice */}
+            {showDecisionLockToast && (
+                <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-50 pointer-events-none">
+                    <div className="bg-yellow-400 text-black font-comic font-bold text-sm px-5 py-2.5 rounded-full shadow-lg border-2 border-black flex items-center gap-2">
+                        <span>⚡</span>
+                        <span>Make your choice to continue!</span>
                     </div>
                 </div>
             )}

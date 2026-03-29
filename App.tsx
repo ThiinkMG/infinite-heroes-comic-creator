@@ -232,7 +232,7 @@ const App: React.FC = () => {
 
   const handleAddCharacter = () => {
     const newChar: Persona = {
-      id: Math.random().toString(36).substr(2, 9),
+      id: crypto.randomUUID?.() ?? Math.random().toString(36).substring(2, 11),
       name: `Character ${additionalCharacters.length + 3}`,
       base64: "",
       desc: "Additional Character",
@@ -641,7 +641,7 @@ const App: React.FC = () => {
               config: { imageConfig: { aspectRatio: '1:1' } }
           });
           const part = res.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
-          if (part?.inlineData?.data) return { id: Math.random().toString(36).substr(2, 9), name: desc, base64: part.inlineData.data, desc, backstoryText: '', backstoryFiles: [] };
+          if (part?.inlineData?.data) return { id: crypto.randomUUID?.() ?? Math.random().toString(36).substring(2, 11), name: desc, base64: part.inlineData.data, desc, backstoryText: '', backstoryFiles: [] };
           throw new Error("Failed");
       } catch (e) { 
         handleAPIError(e);
@@ -720,7 +720,9 @@ const App: React.FC = () => {
   };
 
   const generateSinglePage = async (faceId: string, pageNum: number, type: ComicFace['type'], instruction?: string, extraRefImages?: string[], previousChoices?: string[], comicOverrides?: ComicOverrides, useOnlySelectedRefs?: boolean, currentImageToPreserve?: string) => {
-      const isNovelMode = !generateFromOutline;
+      // Use ref (not state) — this async function can be called from generateBatch or handleChoice
+      // where the React state closure may be stale from the render that created the caller.
+      const isNovelMode = !generateFromOutlineRef.current;
       const config = getComicConfig(storyContext.pageLength, extraPages, isNovelMode);
       const isDecision = isNovelMode ? (type === 'story') : config.DECISION_PAGES.includes(pageNum);
       let beat: Beat = { scene: "", choices: [], focus_char: 'other' };
@@ -1617,6 +1619,7 @@ Create a powerful, memorable conclusion that honors the user's story path.
   };
 
   const resetApp = () => {
+      isStoppedRef.current = true; // abort any in-flight generation
       setIsStarted(false);
       setShowSetup(true);
       setComicFaces([]);
@@ -1631,6 +1634,7 @@ Create a powerful, memorable conclusion that honors the user's story path.
 
   const handleGoHome = () => {
       if (window.confirm("Return to setup? Your current generated pages will be lost, but your characters and settings will be saved. To save your generated comic, use the 'Save Draft' button first.")) {
+          isStoppedRef.current = true; // abort any in-flight generation
           setIsStarted(false);
           setShowSetup(true);
           setComicFaces([]);
@@ -2663,9 +2667,9 @@ Create a powerful, memorable conclusion that honors the user's story path.
                           </button>
                       </div>
                       <div className="flex gap-1 pl-3">
-                          <button onClick={zoomOut} className="comic-btn w-8 h-8 bg-gray-200 hover:bg-gray-300 font-bold text-lg flex items-center justify-center border-[2px] border-black">-</button>
-                          <button onClick={resetZoom} className="comic-btn px-2 h-8 bg-gray-200 hover:bg-gray-300 font-bold flex items-center justify-center border-[2px] border-black text-xs">{Math.round(zoom * 100)}%</button>
-                          <button onClick={zoomIn} className="comic-btn w-8 h-8 bg-gray-200 hover:bg-gray-300 font-bold text-lg flex items-center justify-center border-[2px] border-black">+</button>
+                          <button onClick={zoomOut} className="comic-btn w-8 h-8 bg-gray-200 hover:bg-gray-300 font-bold text-lg flex items-center justify-center border-[2px] border-black" aria-label="Zoom out" title="Zoom out">-</button>
+                          <button onClick={resetZoom} className="comic-btn px-2 h-8 bg-gray-200 hover:bg-gray-300 font-bold flex items-center justify-center border-[2px] border-black text-xs" aria-label={`Reset zoom (currently ${Math.round(zoom * 100)}%)`} title="Reset zoom">{Math.round(zoom * 100)}%</button>
+                          <button onClick={zoomIn} className="comic-btn w-8 h-8 bg-gray-200 hover:bg-gray-300 font-bold text-lg flex items-center justify-center border-[2px] border-black" aria-label="Zoom in" title="Zoom in">+</button>
                       </div>
                   </div>
               )}

@@ -90,7 +90,7 @@ export function createSFXElement(
   overrides?: Partial<Omit<SFXElement, 'id' | 'sfxId'>>
 ): SFXElement {
   return {
-    id: `sfx-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+    id: `sfx-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`,
     sfxId: sfxEntry.id,
     text: overrides?.text ?? sfxEntry.text,
     style: overrides?.style ?? sfxEntry.style,
@@ -114,7 +114,7 @@ export function createCustomSFXElement(
   options?: Partial<Omit<SFXElement, 'id' | 'sfxId' | 'text' | 'position'>>
 ): SFXElement {
   return {
-    id: `sfx-custom-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+    id: `sfx-custom-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`,
     sfxId: null,
     text: text.toUpperCase(),
     style: options?.style ?? 'impact',

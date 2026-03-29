@@ -130,6 +130,7 @@ export const ProfilesDialog: React.FC<Props> = ({ profiles, onUpdate, onAnalyze,
                         <label
                             className="comic-btn bg-blue-600 text-white text-xs px-3 py-2 font-bold border-2 border-black hover:bg-blue-500 uppercase flex items-center gap-1 shrink-0 cursor-pointer"
                             title="Import all profiles from a previously exported JSON file"
+                            aria-label="Import all character profiles from JSON file"
                         >
                             ⬆️ Import All
                             <input
@@ -161,6 +162,7 @@ export const ProfilesDialog: React.FC<Props> = ({ profiles, onUpdate, onAnalyze,
                             }}
                             className="comic-btn bg-gray-700 text-white text-xs px-3 py-2 font-bold border-2 border-black hover:bg-gray-600 uppercase flex items-center gap-1 shrink-0"
                             title="Export all profiles as JSON"
+                            aria-label="Export all character profiles as JSON"
                         >
                             <span>⬇️ Export All</span>
                         </button>
@@ -181,19 +183,26 @@ export const ProfilesDialog: React.FC<Props> = ({ profiles, onUpdate, onAnalyze,
                         const isFilled = String(p.faceDescription || '').trim() !== '' || String(p.clothing || '').trim() !== '';
                         const btnText = isFilled ? "REANALYZE" : "ANALYZE";
 
+                        if (profileQuality.score < 80) {
+                            console.debug('[ProfilesDialog] Low quality profile:', p.name, 'score:', profileQuality.score, 'missing:', profileQuality.missingFields);
+                        }
+
                         return (
                         <div key={p.id} className="border-4 border-black p-4 bg-gray-50 flex flex-col gap-3">
                             {/* Profile Quality Warning Banner */}
-                            {profileQuality.score < 50 && (
-                                <div className="bg-yellow-100 border-2 border-yellow-500 rounded p-3">
+                            {profileQuality.score < 80 && (
+                                <div className={`border-2 rounded p-3 ${profileQuality.score < 50 ? 'bg-yellow-100 border-yellow-500' : 'bg-blue-50 border-blue-300'}`}>
                                     <div className="flex items-start justify-between gap-3">
                                         <div className="flex items-start gap-2">
-                                            <span className="text-yellow-600 text-lg">!</span>
+                                            <span className={`text-lg ${profileQuality.score < 50 ? 'text-yellow-600' : 'text-blue-500'}`}>
+                                                {profileQuality.score < 50 ? '!' : 'ℹ'}
+                                            </span>
                                             <div>
-                                                <p className="font-comic text-sm font-bold text-yellow-800 mb-1">
-                                                    Low Profile Quality ({profileQuality.score}%)
+                                                <p className={`font-comic text-sm font-bold mb-1 ${profileQuality.score < 50 ? 'text-yellow-800' : 'text-blue-800'}`}>
+                                                    Profile Completeness: {profileQuality.score}%
+                                                    {profileQuality.score >= 50 && ' — fill in missing fields below to improve'}
                                                 </p>
-                                                <ul className="text-xs text-yellow-700 space-y-0.5">
+                                                <ul className={`text-xs space-y-0.5 ${profileQuality.score < 50 ? 'text-yellow-700' : 'text-blue-700'}`}>
                                                     {profileQuality.warnings.map((warning, i) => (
                                                         <li key={i}>- {warning}</li>
                                                     ))}
@@ -221,19 +230,32 @@ export const ProfilesDialog: React.FC<Props> = ({ profiles, onUpdate, onAnalyze,
                                 <div className="flex items-center gap-3">
                                     <h3 className="font-comic text-2xl font-bold uppercase text-blue-800">{p.name || 'Unknown'}</h3>
                                     <ProfileQualityIndicator profile={p} />
+                                    {profileQuality.score < 80 && (
+                                        <span
+                                            className="text-[10px] font-comic text-orange-600 font-bold cursor-default"
+                                            title={`Profile could be improved. Missing: ${profileQuality.missingFields.join(', ')}`}
+                                        >
+                                            ↗ Improve
+                                        </span>
+                                    )}
                                 </div>
                                 <div className="flex items-center gap-2">
-                                    <button 
+                                    <button
                                         onClick={() => handleDownloadIndividual(p)}
                                         className="comic-btn bg-yellow-400 text-black text-[10px] px-2 py-1 font-bold border-2 border-black hover:bg-yellow-300 uppercase hidden sm:block"
-                                        title="Download this character's profile"
+                                        title="Download this character's profile as JSON"
+                                        aria-label={`Download ${p.name || 'character'} profile as JSON`}
                                     >⬇️ JSON</button>
-                                    <label className="comic-btn bg-blue-500 text-white text-[10px] px-2 py-1 font-bold border-2 border-black hover:bg-blue-400 uppercase cursor-pointer hidden sm:block">
+                                    <label
+                                        className="comic-btn bg-blue-500 text-white text-[10px] px-2 py-1 font-bold border-2 border-black hover:bg-blue-400 uppercase cursor-pointer hidden sm:block"
+                                        title={`Upload ${p.name || 'character'} profile from JSON`}
+                                        aria-label={`Upload ${p.name || 'character'} profile from JSON`}
+                                    >
                                         ⬆️ JSON
-                                        <input 
-                                            type="file" 
-                                            accept=".json,application/json" 
-                                            className="hidden" 
+                                        <input
+                                            type="file"
+                                            accept=".json,application/json"
+                                            className="hidden"
                                             onChange={(e) => handleUploadIndividual(idx, e)}
                                         />
                                     </label>
@@ -393,7 +415,7 @@ export const ProfilesDialog: React.FC<Props> = ({ profiles, onUpdate, onAnalyze,
                                 <h3 className="font-comic text-white text-xl font-bold uppercase">Import Profiles</h3>
                                 <p className="font-comic text-blue-100 text-xs">Select which profiles to import. Matched profiles will overwrite existing data.</p>
                             </div>
-                            <button onClick={() => setBulkMatches(null)} className="text-white hover:text-gray-200 text-xl font-bold ml-2">✕</button>
+                            <button onClick={() => setBulkMatches(null)} className="text-white hover:text-gray-200 text-xl font-bold ml-2" aria-label="Close import dialog" title="Close import dialog">✕</button>
                         </div>
 
                         <div className="overflow-y-auto flex-1 p-4 space-y-3">
@@ -464,7 +486,7 @@ export const ProfilesDialog: React.FC<Props> = ({ profiles, onUpdate, onAnalyze,
             {bulkError && (
                 <div className="fixed bottom-4 right-4 z-[700] bg-red-600 text-white font-comic text-sm px-4 py-3 border-2 border-black shadow-lg max-w-xs">
                     ❌ {bulkError}
-                    <button onClick={() => setBulkError(null)} className="ml-2 font-bold hover:text-red-200">✕</button>
+                    <button onClick={() => setBulkError(null)} className="ml-2 font-bold hover:text-red-200" aria-label="Dismiss error" title="Dismiss error">✕</button>
                 </div>
             )}
         </div>

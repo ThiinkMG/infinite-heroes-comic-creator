@@ -7,7 +7,7 @@
  */
 
 import React, { useMemo } from 'react';
-import { estimateGenerationCost, formatCost, ESTIMATED_COSTS } from '../stores/useMetricsStore';
+import { estimateGenerationCost, formatCost, ESTIMATED_COSTS, useMetricsStore } from '../stores/useMetricsStore';
 import { useSettingsStore } from '../stores/useSettingsStore';
 
 // ============================================================================
@@ -40,6 +40,12 @@ export const CostEstimator: React.FC<CostEstimatorProps> = ({
 }) => {
   const showApiCostEstimate = useSettingsStore((state) => state.showApiCostEstimate);
   const setShowApiCostEstimate = useSettingsStore((state) => state.setShowApiCostEstimate);
+
+  // Live metrics from active generation
+  const totalGenerations = useMetricsStore((state) => state.totalGenerations);
+  const liveCost = useMetricsStore((state) => state.getEstimatedCost());
+  const generationsByType = useMetricsStore((state) => state.generationsByType);
+  const isLive = totalGenerations > 0;
 
   // Calculate estimated cost
   const estimate = useMemo(() => {
@@ -80,13 +86,20 @@ export const CostEstimator: React.FC<CostEstimatorProps> = ({
           ${className}
         `}
         style={{ fontFamily: "'Comic Neue', sans-serif" }}
-        title="Show API cost estimate"
+        title="Show API cost"
       >
         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
         </svg>
-        <span>Show API Cost (~{formatCost(estimate.total)})</span>
+        {isLive ? (
+          <span className="flex items-center gap-1">
+            Live Cost: <span className="text-green-600">{formatCost(liveCost)}</span>
+            <span className="text-xs text-green-500 animate-pulse">●</span>
+          </span>
+        ) : (
+          <span>Show API Cost (~{formatCost(estimate.total)})</span>
+        )}
       </button>
     );
   }
@@ -105,15 +118,20 @@ export const CostEstimator: React.FC<CostEstimatorProps> = ({
         <div className="flex items-center gap-2">
           <span className="text-purple-600 text-lg">$</span>
           <span className="text-sm font-bold text-gray-700">
-            Estimated API Cost:
+            {isLive ? 'Live API Cost:' : 'Estimated API Cost:'}
           </span>
+          {isLive && (
+            <span className="flex items-center gap-1 text-xs bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full font-bold animate-pulse">
+              ● LIVE
+            </span>
+          )}
         </div>
         <div className="flex items-center gap-2">
           <span
             className="text-lg font-bold text-purple-700"
             style={{ fontFamily: "'Bangers', cursive" }}
           >
-            ~{formatCost(estimate.total)}
+            {isLive ? formatCost(liveCost) : `~${formatCost(estimate.total)}`}
           </span>
           <button
             onClick={() => setShowApiCostEstimate(false)}
@@ -127,13 +145,20 @@ export const CostEstimator: React.FC<CostEstimatorProps> = ({
         </div>
       </div>
 
-      {/* Configuration summary */}
-      <div className="mt-1 text-xs text-gray-500">
-        {pageCount} pages, {characterCount} character{characterCount !== 1 ? 's' : ''}, {isOutlineMode ? 'Outline' : 'Novel'} mode
-      </div>
+      {/* Configuration summary / live status */}
+      {isLive ? (
+        <div className="mt-1 text-xs text-gray-500">
+          {generationsByType.image.total} images · {generationsByType.beat.total} beats · {generationsByType.profile.total} profiles{generationsByType.outline.total > 0 ? ` · ${generationsByType.outline.total} outline` : ''}
+          <span className="ml-2 text-gray-400">(pre-gen estimate: ~{formatCost(estimate.total)})</span>
+        </div>
+      ) : (
+        <div className="mt-1 text-xs text-gray-500">
+          {pageCount} pages, {characterCount} character{characterCount !== 1 ? 's' : ''}, {isOutlineMode ? 'Outline' : 'Novel'} mode
+        </div>
+      )}
 
       {/* Detailed breakdown */}
-      {showBreakdown && estimate.total > 0 && (
+      {showBreakdown && estimate.total > 0 && !isLive && (
         <div className="mt-3 pt-2 border-t border-purple-200 space-y-1 text-xs">
           <div className="font-bold text-gray-600 mb-1">Cost Breakdown:</div>
 
@@ -179,9 +204,44 @@ export const CostEstimator: React.FC<CostEstimatorProps> = ({
         </div>
       )}
 
+      {/* Live breakdown */}
+      {showBreakdown && isLive && (
+        <div className="mt-3 pt-2 border-t border-purple-200 space-y-1 text-xs">
+          <div className="font-bold text-gray-600 mb-1">Live Breakdown:</div>
+          {generationsByType.image.total > 0 && (
+            <div className="flex justify-between text-gray-600">
+              <span>Images ({generationsByType.image.total} calls):</span>
+              <span>{formatCost(generationsByType.image.total * 0.00025)}</span>
+            </div>
+          )}
+          {generationsByType.beat.total > 0 && (
+            <div className="flex justify-between text-gray-600">
+              <span>Narratives ({generationsByType.beat.total} calls):</span>
+              <span>{formatCost(generationsByType.beat.total * 0.0045)}</span>
+            </div>
+          )}
+          {generationsByType.profile.total > 0 && (
+            <div className="flex justify-between text-gray-600">
+              <span>Profiles ({generationsByType.profile.total} calls):</span>
+              <span>{formatCost(generationsByType.profile.total * 0.002)}</span>
+            </div>
+          )}
+          {generationsByType.outline.total > 0 && (
+            <div className="flex justify-between text-gray-600">
+              <span>Outline ({generationsByType.outline.total} call):</span>
+              <span>{formatCost(generationsByType.outline.total * 0.01)}</span>
+            </div>
+          )}
+          <div className="flex justify-between font-bold text-gray-700 pt-1 border-t border-purple-200">
+            <span>Running Total:</span>
+            <span>{formatCost(liveCost)}</span>
+          </div>
+        </div>
+      )}
+
       {/* Disclaimer */}
       <div className="mt-2 text-xs text-gray-400 italic">
-        * Estimates based on typical usage. Actual costs may vary.
+        * {isLive ? 'Live cost based on actual API calls this session.' : 'Estimates based on typical usage. Actual costs may vary.'}
       </div>
     </div>
   );

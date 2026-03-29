@@ -22,6 +22,7 @@ import {
 } from '../types';
 import { useCharacterStore } from '../stores/useCharacterStore';
 import { useSettingsStore } from '../stores/useSettingsStore';
+import { useMetricsStore } from '../stores/useMetricsStore';
 
 // ============================================================================
 // TYPES
@@ -320,6 +321,7 @@ export const useGenerateOutline = (config: GenerateOutlineConfig) => {
    * Uses Claude as primary, falls back to Gemini.
    */
   const generateOutline = async (params: GenerateOutlineParams): Promise<GenerateOutlineResult> => {
+    const outlineStartTime = Date.now();
     const { storyContext, extraPages, userNotes } = params;
 
     // Read settings from store
@@ -420,6 +422,9 @@ OUTPUT: Structured text EXACTLY as shown above for each page.
         console.log('[Claude] Outline generated');
 
         const pageBreakdown = parseEnhancedOutline(outlineText, comicConfig);
+        useMetricsStore.getState().recordGeneration('outline', true, Date.now() - outlineStartTime, 'claude',
+          response.usage ? { input: response.usage.input_tokens, output: response.usage.output_tokens } : undefined
+        );
         return {
           content: outlineText,
           pageBreakdown: pageBreakdown.length > 0 ? pageBreakdown : undefined,
@@ -443,6 +448,7 @@ OUTPUT: Structured text EXACTLY as shown above for each page.
       console.log('[Gemini] Outline generated');
 
       const pageBreakdown = parseEnhancedOutline(outlineText, comicConfig);
+      useMetricsStore.getState().recordGeneration('outline', true, Date.now() - outlineStartTime, 'gemini');
       return {
         content: outlineText,
         pageBreakdown: pageBreakdown.length > 0 ? pageBreakdown : undefined,
@@ -451,6 +457,7 @@ OUTPUT: Structured text EXACTLY as shown above for each page.
     } catch (e) {
       console.error("Outline generation failed", e);
       onAPIError(e);
+      useMetricsStore.getState().recordGeneration('outline', false, Date.now() - outlineStartTime, 'gemini');
       return {
         content: '',
         pageBreakdown: undefined,

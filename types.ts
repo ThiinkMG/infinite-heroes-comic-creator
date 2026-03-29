@@ -19,6 +19,8 @@ export const Z_INDEX = {
 
 // Core Configuration Factory
 export const getComicConfig = (storyLength: number, extraPages: number = 0, isNovelMode: boolean = false) => {
+    // Defensive clamp: guard against 0/negative values from malformed drafts or programmatic calls
+    storyLength = Math.max(1, Math.min(20, storyLength || 1));
     // Decision pages: In Novel Mode, EVERY story page is a decision page
     // In Outline Mode, fixed intervals based on story length
     const getDecisionPages = (pages: number, novelMode: boolean): number[] => {
@@ -315,7 +317,7 @@ export interface ComicFace {
     isLoading?: boolean;
     hasFailed?: boolean;
     /** Reason for generation failure (safety filter, rate limit, etc.) */
-    failureReason?: 'safety' | 'rate_limit' | 'quota' | 'content_policy' | 'unknown' | string;
+    failureReason?: 'safety' | 'rate_limit' | 'quota' | 'content_policy' | 'timeout' | 'unknown' | string;
     choices: string[];
     isDecisionPage?: boolean;
     resolvedChoice?: string;

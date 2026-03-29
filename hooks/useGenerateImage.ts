@@ -26,6 +26,7 @@ import {
 import { detectImageMimeType } from '../claudeHelpers';
 import { useCharacterStore } from '../stores/useCharacterStore';
 import { useSettingsStore } from '../stores/useSettingsStore';
+import { useMetricsStore } from '../stores/useMetricsStore';
 
 // ============================================================================
 // TYPES
@@ -83,7 +84,7 @@ export interface GenerateImageResult {
   imageUrl: string;
   originalPrompt: string;
   /** Failure reason if image generation failed */
-  failureReason?: 'safety' | 'rate_limit' | 'quota' | 'content_policy' | 'unknown' | string;
+  failureReason?: 'safety' | 'rate_limit' | 'quota' | 'content_policy' | 'timeout' | 'unknown' | string;
 }
 
 // ============================================================================
@@ -360,6 +361,12 @@ export const useGenerateImage = (config: GenerateImageConfig) => {
       });
     } else {
       pushCharacterReferences();
+
+      // MILESTONE RE-ANCHORING: At pages 3, 6, 9 explicitly reset to portraits to prevent drift
+      if (pageIndex !== undefined && (pageIndex === 3 || pageIndex === 6 || pageIndex === 9)) {
+        contents.push({ text: `\n[MILESTONE RE-ANCHOR - Page ${pageIndex}]\n⚠️ CHARACTER FACE RESET REQUIRED: Multiple pages have been generated. Visual drift may have occurred. You MUST refer ONLY to the portrait images above for each character's face, hair, skin tone, and eye color. Ignore any visual changes seen in the previous page — the ORIGINAL PORTRAITS above are the single source of truth. Re-read them now before drawing.` });
+      }
+
       if (extraRefImages && extraRefImages.length > 0) {
         extraRefImages.forEach((ref, i) => {
           contents.push({ text: `[ADDITIONAL REF ${i + 1}]:` });
@@ -379,8 +386,9 @@ export const useGenerateImage = (config: GenerateImageConfig) => {
     }
 
     // Previous page visual context (image reference)
+    // IMPORTANT: Labeled as CONTINUITY ONLY to prevent facial drift compounding
     if (prevImage && prevBeat) {
-      contents.push({ text: "\n[PREVIOUS PAGE - maintain continuity]:" });
+      contents.push({ text: "\n[PREVIOUS PAGE — POSE/ACTION CONTINUITY ONLY]\n⚠️ DO NOT copy face or hair appearance from this image. Use ONLY for scene continuity (poses, backgrounds, lighting, action flow). For character faces, ALWAYS use the portrait references above." });
       contents.push(createInlineImage(prevImage.split(',')[1] || prevImage));
     }
 
@@ -503,6 +511,11 @@ export const useGenerateImage = (config: GenerateImageConfig) => {
     if (type !== 'back_cover') {
       promptText += buildCriticalDirectivesV2(profiles);
 
+      // Face drift prevention for pages 2+ (both Novel and Outline mode)
+      if (prevImage && pageIndex !== undefined && pageIndex >= 2) {
+        promptText += `\n[FACE DRIFT PREVENTION — Page ${pageIndex}]\nThe PORTRAIT images in the reference section above are the ONLY ground truth for each character's face, eyes, hair, and skin tone. The "PREVIOUS PAGE" image is provided ONLY for action/pose continuity. NEVER copy facial features from the previous page — it may have drifted from the original portrait. Always match the original portrait exactly.\n`;
+      }
+
       // Layer 2/4 blocks only in non-compact mode (Task 5.2.4)
       if (!compactMode && profiles.length > 0) {
         promptText += '\n--- CHARACTER IDENTITY BLOCKS ---\n';
@@ -540,11 +553,20 @@ export const useGenerateImage = (config: GenerateImageConfig) => {
       console.log(`[generateImage] Calling Gemini API (model: ${MODEL_IMAGE_GEN_NAME})...`);
       const apiStartTime = Date.now();
 
-      const res = await ai.models.generateContent({
-        model: MODEL_IMAGE_GEN_NAME,
-        contents: contents,
-        config: { imageConfig: { aspectRatio: '2:3' } }
-      });
+      // 2-minute timeout guard — Gemini can hang on complex prompts
+      const TIMEOUT_MS = 120_000;
+      const timeoutPromise = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('GENERATION_TIMEOUT')), TIMEOUT_MS)
+      );
+
+      const res = await Promise.race([
+        ai.models.generateContent({
+          model: MODEL_IMAGE_GEN_NAME,
+          contents: contents,
+          config: { imageConfig: { aspectRatio: '2:3' } }
+        }),
+        timeoutPromise,
+      ]);
 
       const apiDuration = Date.now() - apiStartTime;
       const totalDuration = Date.now() - startTime;
@@ -579,9 +601,11 @@ export const useGenerateImage = (config: GenerateImageConfig) => {
           failureReason = 'safety';
         }
 
+        useMetricsStore.getState().recordGeneration('image', false, Date.now() - startTime, 'gemini');
         return { imageUrl: '', originalPrompt: promptText, failureReason };
       }
 
+      useMetricsStore.getState().recordGeneration('image', true, Date.now() - startTime, 'gemini');
       return { imageUrl, originalPrompt: promptText };
     } catch (e) {
       const totalDuration = Date.now() - startTime;
@@ -592,7 +616,10 @@ export const useGenerateImage = (config: GenerateImageConfig) => {
       const errorMsg = String(e).toLowerCase();
       let failureReason: GenerateImageResult['failureReason'] = 'unknown';
 
-      if (errorMsg.includes('rate') || errorMsg.includes('429') || errorMsg.includes('too many')) {
+      if (errorMsg.includes('generation_timeout')) {
+        console.warn(`[generateImage] Timed out after 120s`);
+        failureReason = 'timeout';
+      } else if (errorMsg.includes('rate') || errorMsg.includes('429') || errorMsg.includes('too many')) {
         failureReason = 'rate_limit';
       } else if (errorMsg.includes('quota') || errorMsg.includes('resource exhausted')) {
         failureReason = 'quota';
@@ -602,6 +629,7 @@ export const useGenerateImage = (config: GenerateImageConfig) => {
         failureReason = 'api_key';
       }
 
+      useMetricsStore.getState().recordGeneration('image', false, totalDuration, 'gemini');
       return { imageUrl: '', originalPrompt: promptText, failureReason };
     }
   };

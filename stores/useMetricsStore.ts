@@ -197,7 +197,7 @@ export const useMetricsStore = create<MetricsStore>((set, get) => ({
 
   recordGeneration: (type, success, durationMs, provider, tokens) => {
     const record: GenerationRecord = {
-      id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      id: `${Date.now()}-${Math.random().toString(36).substring(2, 11)}`,
       type,
       success,
       durationMs,

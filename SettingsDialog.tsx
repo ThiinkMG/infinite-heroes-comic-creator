@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { galleryDeleteAll } from './hooks/useGalleryDB';
+import { useMetricsStore, formatCost } from './stores/useMetricsStore';
 
 interface Props {
     serverKeyExists: boolean;
@@ -169,6 +170,12 @@ export const SettingsDialog: React.FC<Props> = ({ serverKeyExists, anthropicServ
     const [showResetConfirm, setShowResetConfirm] = useState(false);
     const [isResetting, setIsResetting] = useState(false);
 
+    // Live metrics
+    const totalGenerations = useMetricsStore(s => s.totalGenerations);
+    const liveCost = useMetricsStore(s => s.getEstimatedCost());
+    const generationsByType = useMetricsStore(s => s.generationsByType);
+    const isLive = totalGenerations > 0;
+
     const handleResetApp = async () => {
         setIsResetting(true);
         try {
@@ -194,9 +201,11 @@ export const SettingsDialog: React.FC<Props> = ({ serverKeyExists, anthropicServ
                 {/* Header */}
                 <div className="bg-gray-900 border-b-[4px] border-black px-6 py-3 flex justify-between items-center">
                     <h2 className="font-comic text-2xl text-white uppercase tracking-wider">⚙️ Settings</h2>
-                    <button 
+                    <button
                         onClick={onClose}
                         className="comic-btn bg-red-600 text-white w-10 h-10 flex items-center justify-center font-bold text-xl border-[3px] border-black hover:bg-red-500"
+                        aria-label="Close settings"
+                        title="Close settings"
                     >✕</button>
                 </div>
 
@@ -332,6 +341,43 @@ export const SettingsDialog: React.FC<Props> = ({ serverKeyExists, anthropicServ
                         </div>
                     )}
 
+                    {/* Live API Cost */}
+                    <div className="border-[3px] border-purple-400 bg-purple-50 p-4">
+                        <div className="flex items-center justify-between mb-1">
+                            <p className="font-comic text-sm font-bold uppercase text-purple-800">💰 API Cost This Session</p>
+                            {isLive && (
+                                <span className="flex items-center gap-1 text-xs bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full font-bold">
+                                    <span className="animate-pulse">●</span> LIVE
+                                </span>
+                            )}
+                        </div>
+                        {isLive ? (
+                            <>
+                                <p className="font-comic text-2xl font-bold text-purple-700 mb-2"
+                                   style={{ fontFamily: "'Bangers', cursive" }}>
+                                    {formatCost(liveCost)}
+                                </p>
+                                <div className="grid grid-cols-2 gap-1 text-xs font-comic text-gray-600">
+                                    {generationsByType.image.total > 0 && (
+                                        <span>🖼️ {generationsByType.image.total} images: {formatCost(generationsByType.image.total * 0.00025)}</span>
+                                    )}
+                                    {generationsByType.beat.total > 0 && (
+                                        <span>📝 {generationsByType.beat.total} beats: {formatCost(generationsByType.beat.total * 0.0045)}</span>
+                                    )}
+                                    {generationsByType.profile.total > 0 && (
+                                        <span>👤 {generationsByType.profile.total} profiles: {formatCost(generationsByType.profile.total * 0.002)}</span>
+                                    )}
+                                    {generationsByType.outline.total > 0 && (
+                                        <span>📋 {generationsByType.outline.total} outline: {formatCost(generationsByType.outline.total * 0.01)}</span>
+                                    )}
+                                </div>
+                                <p className="font-comic text-xs text-gray-400 italic mt-2">* Approximate — based on typical token usage.</p>
+                            </>
+                        ) : (
+                            <p className="font-comic text-xs text-gray-500">No API calls made yet this session.</p>
+                        )}
+                    </div>
+
                     {/* Reset App */}
                     <div className="border-[3px] border-red-400 bg-red-50 p-4">
                         <p className="font-comic text-sm font-bold uppercase text-red-800 mb-1">🗑️ Reset App</p>
@@ -353,10 +399,10 @@ export const SettingsDialog: React.FC<Props> = ({ serverKeyExists, anthropicServ
                 </div>
             </div>
 
-            {/* Reset confirmation modal */}
+            {/* Reset confirmation modal — z-[750] ensures it renders above the parent dialog (z-[600]) */}
             {showResetConfirm && (
-                <div className="fixed inset-0 z-[700] bg-black/80 flex items-center justify-center p-4">
-                    <div className="bg-white border-[6px] border-red-600 max-w-sm w-full p-6 text-center shadow-[8px_8px_0_rgba(0,0,0,0.5)]">
+                <div className="fixed inset-0 z-[750] bg-black/80 flex items-center justify-center p-4">
+                    <div className="bg-white border-[6px] border-red-600 max-w-sm w-full mx-auto max-h-screen overflow-y-auto p-6 text-center shadow-[8px_8px_0_rgba(0,0,0,0.5)]">
                         <div className="text-5xl mb-3">⚠️</div>
                         <h3 className="font-comic text-2xl font-bold text-red-700 mb-2 uppercase">Reset Everything?</h3>
                         <p className="font-comic text-sm text-gray-700 mb-2">

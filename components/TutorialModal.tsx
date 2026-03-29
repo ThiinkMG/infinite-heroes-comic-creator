@@ -13,13 +13,15 @@ export interface TutorialModalProps {
     show: boolean;
     /** Handler for closing the modal */
     onClose: () => void;
+    /** Handler for opening the full-page tutorial guide */
+    onOpenFullGuide?: () => void;
 }
 
 /**
  * TutorialModal component displaying how-to-use instructions for the app.
  * Shows a step-by-step guide with pro tips.
  */
-export const TutorialModal: React.FC<TutorialModalProps> = ({ show, onClose }) => {
+export const TutorialModal: React.FC<TutorialModalProps> = ({ show, onClose, onOpenFullGuide }) => {
     if (!show) return null;
 
     return (
@@ -119,6 +121,7 @@ export const TutorialModal: React.FC<TutorialModalProps> = ({ show, onClose }) =
                     <div className="border-t-2 border-dashed border-gray-300 pt-3 mt-3">
                         <p className="font-bold text-sm text-purple-700 uppercase mb-2">Pro Tips</p>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
+
                             <div className="bg-purple-50 p-2 rounded border border-purple-200">
                                 <p className="text-purple-800"><strong>🎯 Consistency:</strong> More reference images = better character accuracy. Upload 2-3 angles of your character's face.</p>
                             </div>
@@ -133,12 +136,31 @@ export const TutorialModal: React.FC<TutorialModalProps> = ({ show, onClose }) =
                             </div>
                         </div>
                     </div>
+
+                    <div className="border-t-2 border-dashed border-gray-300 pt-3 mt-3 text-center">
+                        <p className="font-comic text-xs text-gray-500">
+                            📎 <a
+                                href="https://github.com/ThiinkMG/infinite-heroes-comic-creator"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-blue-600 underline font-bold hover:text-blue-800"
+                            >GitHub Repository</a> — source code, issues &amp; updates
+                        </p>
+                    </div>
                 </div>
 
-                <button
-                    onClick={onClose}
-                    className="comic-btn bg-green-600 text-white px-8 py-3 text-2xl font-bold w-full hover:bg-green-500"
-                >GOT IT!</button>
+                <div className="flex gap-2 mt-2">
+                    {onOpenFullGuide && (
+                        <button
+                            onClick={onOpenFullGuide}
+                            className="comic-btn bg-blue-600 text-white px-4 py-3 text-base font-bold flex-1 hover:bg-blue-500 font-comic"
+                        >📖 Full Guide →</button>
+                    )}
+                    <button
+                        onClick={onClose}
+                        className="comic-btn bg-green-600 text-white px-8 py-3 text-2xl font-bold flex-1 hover:bg-green-500"
+                    >GOT IT!</button>
+                </div>
             </div>
         </div>
     );

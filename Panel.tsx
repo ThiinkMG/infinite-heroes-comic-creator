@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
 */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { ComicFace, getComicConfig, StoryContext } from './types';
 import { LoadingFX } from './LoadingFX';
 
@@ -26,6 +26,14 @@ interface PanelProps {
 export const Panel: React.FC<PanelProps> = ({ face, allFaces, storyContext, generateFromOutline, onChoice, onReroll, onQuickRetry, onAddPage, onStop, onStopHere, onOpenBook, onDownload, onReset }) => {
     const [showCustomChoice, setShowCustomChoice] = useState(false);
     const [customChoiceText, setCustomChoiceText] = useState('');
+    const [showSkipConfirm, setShowSkipConfirm] = useState(false);
+
+    // Reset custom choice UI when navigating to a new decision page (single-page view reuses the same Panel instance)
+    useEffect(() => {
+        setShowCustomChoice(false);
+        setCustomChoiceText('');
+        setShowSkipConfirm(false);
+    }, [face?.pageIndex]);
 
     if (!face) return <div className="w-full h-full bg-gray-950" />;
     if (face.isLoading && !face.imageUrl) return <LoadingFX />;
@@ -35,10 +43,12 @@ export const Panel: React.FC<PanelProps> = ({ face, allFaces, storyContext, gene
 
     // In Novel Mode, only show decision overlay on the MOST RECENT unresolved decision page
     // This prevents multiple overlays from appearing on different pages simultaneously
-    const latestUnresolvedDecision = allFaces
-        .filter(f => f.isDecisionPage && !f.resolvedChoice && f.choices && f.choices.length > 0 && !f.isLoading)
-        .reduce((max, f) => Math.max(max, f.pageIndex || 0), 0);
-    const isLatestDecisionPage = face.pageIndex === latestUnresolvedDecision;
+    const unresolvedDecisionPages = allFaces
+        .filter(f => f.isDecisionPage && !f.resolvedChoice && f.choices && f.choices.length > 0 && !f.isLoading && f.pageIndex != null);
+    const latestUnresolvedDecision = unresolvedDecisionPages.length > 0
+        ? unresolvedDecisionPages.reduce((max, f) => Math.max(max, f.pageIndex!), 0)
+        : -1; // -1 means no unresolved decision pages — nothing matches
+    const isLatestDecisionPage = face.pageIndex != null && face.pageIndex === latestUnresolvedDecision;
 
     return (
         <div className={`panel-container relative group ${isFullBleed ? '!p-0 !bg-[#0a0a0a]' : ''}`}>
@@ -60,6 +70,8 @@ export const Panel: React.FC<PanelProps> = ({ face, allFaces, storyContext, gene
                             return { title: 'Content Policy', desc: 'Scene description may violate content guidelines. Try a different approach.', tip: 'Modify the scene to be less intense.' };
                         case 'api_key':
                             return { title: 'API Key Issue', desc: 'There may be a problem with your API key. Check settings.', tip: 'Verify API key in settings.' };
+                        case 'timeout':
+                            return { title: 'Generation Timed Out', desc: 'The request took too long and was cancelled. Gemini may be busy.', tip: 'Quick Retry usually succeeds on the second attempt.' };
                         default:
                             return { title: 'Generation Failed', desc: 'Panel couldn\'t be generated. Retry or try different instructions.', tip: 'Quick Retry often helps.' };
                     }
@@ -73,7 +85,7 @@ export const Panel: React.FC<PanelProps> = ({ face, allFaces, storyContext, gene
                         <div className="flex flex-col gap-3 w-64">
                             {onQuickRetry && (
                                 <button
-                                    onClick={(e) => { e.stopPropagation(); onQuickRetry(face.pageIndex as number); }}
+                                    onClick={(e) => { e.stopPropagation(); onQuickRetry(face.pageIndex ?? 0); }}
                                     className="comic-btn bg-green-500 text-white px-6 py-3 text-lg font-bold border-[3px] border-black hover:scale-105 shadow-[4px_4px_0px_rgba(0,0,0,1)] w-full"
                                     title="Quick retry with enhanced context (emblem, weapon, outline)"
                                     aria-label="Quick retry panel generation"
@@ -82,7 +94,7 @@ export const Panel: React.FC<PanelProps> = ({ face, allFaces, storyContext, gene
                                 </button>
                             )}
                             <button
-                                onClick={(e) => { e.stopPropagation(); onReroll(face.pageIndex as number); }}
+                                onClick={(e) => { e.stopPropagation(); onReroll(face.pageIndex ?? 0); }}
                                 className="comic-btn bg-yellow-400 text-black px-6 py-3 text-lg font-bold border-[3px] border-black hover:scale-105 shadow-[4px_4px_0px_rgba(0,0,0,1)] w-full"
                                 aria-label="Reroll panel with full options"
                             >
@@ -101,7 +113,7 @@ export const Panel: React.FC<PanelProps> = ({ face, allFaces, storyContext, gene
                 <button
                     onClick={(e) => {
                         e.stopPropagation();
-                        onReroll(face.pageIndex as number);
+                        onReroll(face.pageIndex ?? 0);
                     }}
                     className="absolute top-4 right-4 bg-yellow-400 text-black border-[3px] border-black rounded-full w-10 h-10 flex items-center justify-center font-bold text-xl hover:scale-110 shadow-[2px_2px_0px_rgba(0,0,0,1)] z-30 opacity-50 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity touch-manipulation"
                     title="Re-roll Panel"
@@ -139,7 +151,7 @@ export const Panel: React.FC<PanelProps> = ({ face, allFaces, storyContext, gene
                     {!showCustomChoice ? (
                         <>
                             {face.choices.map((choice, i) => (
-                                <button key={i} onClick={(e) => { e.stopPropagation(); if(face.pageIndex) onChoice(face.pageIndex, choice, false); }}
+                                <button key={i} onClick={(e) => { e.stopPropagation(); if(face.pageIndex != null) onChoice(face.pageIndex, choice, false); }}
                                   className={`comic-btn w-full py-3 text-lg leading-tight font-bold tracking-wider ${i===0?'bg-yellow-400 hover:bg-yellow-300':'bg-blue-500 text-white hover:bg-blue-400'}`}
                                   aria-label={`Choose: ${choice}`}>
                                     {choice}
@@ -155,7 +167,7 @@ export const Panel: React.FC<PanelProps> = ({ face, allFaces, storyContext, gene
                                 <button
                                     onClick={(e) => {
                                         e.stopPropagation();
-                                        if(face.pageIndex) {
+                                        if(face.pageIndex != null) {
                                             // Pick a random choice from available options
                                             const randomChoice = face.choices[Math.floor(Math.random() * face.choices.length)];
                                             onChoice(face.pageIndex, randomChoice, false);
@@ -170,18 +182,36 @@ export const Panel: React.FC<PanelProps> = ({ face, allFaces, storyContext, gene
                             )}
                             {/* Skip - Dismiss stale dialogue without action */}
                             {!generateFromOutline && (
-                                <button
-                                    onClick={(e) => {
-                                        e.stopPropagation();
-                                        // Mark as resolved without generating - just dismiss the dialogue
-                                        if(face.pageIndex) onChoice(face.pageIndex, '[SKIPPED]', true);
-                                    }}
-                                    className="comic-btn w-full py-2 text-xs bg-gray-400 text-white hover:bg-gray-300 font-bold tracking-wider border-2 border-black"
-                                    title="Dismiss this dialogue (for stale/out-of-sync prompts)"
-                                    aria-label="Skip and dismiss this dialogue"
-                                >
-                                    ⏭️ Skip (Dismiss)
-                                </button>
+                                !showSkipConfirm ? (
+                                    <button
+                                        onClick={(e) => { e.stopPropagation(); setShowSkipConfirm(true); }}
+                                        className="comic-btn w-full py-2 text-xs bg-gray-400 text-white hover:bg-gray-300 font-bold tracking-wider border-2 border-black"
+                                        title="Dismiss this dialogue (for stale/out-of-sync prompts)"
+                                        aria-label="Skip and dismiss this dialogue"
+                                    >
+                                        ⏭️ Skip (Dismiss)
+                                    </button>
+                                ) : (
+                                    <div className="w-full flex flex-col gap-1" onClick={e => e.stopPropagation()}>
+                                        <p className="text-white font-comic text-xs text-center">Really dismiss this choice? Story won't advance.</p>
+                                        <div className="flex gap-2">
+                                            <button
+                                                onClick={(e) => { e.stopPropagation(); if(face.pageIndex != null) { console.debug('[Panel] Skip confirmed for page', face.pageIndex); onChoice(face.pageIndex, '[SKIPPED]', true); } setShowSkipConfirm(false); }}
+                                                className="comic-btn flex-1 py-1.5 text-xs bg-red-500 text-white hover:bg-red-400 font-bold border-2 border-black"
+                                                aria-label="Confirm skip choice"
+                                            >
+                                                Yes, Dismiss
+                                            </button>
+                                            <button
+                                                onClick={(e) => { e.stopPropagation(); setShowSkipConfirm(false); }}
+                                                className="comic-btn flex-1 py-1.5 text-xs bg-green-600 text-white hover:bg-green-500 font-bold border-2 border-black"
+                                                aria-label="Cancel skip"
+                                            >
+                                                Cancel
+                                            </button>
+                                        </div>
+                                    </div>
+                                )
                             )}
                             {/* Stop Here Button - Novel Mode only */}
                             {onStopHere && !generateFromOutline && (
@@ -205,7 +235,7 @@ export const Panel: React.FC<PanelProps> = ({ face, allFaces, storyContext, gene
                                 autoFocus
                                 aria-label="Custom action text"
                                 onKeyDown={e => {
-                                    if(e.key === 'Enter' && customChoiceText.trim() && face.pageIndex) {
+                                    if(e.key === 'Enter' && customChoiceText.trim() && face.pageIndex != null) {
                                         onChoice(face.pageIndex, customChoiceText.trim(), true);
                                         setShowCustomChoice(false);
                                         setCustomChoiceText('');
@@ -213,7 +243,7 @@ export const Panel: React.FC<PanelProps> = ({ face, allFaces, storyContext, gene
                                 }}
                             />
                             <button
-                                onClick={(e) => { e.stopPropagation(); if(customChoiceText.trim() && face.pageIndex) { onChoice(face.pageIndex, customChoiceText.trim(), true); setShowCustomChoice(false); setCustomChoiceText(''); } }}
+                                onClick={(e) => { e.stopPropagation(); if(customChoiceText.trim() && face.pageIndex != null) { onChoice(face.pageIndex, customChoiceText.trim(), true); setShowCustomChoice(false); setCustomChoiceText(''); } }}
                                 className="comic-btn bg-green-600 text-white px-4 font-bold border-2 border-black hover:bg-green-500"
                                 aria-label="Submit custom action"
                             >

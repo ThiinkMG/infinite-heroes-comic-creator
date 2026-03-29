@@ -6,6 +6,7 @@
  * Extracted from App.tsx as part of Batch 2.2 decomposition.
  */
 
+import { useRef } from 'react';
 import { GoogleGenAI } from '@google/genai';
 import Anthropic from '@anthropic-ai/sdk';
 import {
@@ -22,6 +23,7 @@ import {
 } from '../claudeHelpers';
 import { useCharacterStore } from '../stores/useCharacterStore';
 import { validateProfileCompleteness } from '../utils/profileValidation';
+import { useMetricsStore } from '../stores/useMetricsStore';
 
 // ============================================================================
 // TYPES
@@ -243,6 +245,10 @@ const buildSignatureArray = (parsed: Record<string, unknown>): string[] => {
 export const useGenerateProfile = (config: GenerateProfileConfig) => {
   const { getAI, getClaude, onAPIError, onAnthropicError } = config;
 
+  // Prevents concurrent profile generation for the same character ID
+  // (rapid double-click or overlapping calls would otherwise overwrite each other)
+  const generatingProfileIds = useRef(new Set<string>());
+
   // Store getters (for use in async callbacks)
   const getHero = () => useCharacterStore.getState().hero;
   const getFriend = () => useCharacterStore.getState().friend;
@@ -346,6 +352,16 @@ export const useGenerateProfile = (config: GenerateProfileConfig) => {
    * Uses Claude as primary, falls back to Gemini.
    */
   const generateCharacterProfile = async (persona: Persona, forceAnalysis = false): Promise<CharacterProfile> => {
+    const profileStartTime = Date.now();
+
+    // Guard: prevent concurrent generation for the same character
+    if (generatingProfileIds.current.has(persona.id)) {
+      console.debug(`[generateCharacterProfile] Skipping duplicate request for "${persona.name}" (${persona.id})`);
+      // Return the currently stored profile if available, else wait for the running call to finish
+      const existing = useCharacterStore.getState().getProfilesArray().find(p => p.id === persona.id);
+      if (existing) return existing;
+    }
+    generatingProfileIds.current.add(persona.id);
     // Build content for both Claude and Gemini
     const claudeContent: ClaudeContentBlock[] = [];
     const geminiContent: Array<{ text: string } | { inlineData: { mimeType: string; data: string } }> = [];
@@ -510,6 +526,10 @@ For hardNegatives, analyze the image and add negatives for:
           warnings: profileQuality.warnings
         });
 
+        useMetricsStore.getState().recordGeneration('profile', true, Date.now() - profileStartTime, 'claude',
+          response.usage ? { input: response.usage.input_tokens, output: response.usage.output_tokens } : undefined
+        );
+        generatingProfileIds.current.delete(persona.id);
         return profile;
       } catch (e) {
         console.warn(`[Claude] Failed for ${persona.name}, falling back to Gemini:`, e);
@@ -548,10 +568,14 @@ For hardNegatives, analyze the image and add negatives for:
         warnings: profileQuality.warnings
       });
 
+      useMetricsStore.getState().recordGeneration('profile', true, Date.now() - profileStartTime, 'gemini');
+      generatingProfileIds.current.delete(persona.id);
       return profile;
     } catch (e) {
       console.warn('Failed to generate character profile for', persona.name, e);
       onAPIError(e);
+      useMetricsStore.getState().recordGeneration('profile', false, Date.now() - profileStartTime, 'gemini');
+      generatingProfileIds.current.delete(persona.id);
       return {
         id: persona.id,
         name: persona.name || 'Unknown',

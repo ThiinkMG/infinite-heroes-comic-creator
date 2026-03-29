@@ -20,6 +20,7 @@ import {
     CostEstimator
 } from './components';
 import { HelpTooltip } from './components/HelpTooltip';
+import { TutorialPage } from './components/TutorialPage';
 import { UndoRedoButtons } from './components/UndoRedoButtons';
 import { useUndoHistory } from './hooks/useUndoHistory';
 import { useSessionHistoryStore, SessionEntry } from './stores/useSessionHistoryStore';
@@ -120,7 +121,9 @@ interface ValidationErrors {
  */
 export const Setup: React.FC<SetupProps> = (props) => {
     const [showTutorial, setShowTutorial] = useState(false);
+    const [showTutorialPage, setShowTutorialPage] = useState(false);
     const [isImprovingStory, setIsImprovingStory] = useState(false);
+    const [improveStoryError, setImproveStoryError] = useState('');
     const [selectedContextChars, setSelectedContextChars] = useState<Set<string>>(new Set());
     const [showContextDropdown, setShowContextDropdown] = useState(false);
     const [showExpandedStory, setShowExpandedStory] = useState(false);
@@ -258,6 +261,8 @@ export const Setup: React.FC<SetupProps> = (props) => {
             props.onStoryContextUpdate({ descriptionText: improved });
         } catch (e) {
             console.error('Failed to improve story:', e);
+            setImproveStoryError('AI Improve failed. Please try again.');
+            setTimeout(() => setImproveStoryError(''), 5000);
         } finally {
             setIsImprovingStory(false);
         }
@@ -355,7 +360,7 @@ export const Setup: React.FC<SetupProps> = (props) => {
         });
     };
 
-    if (!props.show && !props.isTransitioning && !showTutorial) {
+    if (!props.show && !props.isTransitioning && !showTutorial && !showTutorialPage) {
         return null;
     }
 
@@ -615,6 +620,8 @@ export const Setup: React.FC<SetupProps> = (props) => {
                                                 <button
                                                     onClick={() => setShowSurprisePanel(false)}
                                                     className="comic-btn bg-gray-400 text-white text-xs px-2 py-1.5 border-2 border-black hover:bg-gray-300"
+                                                    aria-label="Close AI story generator panel"
+                                                    title="Close"
                                                 >
                                                     ✕
                                                 </button>
@@ -705,6 +712,8 @@ export const Setup: React.FC<SetupProps> = (props) => {
                                                         <button
                                                             onClick={() => setShowContextDropdown(false)}
                                                             className="comic-btn bg-gray-400 text-white text-xs px-2 py-1 border-2 border-black hover:bg-gray-300"
+                                                            aria-label="Close character context dropdown"
+                                                            title="Close"
                                                         >
                                                             ✕
                                                         </button>
@@ -769,6 +778,8 @@ export const Setup: React.FC<SetupProps> = (props) => {
                                             <button
                                                 onClick={() => setShowExpandedStory(false)}
                                                 className="shrink-0 bg-red-600 text-white w-8 h-8 sm:w-10 sm:h-10 border-2 sm:border-4 border-black font-bold text-lg sm:text-xl flex items-center justify-center hover:scale-110 hover:bg-red-500"
+                                                aria-label="Close story editor"
+                                                title="Close story editor"
                                             >×</button>
                                         </div>
                                         <textarea
@@ -782,6 +793,9 @@ export const Setup: React.FC<SetupProps> = (props) => {
                                             <p className="font-comic text-[10px] sm:text-xs text-gray-500">
                                                 {props.storyContext.descriptionText.length} chars
                                             </p>
+                                            {improveStoryError && (
+                                                <p className="font-comic text-xs text-red-600 font-bold">{improveStoryError}</p>
+                                            )}
                                             <div className="flex gap-2">
                                                 {props.onImproveText && (
                                                     <button
@@ -955,6 +969,12 @@ export const Setup: React.FC<SetupProps> = (props) => {
           <TutorialModal
               show={showTutorial}
               onClose={() => setShowTutorial(false)}
+              onOpenFullGuide={() => { setShowTutorial(false); setShowTutorialPage(true); }}
+          />
+
+          <TutorialPage
+              show={showTutorialPage}
+              onBack={() => setShowTutorialPage(false)}
           />
 
           {/* Session History Modal */}
@@ -969,7 +989,7 @@ export const Setup: React.FC<SetupProps> = (props) => {
                   >
                       <div className="bg-indigo-600 p-4 flex items-center justify-between border-b-4 border-black">
                           <h3 className="font-comic text-white text-xl font-bold uppercase">📋 Recent Sessions</h3>
-                          <button onClick={() => setShowSessionHistory(false)} className="text-white hover:text-gray-200 text-xl font-bold">✕</button>
+                          <button onClick={() => setShowSessionHistory(false)} className="text-white hover:text-gray-200 text-xl font-bold" aria-label="Close session history" title="Close session history">✕</button>
                       </div>
 
                       {/* Controls */}

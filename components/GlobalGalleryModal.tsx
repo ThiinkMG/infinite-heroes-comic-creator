@@ -178,7 +178,7 @@ export const GlobalGalleryModal: React.FC<GlobalGalleryModalProps> = ({ onClose 
 
     return (
         <div
-            className="fixed inset-0 z-[500] bg-black/90 flex flex-col"
+            className="fixed inset-0 z-[580] bg-black/90 flex flex-col"
             role="dialog"
             aria-modal="true"
             aria-label="Global Image Gallery"

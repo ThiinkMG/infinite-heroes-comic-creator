@@ -123,7 +123,7 @@ export const SingleImageMode: React.FC<SingleImageModeProps> = ({ onClose, onGen
 
     return (
         <div
-            className="fixed inset-0 z-[300] bg-black/90 backdrop-blur-sm flex items-start justify-center overflow-auto"
+            className="fixed inset-0 z-[580] bg-black/90 backdrop-blur-sm flex items-start justify-center overflow-auto"
             role="dialog"
             aria-modal="true"
             aria-label="Single Image Generator"
