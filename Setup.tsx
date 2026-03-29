@@ -342,9 +342,10 @@ export const Setup: React.FC<SetupProps> = (props) => {
 
                     {/* Left Column: Cast */}
                     <div className="flex-1 flex flex-col gap-2">
-                        <button
+                        <div
                             onClick={() => setCastExpanded(!castExpanded)}
-                            className="font-comic text-lg sm:text-xl text-black border-b-4 border-black mb-1 flex justify-between items-center w-full text-left hover:bg-gray-50 p-1 -m-1 transition-colors md:cursor-default"
+                            className="font-comic text-lg sm:text-xl text-black border-b-4 border-black mb-1 flex justify-between items-center w-full text-left hover:bg-gray-50 p-1 -m-1 transition-colors md:cursor-default cursor-pointer md:cursor-default"
+                            role="button"
                             aria-expanded={castExpanded}
                             aria-controls="cast-section"
                         >
@@ -358,7 +359,7 @@ export const Setup: React.FC<SetupProps> = (props) => {
                             >
                                 ADD CHARACTER
                             </button>
-                        </button>
+                        </div>
 
                         <div
                             id="cast-section"
@@ -381,6 +382,10 @@ export const Setup: React.FC<SetupProps> = (props) => {
                                 onBackstoryFileUpload={(files) => props.onBackstoryFileUpload('hero', files)}
                                 onBackstoryFileRemove={(i) => props.onBackstoryFileRemove('hero', i)}
                                 onImproveText={props.onImproveText}
+                                otherCharacters={[
+                                    props.friend ? { id: 'friend', name: props.friend.name || 'Co-Star', backstoryText: props.friend.backstoryText } : null,
+                                    ...props.additionalCharacters.map(c => ({ id: c.id, name: c.name || 'Character', backstoryText: c.backstoryText }))
+                                ].filter(Boolean) as { id: string; name: string; backstoryText?: string }[]}
                                 nameError={validationErrors.heroName}
                                 portraitError={validationErrors.heroPortrait}
                                 onNameBlur={() => handleFieldBlur('heroName')}
@@ -403,6 +408,10 @@ export const Setup: React.FC<SetupProps> = (props) => {
                                 onBackstoryFileUpload={(files) => props.onBackstoryFileUpload('friend', files)}
                                 onBackstoryFileRemove={(i) => props.onBackstoryFileRemove('friend', i)}
                                 onImproveText={props.onImproveText}
+                                otherCharacters={[
+                                    props.hero ? { id: 'hero', name: props.hero.name || 'Hero', backstoryText: props.hero.backstoryText } : null,
+                                    ...props.additionalCharacters.map(c => ({ id: c.id, name: c.name || 'Character', backstoryText: c.backstoryText }))
+                                ].filter(Boolean) as { id: string; name: string; backstoryText?: string }[]}
                             />
 
                             {props.additionalCharacters.map((char) => (
@@ -422,6 +431,13 @@ export const Setup: React.FC<SetupProps> = (props) => {
                                     onBackstoryFileUpload={(files) => props.onBackstoryFileUpload(char.id, files)}
                                     onBackstoryFileRemove={(i) => props.onBackstoryFileRemove(char.id, i)}
                                     onImproveText={props.onImproveText}
+                                    otherCharacters={[
+                                        props.hero ? { id: 'hero', name: props.hero.name || 'Hero', backstoryText: props.hero.backstoryText } : null,
+                                        props.friend ? { id: 'friend', name: props.friend.name || 'Co-Star', backstoryText: props.friend.backstoryText } : null,
+                                        ...props.additionalCharacters
+                                            .filter(c => c.id !== char.id)
+                                            .map(c => ({ id: c.id, name: c.name || 'Character', backstoryText: c.backstoryText }))
+                                    ].filter(Boolean) as { id: string; name: string; backstoryText?: string }[]}
                                 />
                             ))}
                         </div>
@@ -429,9 +445,10 @@ export const Setup: React.FC<SetupProps> = (props) => {
 
                     {/* Right Column: Settings */}
                     <div className="flex-1 flex flex-col gap-2">
-                        <button
+                        <div
                             onClick={() => setStoryExpanded(!storyExpanded)}
-                            className="font-comic text-lg sm:text-xl text-black border-b-4 border-black mb-1 flex justify-between items-center w-full text-left hover:bg-gray-50 p-1 -m-1 transition-colors md:cursor-default"
+                            className="font-comic text-lg sm:text-xl text-black border-b-4 border-black mb-1 flex justify-between items-center w-full text-left hover:bg-gray-50 p-1 -m-1 transition-colors cursor-pointer md:cursor-default"
+                            role="button"
                             aria-expanded={storyExpanded}
                             aria-controls="story-section"
                         >
@@ -445,7 +462,7 @@ export const Setup: React.FC<SetupProps> = (props) => {
                             >
                                 🎲 SURPRISE ME!
                             </button>
-                        </button>
+                        </div>
 
                         <div
                             id="story-section"

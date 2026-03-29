@@ -45,6 +45,8 @@ export interface CharacterCardProps {
     onBackstoryFileRemove: (index: number) => void;
     /** Optional handler for AI text improvement */
     onImproveText?: (text: string, context?: string, purpose?: 'story_description' | 'regeneration_instruction' | 'backstory') => Promise<string>;
+    /** Other characters for context-aware backstory improvement */
+    otherCharacters?: { id: string; name: string; backstoryText?: string }[];
     /** Validation error message for name field */
     nameError?: string;
     /** Validation error message for portrait field */
@@ -84,6 +86,7 @@ export const CharacterCard: React.FC<CharacterCardProps> = ({
     onBackstoryFileUpload,
     onBackstoryFileRemove,
     onImproveText,
+    otherCharacters = [],
     nameError,
     portraitError,
     onNameBlur,
@@ -95,6 +98,9 @@ export const CharacterCard: React.FC<CharacterCardProps> = ({
 }) => {
     const [showExpandedBackstory, setShowExpandedBackstory] = useState(false);
     const [isImprovingBackstory, setIsImprovingBackstory] = useState(false);
+    const [showContextDropdown, setShowContextDropdown] = useState(false);
+    const [selectedContextChars, setSelectedContextChars] = useState<Set<string>>(new Set());
+    const [extraContext, setExtraContext] = useState('');
     const [librarySaveStatus, setLibrarySaveStatus] = useState<'idle' | 'saved'>('idle');
     const [showPortraitOptions, setShowPortraitOptions] = useState(false);
     const [showEmblemOptions, setShowEmblemOptions] = useState(false);
@@ -119,15 +125,36 @@ export const CharacterCard: React.FC<CharacterCardProps> = ({
         onLibrarySave?.(libraryId);
     };
 
+    const toggleContextChar = (id: string) => {
+        setSelectedContextChars(prev => {
+            const next = new Set(prev);
+            if (next.has(id)) next.delete(id);
+            else next.add(id);
+            return next;
+        });
+    };
+
     const handleImproveBackstory = async () => {
         if (!onImproveText || !persona?.backstoryText?.trim()) return;
         setIsImprovingBackstory(true);
+        setShowContextDropdown(false);
         try {
-            const improved = await onImproveText(persona.backstoryText, undefined, 'backstory');
+            // Build context from selected characters and extra context
+            const contextParts: string[] = [];
+            if (selectedContextChars.size > 0) {
+                otherCharacters
+                    .filter(c => selectedContextChars.has(c.id) && c.backstoryText?.trim())
+                    .forEach(c => contextParts.push(`${c.name}: ${c.backstoryText}`));
+            }
+            if (extraContext.trim()) {
+                contextParts.push(`Additional context: ${extraContext.trim()}`);
+            }
+            const context = contextParts.length > 0 ? contextParts.join('\n\n') : undefined;
+
+            const improved = await onImproveText(persona.backstoryText, context, 'backstory');
             onUpdate({ backstoryText: improved });
         } catch (e) {
             console.error('Failed to improve backstory:', e);
-            console.error('Failed to improve text. Please try again.');
         } finally {
             setIsImprovingBackstory(false);
         }
@@ -191,14 +218,14 @@ export const CharacterCard: React.FC<CharacterCardProps> = ({
             <div className="space-y-4 sm:space-y-5">
                 {/* Portrait Section */}
                 <div>
-                    <p className="font-comic text-xs sm:text-sm mb-2 font-bold text-gray-600 uppercase flex items-center">
+                    <div className="font-comic text-xs sm:text-sm mb-2 font-bold text-gray-600 uppercase flex items-center">
                         Portrait{isRequired && <span className="text-red-600 ml-0.5">*</span>}
                         <HelpTooltip
                             title="Good Portraits"
                             text="Use a clear, front-facing image with good lighting. Avoid busy backgrounds. The AI uses this as the primary reference for your character's face."
                             position="right"
                         />
-                    </p>
+                    </div>
                     {persona?.base64 ? (
                         <div className="relative inline-block">
                             <img
@@ -407,15 +434,66 @@ export const CharacterCard: React.FC<CharacterCardProps> = ({
                         </p>
                         <div className="flex flex-col gap-1 shrink-0">
                             {onImproveText && (
-                                <button
-                                    onClick={handleImproveBackstory}
-                                    disabled={isImprovingBackstory || !(persona?.backstoryText?.trim())}
-                                    className="comic-btn bg-purple-600 text-white text-[10px] sm:text-xs px-2 sm:px-2.5 py-1 hover:bg-purple-500 border-2 border-black uppercase disabled:opacity-50 disabled:cursor-not-allowed"
-                                    title={persona?.backstoryText?.trim() ? "Improve description with AI" : "Enter description text first"}
-                                    aria-label="Improve description with AI"
-                                >
-                                    {isImprovingBackstory ? '⏳...' : '✨ AI'}
-                                </button>
+                                <div className="relative">
+                                    <button
+                                        onClick={() => setShowContextDropdown(!showContextDropdown)}
+                                        disabled={isImprovingBackstory || !(persona?.backstoryText?.trim())}
+                                        className="comic-btn bg-purple-600 text-white text-[10px] sm:text-xs px-2 sm:px-2.5 py-1 hover:bg-purple-500 border-2 border-black uppercase disabled:opacity-50 disabled:cursor-not-allowed"
+                                        title={persona?.backstoryText?.trim() ? "Improve description with AI" : "Enter description text first"}
+                                        aria-label="Improve description with AI"
+                                    >
+                                        {isImprovingBackstory ? '⏳...' : '✨ AI'}
+                                    </button>
+                                    {showContextDropdown && !isImprovingBackstory && (
+                                        <>
+                                            <div className="fixed inset-0 z-[49]" onClick={() => setShowContextDropdown(false)} />
+                                            <div className="absolute right-0 top-full mt-1 bg-white border-2 border-black shadow-[3px_3px_0px_rgba(0,0,0,0.3)] z-50 w-56">
+                                                <div className="p-2 border-b-2 border-gray-200">
+                                                    <p className="font-comic text-[10px] text-gray-600 uppercase">Influence from other characters (optional):</p>
+                                                </div>
+                                                <div className="max-h-28 overflow-y-auto">
+                                                    {otherCharacters.length > 0 ? otherCharacters.map(c => (
+                                                        <label key={c.id} className="flex items-center gap-2 px-2 py-1.5 hover:bg-purple-50 cursor-pointer">
+                                                            <input
+                                                                type="checkbox"
+                                                                checked={selectedContextChars.has(c.id)}
+                                                                onChange={() => toggleContextChar(c.id)}
+                                                                className="w-4 h-4 accent-purple-600"
+                                                            />
+                                                            <span className="font-comic text-xs truncate">{c.name || 'Unnamed'}</span>
+                                                        </label>
+                                                    )) : (
+                                                        <p className="text-xs text-gray-400 p-2 italic">No other characters yet</p>
+                                                    )}
+                                                </div>
+                                                <div className="p-2 border-t-2 border-b-2 border-gray-200">
+                                                    <p className="font-comic text-[10px] text-gray-600 uppercase mb-1">Extra context (optional):</p>
+                                                    <textarea
+                                                        value={extraContext}
+                                                        onChange={(e) => setExtraContext(e.target.value)}
+                                                        placeholder="e.g. They are siblings, rivals, same team..."
+                                                        className="w-full p-1.5 border-2 border-black font-comic text-xs resize-none h-14"
+                                                        onClick={(e) => e.stopPropagation()}
+                                                    />
+                                                </div>
+                                                <div className="p-2 flex gap-2">
+                                                    <button
+                                                        onClick={handleImproveBackstory}
+                                                        className="flex-1 comic-btn bg-green-600 text-white text-xs px-2 py-1 border-2 border-black hover:bg-green-500 font-bold"
+                                                    >
+                                                        ✨ IMPROVE
+                                                    </button>
+                                                    <button
+                                                        onClick={() => setShowContextDropdown(false)}
+                                                        className="comic-btn bg-gray-400 text-white text-xs px-2 py-1 border-2 border-black hover:bg-gray-300"
+                                                    >
+                                                        ✕
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </>
+                                    )}
+                                </div>
                             )}
                             <button
                                 onClick={() => setShowExpandedBackstory(true)}
@@ -487,14 +565,65 @@ export const CharacterCard: React.FC<CharacterCardProps> = ({
                             </p>
                             <div className="flex gap-2">
                                 {onImproveText && (
-                                    <button
-                                        onClick={handleImproveBackstory}
-                                        disabled={isImprovingBackstory || !persona?.backstoryText?.trim()}
-                                        className="comic-btn bg-purple-600 text-white px-3 sm:px-4 py-2 font-bold border-2 sm:border-[3px] border-black hover:bg-purple-500 uppercase text-sm disabled:opacity-50 disabled:cursor-not-allowed"
-                                        title="Improve description with AI"
-                                    >
-                                        {isImprovingBackstory ? '⏳ IMPROVING...' : '✨ AI IMPROVE'}
-                                    </button>
+                                    <div className="relative">
+                                        <button
+                                            onClick={() => setShowContextDropdown(!showContextDropdown)}
+                                            disabled={isImprovingBackstory || !persona?.backstoryText?.trim()}
+                                            className="comic-btn bg-purple-600 text-white px-3 sm:px-4 py-2 font-bold border-2 sm:border-[3px] border-black hover:bg-purple-500 uppercase text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                                            title="Improve description with AI"
+                                        >
+                                            {isImprovingBackstory ? '⏳ IMPROVING...' : '✨ AI IMPROVE'}
+                                        </button>
+                                        {showContextDropdown && !isImprovingBackstory && (
+                                            <>
+                                                <div className="fixed inset-0 z-[749]" onClick={() => setShowContextDropdown(false)} />
+                                                <div className="absolute right-0 bottom-full mb-1 bg-white border-2 border-black shadow-[3px_3px_0px_rgba(0,0,0,0.3)] z-[750] w-60">
+                                                    <div className="p-2 border-b-2 border-gray-200">
+                                                        <p className="font-comic text-[10px] text-gray-600 uppercase">Influence from other characters (optional):</p>
+                                                    </div>
+                                                    <div className="max-h-28 overflow-y-auto">
+                                                        {otherCharacters.length > 0 ? otherCharacters.map(c => (
+                                                            <label key={c.id} className="flex items-center gap-2 px-2 py-1.5 hover:bg-purple-50 cursor-pointer">
+                                                                <input
+                                                                    type="checkbox"
+                                                                    checked={selectedContextChars.has(c.id)}
+                                                                    onChange={() => toggleContextChar(c.id)}
+                                                                    className="w-4 h-4 accent-purple-600"
+                                                                />
+                                                                <span className="font-comic text-xs truncate">{c.name || 'Unnamed'}</span>
+                                                            </label>
+                                                        )) : (
+                                                            <p className="text-xs text-gray-400 p-2 italic">No other characters yet</p>
+                                                        )}
+                                                    </div>
+                                                    <div className="p-2 border-t-2 border-b-2 border-gray-200">
+                                                        <p className="font-comic text-[10px] text-gray-600 uppercase mb-1">Extra context (optional):</p>
+                                                        <textarea
+                                                            value={extraContext}
+                                                            onChange={(e) => setExtraContext(e.target.value)}
+                                                            placeholder="e.g. They are siblings, rivals, same team..."
+                                                            className="w-full p-1.5 border-2 border-black font-comic text-xs resize-none h-14"
+                                                            onClick={(e) => e.stopPropagation()}
+                                                        />
+                                                    </div>
+                                                    <div className="p-2 flex gap-2">
+                                                        <button
+                                                            onClick={handleImproveBackstory}
+                                                            className="flex-1 comic-btn bg-green-600 text-white text-xs px-2 py-1 border-2 border-black hover:bg-green-500 font-bold"
+                                                        >
+                                                            ✨ IMPROVE
+                                                        </button>
+                                                        <button
+                                                            onClick={() => setShowContextDropdown(false)}
+                                                            className="comic-btn bg-gray-400 text-white text-xs px-2 py-1 border-2 border-black hover:bg-gray-300"
+                                                        >
+                                                            ✕
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            </>
+                                        )}
+                                    </div>
                                 )}
                                 <button
                                     onClick={() => setShowExpandedBackstory(false)}

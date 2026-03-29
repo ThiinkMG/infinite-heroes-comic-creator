@@ -11,6 +11,150 @@ Master index of all development sessions for the Infinite Heroes Comic Creator p
 
 ## March 2026
 
+### Session 24 - 2026-03-29
+**File**: [2026-03-29_Session_24.md](./March%202026/2026-03-29_Session_24.md)
+**Title**: Character Card AI Improve with Context + Start Adventure Button Fix
+**Status**: Complete
+**Duration**: ~1 hour
+
+**Summary**: Added cross-character context picker to the AI Improve button on CharacterCard (matching the existing pattern from Setup.tsx's story description field). Fixed a broken Start Adventure button caused by invalid DOM nesting — `<button>` inside `<button>` in the collapsible section headers was causing browser DOM auto-correction that desync'd React's virtual DOM and silently broke the click handler.
+
+**Key Accomplishments**:
+- Added `otherCharacters` prop to CharacterCard with checkbox-based context picker dropdown
+- Rewrote `handleImproveBackstory()` to inject selected character backstories + free-text extra context
+- Fixed `<button>` inside `<button>` in Setup.tsx section headers (changed to `<div role="button">`)
+- Fixed `<p>` wrapping `<div>` (HelpTooltip) in CharacterCard portrait label (changed to `<div>`)
+- Documented root cause: invalid HTML nesting causes browser DOM auto-correction, breaking React's virtual DOM sync
+
+**Files Modified**: `components/CharacterCard.tsx`, `Setup.tsx`
+
+**Key Lesson**: React's DOM nesting warnings ("`<button>` cannot be a descendant of `<button>`") are actionable errors. Browser auto-correction desync's React's virtual DOM from the actual DOM, breaking event handlers on completely unrelated elements. Always use `<div role="button">` for collapsible containers that hold interactive children.
+
+**Git Commits**: Pending
+
+---
+
+### Session 21 - 2026-03-27
+**File**: [2026-03-27_Session_21.md](./March%202026/2026-03-27_Session_21.md)
+**Title**: Error Handling + README Enhancement + Layout Fixes + React Bug Fix
+**Status**: ✅ Complete
+**Duration**: ~60 minutes
+
+**Summary**: Improved image generation error handling with specific failure reasons. Enhanced README with screenshots, live demo link, and comic gallery. Fixed responsive layout with click-to-show buttons. Fixed React max update depth error in RerollModal.
+
+**Key Accomplishments**:
+- ✅ Added `failureReason` field to ComicFace type for error diagnostics
+- ✅ useGenerateImage detects: safety, rate_limit, quota, content_policy
+- ✅ Panel shows context-specific error messages with helpful tips
+- ✅ README rewritten with screenshots, live link, comic gallery, Claude API key
+- ✅ Click-to-show buttons for portrait/emblem/weapon (fixes overlap)
+- ✅ Fixed Tooltip layout issues with inline elements
+- ✅ Fixed React error #185 (max update depth) in RerollModal
+
+**Files Modified**: types.ts, useGenerateImage.ts, Panel.tsx, App.tsx, README.md, CharacterCard.tsx, Tooltip.tsx, RerollModal.tsx
+
+**Git Commits**: c5beb93, 8b78490, f98a205, acf61c6, 41bbb13, fd28ccb, 94121e5, 73ae6b1, 4c74d37, 24f3b61
+
+---
+
+### Session 20 - 2026-03-27
+**File**: [2026-03-27_Session_20.md](./March%202026/2026-03-27_Session_20.md)
+**Title**: Home Screen Features + Novel Mode Fix
+**Status**: ✅ Complete
+**Duration**: ~30 minutes
+
+**Summary**: Added character analysis display and preset management to home screen. Fixed Novel Mode generating generic "Option A/B" choices.
+
+**Key Accomplishments**:
+- ✅ CharacterAnalysisPanel: View AI-generated profiles on home screen
+- ✅ PresetManager: View, edit, delete saved presets with expandable cards
+- ✅ Use Saved Profiles checkbox: Skip ProfilesDialog with auto-save
+- ✅ Novel Mode fix: Descriptive choices instead of "Option A/B"
+
+**Files Created**: 2 new components (CharacterAnalysisPanel, PresetManager)
+
+**Git Commit**: d036df1 "Session 20: Home screen features + Novel Mode fix"
+
+---
+
+### Session 19 - 2026-03-27
+**File**: [2026-03-27_Session_19.md](./March%202026/2026-03-27_Session_19.md)
+**Title**: V2 Batch Plan Complete - All 52 Tasks (Phases 1-5)
+**Status**: ✅ Complete
+**Duration**: ~3 hours
+
+**Summary**: Complete implementation of V2 Batch Plan using parallel subagents. All 52 tasks completed across 5 phases including RerollModal redesign, comic authenticity features, platform enhancements, and character consistency improvements.
+
+**Key Accomplishments**:
+- ✅ Phase 1: RerollModal Quick Wins (12 tasks) - Presets, Strength, Focus, Preview
+- ✅ Phase 2: RerollModal Advanced (8 tasks) - Wizard, Variations, History, Expert Mode
+- ✅ Phase 3: Comic Authenticity (10 tasks) - SFX, Bubbles, Captions, Villains
+- ✅ Phase 4: Platform Enhancements (8 tasks) - Cover variants, Batch queue, CMYK, Relationships
+- ✅ Phase 5: Character Consistency (14 tasks) - Profile validation, Prompt optimization
+
+**Files Created**: 41 new files (17 components, 5 data, 1 hook, 1 store, 8 utils)
+
+**Git Commit**: 6ffc3ca "V2 Batch Plan: Complete Phases 1-5 (52 tasks)"
+
+---
+
+### Session 18 - 2026-03-27
+**File**: [2026-03-27_Session_18.md](./March%202026/2026-03-27_Session_18.md)
+**Title**: Bug Fixes + RerollModal Analysis & V2 Batch Plan
+**Status**: ✅ Complete
+**Duration**: ~2 hours
+
+**Summary**: Two-part session: (1) Bug fixes addressing 7 issues (6 resolved, 1 deferred), (2) Comprehensive RerollModal UX analysis with competitive research and V2 batch plan creation.
+
+**Part 1 - Bug Fixes:**
+- ✅ API cost show/hide toggle with persistence
+- ✅ GitHub link in footer (replaced Remix Ideas)
+- ✅ Negative prompts UI in ProfilesDialog and ProfileSelector
+- ✅ Profile selection persistence in RerollModal
+- ✅ Outline modal not appearing fix
+- ✅ Character consistency enhancement (front-loaded summary)
+- 📋 Download destination persistence (deferred to backlog)
+
+**Part 2 - Analysis:**
+- ✅ RerollModal comprehensive UX analysis (rated 7.2/10)
+- ✅ Competitive research (Midjourney, Leonardo, DALL-E, ComfyUI)
+- ✅ Gemini compatibility assessment
+- ✅ Implementation mockups and code snippets
+- ✅ V2 Batch Plan (38 tasks across 4 phases)
+
+**Files Created**:
+- `research/batch-plans/V2. batch-plan/BATCH_PLAN_V2.md`
+- `research/future-builds/reroll-analysis/` (4 documents)
+
+**Next Steps**: Implement Phase 1 Quick Wins from V2 Batch Plan
+
+---
+
+### Session 17 - 2026-03-27
+**File**: [2026-03-27_Session_17.md](./March%202026/2026-03-27_Session_17.md)
+**Title**: Phase 5 Complete - Mobile UX & Responsive Design
+**Status**: ✅ Complete
+**Duration**: ~1.5 hours
+
+**Summary**: Final session completing all 5 phases of the batch implementation plan. Implemented mobile-friendly design patterns, responsive layouts, and finalized the GitHub integration in the footer.
+
+**Key Accomplishments**:
+- ✅ Made Setup.tsx fully responsive with collapsible sections for mobile
+- ✅ Added touch-friendly controls with proper tap targets (48px minimum)
+- ✅ Implemented responsive typography scaling (text-3xl sm:text-4xl md:text-5xl)
+- ✅ Added mobile-first padding and spacing patterns
+- ✅ Updated Footer with GitHub logo and project repository link
+- ✅ Added touch-manipulation CSS for better mobile interactions
+- ✅ Completed ActionButtons with responsive grid layout
+
+**Files Modified**: `Setup.tsx`, `components/ActionButtons.tsx`, `components/Footer.tsx`
+
+**Git Commit**: 74818b6 - Pushed 105 files (+22,583/-2,643 lines) completing all phases
+
+**Project Status**: ALL 5 PHASES COMPLETE (89 tasks total)
+
+---
+
 ### Session 9 - 2026-03-25
 **File**: [2026-03-25_Session_9.md](./March%202026/2026-03-25_Session_9.md)
 **Title**: AI Text Improvement, API Key Validation & Multiple Enhancements
@@ -215,6 +359,7 @@ Master index of all development sessions for the Infinite Heroes Comic Creator p
 - [Session 3 - AI Integration](./March%202026/2026-03-25_Session_001.md#code-changes-summary)
 
 ### AI Character Consistency
+- [Session 18 - Front-Loaded Character Summary](./March%202026/2026-03-27_Session_18.md#6-character-consistency-enhancement-issue-7)
 - [Session 8 - Emblem Placement Reinforcement](./March%202026/2026-03-25_Session_8.md#1-emblemlogo-placement-reinforcement)
 - [Session 8 - Clothing/Armor Consistency](./March%202026/2026-03-25_Session_8.md#2-clothingarmor-consistency-reinforcement)
 - [Session 7 - Emblem/Logo References](./March%202026/2026-03-25_Session_7.md#decision-emblem-placement-as-enum--custom-option)
@@ -228,13 +373,25 @@ Master index of all development sessions for the Infinite Heroes Comic Creator p
 - [Session 1 - Choice Reroll](./March%202026/2026-03-25_Session_1.md#issue-i-implemented-choice-reroll-system)
 
 ### Regeneration System
+- [Session 18 - RerollModal Comprehensive Analysis](./March%202026/2026-03-27_Session_18.md#part-2-rerollmodal-analysis--v2-batch-plan)
+- [Session 18 - Competitive Research (Midjourney, Leonardo, etc.)](./March%202026/2026-03-27_Session_18.md#competitive-research)
+- [Session 18 - V2 Batch Plan (38 tasks)](./March%202026/2026-03-27_Session_18.md#v2-batch-plan-structure)
 - [Session 9 - AI Text Improvement for Reroll](./March%202026/2026-03-25_Session_9.md#rerollmodaltsx---ai-improve-button)
 - [Session 9 - Batch-of-3 Generation Reinforcement](./March%202026/2026-03-25_Session_9.md#4-batch-of-3-generation-reinforcement)
 - [Session 7 - Negative Prompts](./March%202026/2026-03-25_Session_7.md#decision-negative-prompt-in-rerollmodal)
 - [Session 5 - Debug UI Enhancements](./March%202026/2026-03-25_Session_5.md#session-5-story-outline--original-prompt-copydownload-enhancement)
 - [Session 1 - Mode Selection](./March%202026/2026-03-25_Session_1.md#issue-d-created-regeneration-mode-system-in-rerollmodaltsx)
 
+### Responsive Design & Mobile UX
+- [Session 17 - Setup Responsive Collapsible Sections](./March%202026/2026-03-27_Session_17.md#responsive-collapsible-sections)
+- [Session 17 - Touch-Friendly Controls](./March%202026/2026-03-27_Session_17.md#touch-friendly-controls)
+- [Session 17 - ActionButtons Responsive Grid](./March%202026/2026-03-27_Session_17.md#actionbuttons-responsive-grid)
+
 ### UI/UX Components
+- [Session 18 - API Cost Show/Hide Toggle](./March%202026/2026-03-27_Session_18.md#1-api-cost-showhide-toggle-issue-1)
+- [Session 18 - Negative Prompts UI](./March%202026/2026-03-27_Session_18.md#3-negative-prompts-ui-issue-3)
+- [Session 18 - Profile Selection Persistence](./March%202026/2026-03-27_Session_18.md#4-profile-selection-persistence-issue-4)
+- [Session 17 - Footer GitHub Integration](./March%202026/2026-03-27_Session_17.md#footer-github-integration)
 - [Session 7 - Expandable Backstory Modal](./March%202026/2026-03-25_Session_7.md#decision-full-screen-modal-for-backstory-editing)
 - [Session 7 - Emblem Placement Dropdown](./March%202026/2026-03-25_Session_7.md#decision-emblem-placement-as-enum--custom-option)
 - [Session 6 - Image Replace Feature](./March%202026/2026-03-25_Session_6.md#decision-hidden-file-input-pattern)
@@ -289,29 +446,47 @@ Progress on the 11-issue enhancement plan (Issues A-K).
 - [x] Type safety helpers for AI responses
 - **Git Commit**: f433f71 "Add Claude AI integration for text analysis + UI improvements"
 
-### 🚧 Batch 5: Responsive Design & Mode Selection (Partially Complete)
+### ✅ Batch 5: Responsive Design & Mobile UX (Complete - Session 17)
 - [x] Mobile button grid layout (2x2 on mobile, 4-column on tablet+)
-- [ ] Additional mobile/tablet responsive layout improvements
-- [ ] Mode selection UI enhancements
-- [ ] UI polish and layout adjustments
+- [x] Setup.tsx responsive with collapsible sections
+- [x] Touch-friendly controls (48px tap targets)
+- [x] Responsive typography scaling
+- [x] GitHub integration in Footer
+- **Git Commit**: 74818b6 "Complete Phase 1-5 implementation"
 
-### ⏳ Batch 6: Multi-Panel Layouts (Planned)
-- [ ] Support for split-screen layouts
-- [ ] Support for inset panels
-- [ ] Support for stacked layouts
+### ✅ V1 PROJECT COMPLETE
+All 5 phases of the V1 batch implementation plan finished:
+- Phase 1: Character Consistency Critical Fixes (16 tasks)
+- Phase 2: Architecture Refactoring (hooks, stores, components)
+- Phase 3: UX Improvements (keyboard nav, accessibility, notifications)
+- Phase 4: Feature Enhancements (character library, analytics, help system)
+- Phase 5: Mobile UX & Responsive Design (8 tasks)
+- **Total**: 89 tasks across 17 sessions
+
+### ✅ V2 BATCH PLAN COMPLETE (Session 19)
+All 52 tasks of the V2 Batch Plan completed:
+- Phase 1: RerollModal Quick Wins (12 tasks) - Presets, Strength, Focus, Preview
+- Phase 2: RerollModal Advanced (8 tasks) - Wizard, Variations, History, Expert Mode
+- Phase 3: Comic Authenticity (10 tasks) - SFX, Bubbles, Captions, Villains
+- Phase 4: Platform Enhancements (8 tasks) - Cover variants, Batch queue, CMYK
+- Phase 5: Character Consistency (14 tasks) - Profile validation, Prompt optimization
+- **Total**: 52 tasks in 1 session (parallel subagents)
+- **Git Commit**: 6ffc3ca "V2 Batch Plan: Complete Phases 1-5"
 
 ---
 
 ## Session Statistics
 
-- **Total Sessions**: 9
-- **Total Duration**: ~10.8+ hours
-- **Files Modified**: 30+ unique files
-- **Lines Added**: ~3,300+
-- **Batches Complete**: 4.5 of 6
-- **Progress**: 80%
-- **Quality Score Average**: 94%
-- **Git Commits**: 17 (7ae4b86...18a1cea)
+- **Total Sessions**: 21
+- **Total Duration**: ~32+ hours
+- **Files Modified**: 160+ unique files
+- **Lines Changed**: +42,000+ / -3,300+
+- **V1 Phases Complete**: 5 of 5 (100%)
+- **V1 Tasks Complete**: 89 total
+- **V2 Batch Plan**: 52 of 52 tasks (100%)
+- **Progress**: ✅ V1 COMPLETE, ✅ V2 COMPLETE
+- **Git Commits**: 30+ (7ae4b86...8b78490)
+- **Live Demo**: https://infinite-heroes-comic-creator.vercel.app/
 
 ---
 
