@@ -205,9 +205,14 @@ export const CoverVariantSelector: React.FC<CoverVariantSelectorProps> = ({
         <div className="flex justify-between items-center mb-6">
           <h2
             id="cover-selector-title"
-            className="m-0 text-white text-2xl font-bold"
+            className="m-0 text-white text-2xl font-bold flex items-center gap-3"
           >
             Select Your Cover
+            {isGenerating && variants.length > 0 && (
+              <span className="text-sm font-normal text-purple-400 animate-pulse">
+                ({variants.length}/3 ready…)
+              </span>
+            )}
           </h2>
           <button
             onClick={onClose}
@@ -270,15 +275,13 @@ export const CoverVariantSelector: React.FC<CoverVariantSelectorProps> = ({
             );
           })}
 
-          {/* Loading placeholder */}
-          {isGenerating && variants.length < 3 && (
-            <div className="aspect-[2/3] rounded-xl bg-[#2a2a3e] flex items-center justify-center text-gray-500">
-              <div className="text-center">
-                <div className="text-3xl mb-2">⏳</div>
-                <span>Generating...</span>
-              </div>
+          {/* Loading placeholder(s) — one per remaining slot while generating */}
+          {isGenerating && Array.from({ length: Math.max(0, 3 - variants.length) }).map((_, i) => (
+            <div key={`placeholder-${i}`} className="aspect-[2/3] rounded-xl bg-[#2a2a3e] flex flex-col items-center justify-center gap-3 border-2 border-dashed border-purple-500/30">
+              <div className="text-4xl animate-spin" style={{ animationDuration: '2s' }}>⏳</div>
+              <span className="text-purple-400 text-sm font-medium">Generating…</span>
             </div>
-          )}
+          ))}
         </div>
 
         {/* Action buttons */}

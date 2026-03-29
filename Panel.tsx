@@ -96,14 +96,14 @@ export const Panel: React.FC<PanelProps> = ({ face, allFaces, storyContext, gene
                 );
             })()}
 
-            {/* Reroll Button — shows on any non-loading story/cover panel */}
-            {!face.isLoading && (face.type === 'story' || face.type === 'cover') && face.pageIndex !== undefined && face.imageUrl && (
+            {/* Reroll Button — story, cover, and back_cover panels */}
+            {!face.isLoading && (face.type === 'story' || face.type === 'cover' || face.type === 'back_cover') && face.pageIndex !== undefined && face.imageUrl && (
                 <button
                     onClick={(e) => {
                         e.stopPropagation();
                         onReroll(face.pageIndex as number);
                     }}
-                    className="absolute top-4 right-4 bg-yellow-400 text-black border-[3px] border-black rounded-full w-10 h-10 flex items-center justify-center font-bold text-xl hover:scale-110 shadow-[2px_2px_0px_rgba(0,0,0,1)] z-30 opacity-0 group-hover:opacity-100 transition-opacity"
+                    className="absolute top-4 right-4 bg-yellow-400 text-black border-[3px] border-black rounded-full w-10 h-10 flex items-center justify-center font-bold text-xl hover:scale-110 shadow-[2px_2px_0px_rgba(0,0,0,1)] z-30 opacity-50 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity touch-manipulation"
                     title="Re-roll Panel"
                     aria-label="Reroll this panel"
                 >

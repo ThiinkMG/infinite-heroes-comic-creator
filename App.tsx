@@ -328,6 +328,9 @@ const App: React.FC = () => {
   const generatingPages = useRef(new Set<number>());
   const historyRef = useRef<ComicFace[]>([]);
   const isStoppedRef = useRef(false);
+  // Mirrors generateFromOutline so async closures always read the current value.
+  // React batches state updates — closures capture stale values without this ref.
+  const generateFromOutlineRef = useRef(false);
 
   const [zoom, setZoom] = useState(1);
   const zoomIn = () => setZoom(z => Math.min(z + 0.5, 3));
@@ -798,8 +801,9 @@ const App: React.FC = () => {
   };
 
   const generateBatch = async (startPage: number, count: number) => {
-      // Pass isNovelMode flag - Novel Mode is when NOT generating from outline
-      const isNovelMode = !generateFromOutline;
+      // Use ref (not state) — this function is called from async/closure contexts where
+      // the state variable may be stale from the render that created the closure.
+      const isNovelMode = !generateFromOutlineRef.current;
       const config = getComicConfig(storyContext.pageLength, extraPages, isNovelMode);
       const pagesToGen: number[] = [];
       for (let i = 0; i < count; i++) {
@@ -839,7 +843,7 @@ const App: React.FC = () => {
           pagesToGen.forEach(p => generatingPages.current.delete(p));
 
           // Auto-continue in Outline Mode: generate next batch if more pages remain
-          if (!isStoppedRef.current && generateFromOutline) {
+          if (!isStoppedRef.current && generateFromOutlineRef.current) {
               const maxGenerated = Math.max(...pagesToGen, 0);
               if (maxGenerated < config.TOTAL_PAGES) {
                   // Schedule next batch after a small delay
@@ -910,9 +914,10 @@ const App: React.FC = () => {
   };
 
   const handleModeSelect = (mode: 'novel' | 'outline') => {
-    setGenerateFromOutline(mode === 'outline');
-    // Reset outline state when selecting Outline mode to ensure the modal appears
-    if (mode === 'outline') {
+    const isOutline = mode === 'outline';
+    generateFromOutlineRef.current = isOutline; // sync ref BEFORE launchStory reads it
+    setGenerateFromOutline(isOutline);
+    if (isOutline) {
       setStoryOutline({ content: "", isReady: false, isGenerating: false });
     }
     setShowModeSelection(false);
@@ -993,7 +998,7 @@ const App: React.FC = () => {
             store.setAllProfiles(finalProfiles);
 
             // Skip ProfilesDialog and proceed directly
-            if (generateFromOutline && !storyOutline.isReady) {
+            if (generateFromOutlineRef.current && !storyOutline.isReady) {
                 setShowOutlineStep(true);
                 generateOutline();
             } else {
@@ -1417,7 +1422,9 @@ Create a powerful, memorable conclusion that honors the user's story path.
       const pageIndex = rerollTarget;
       setRerollTarget(null);
       const faceId = pageIndex === 0 ? 'cover' : `page-${pageIndex}`;
-      const type = pageIndex === 0 ? 'cover' : 'story';
+      const rerollConfig = getComicConfig(storyContext.pageLength, extraPages);
+      const type: ComicFace['type'] = pageIndex === 0 ? 'cover'
+          : (pageIndex === rerollConfig.BACK_COVER_PAGE ? 'back_cover' : 'story');
 
       // Get previous choices from the face being rerolled (for Novel Mode choice reroll)
       const currentFace = comicFaces.find(f => f.id === faceId);
