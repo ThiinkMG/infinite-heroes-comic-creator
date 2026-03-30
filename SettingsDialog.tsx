@@ -172,6 +172,7 @@ export const SettingsDialog: React.FC<Props> = ({ serverKeyExists, anthropicServ
 
     const [showResetConfirm, setShowResetConfirm] = useState(false);
     const [isResetting, setIsResetting] = useState(false);
+    const [consistencyOpen, setConsistencyOpen] = useState(false);
 
     // Consistency Settings (Feature E)
     const consistencyStrength = useSettingsStore(s => s.consistencyStrength);
@@ -402,84 +403,97 @@ export const SettingsDialog: React.FC<Props> = ({ serverKeyExists, anthropicServ
                     </div>
 
                     {/* Consistency Settings (Feature E) */}
-                    <div className="border-[3px] border-blue-400 bg-blue-50 p-4">
-                        <p className="font-comic text-sm font-bold uppercase text-blue-900 mb-3">🎯 Character Consistency</p>
+                    <div className="border-[3px] border-blue-400 bg-blue-50">
+                        <button
+                            onClick={() => setConsistencyOpen(o => !o)}
+                            className="w-full flex items-center justify-between p-4 cursor-pointer hover:bg-blue-100 transition-colors touch-manipulation"
+                            aria-expanded={consistencyOpen}
+                        >
+                            <p className="font-comic text-sm font-bold uppercase text-blue-900">🎯 Character Consistency</p>
+                            <span className="font-comic text-blue-600 text-lg leading-none select-none">
+                                {consistencyOpen ? '▲' : '▼'}
+                            </span>
+                        </button>
 
-                        {/* Consistency Strength */}
-                        <div className="mb-4">
-                            <div className="flex justify-between items-center mb-1">
-                                <label className="font-comic text-xs font-bold text-blue-800 uppercase">Strength</label>
-                                <span className="font-comic text-xs font-bold text-blue-700 bg-blue-100 px-2 py-0.5 border border-blue-300 rounded">
-                                    {currentStrengthLevel.label}
-                                </span>
-                            </div>
-                            <input
-                                type="range"
-                                min="0"
-                                max="3"
-                                step="1"
-                                value={STRENGTH_LEVELS.findIndex(l => l.value === currentStrengthLevel.value)}
-                                onChange={e => setConsistencyStrength(STRENGTH_LEVELS[parseInt(e.target.value)].value)}
-                                className="w-full accent-blue-600"
-                                aria-label="Consistency strength"
-                            />
-                            <div className="flex justify-between mt-0.5">
-                                {STRENGTH_LEVELS.map(l => (
-                                    <span key={l.value} className="font-comic text-[9px] text-blue-500">{l.label}</span>
-                                ))}
-                            </div>
-                            <p className="font-comic text-[10px] text-gray-500 mt-1">{currentStrengthLevel.desc} — controls how strictly character reference data is enforced in prompts.</p>
-                        </div>
-
-                        {/* Re-anchor Every N */}
-                        <div className="mb-4">
-                            <div className="flex justify-between items-center mb-1">
-                                <label className="font-comic text-xs font-bold text-blue-800 uppercase">Re-Anchor Every</label>
-                                <span className="font-comic text-xs font-bold text-blue-700">{reAnchorEveryN} page{reAnchorEveryN !== 1 ? 's' : ''}</span>
-                            </div>
-                            <input
-                                type="range"
-                                min="1"
-                                max="5"
-                                step="1"
-                                value={reAnchorEveryN}
-                                onChange={e => setReAnchorEveryN(parseInt(e.target.value))}
-                                className="w-full accent-blue-600"
-                                aria-label="Re-anchor character reference every N pages"
-                            />
-                            <p className="font-comic text-[10px] text-gray-500 mt-1">Re-inject full character references every {reAnchorEveryN} pages to prevent long-run drift. Lower = more reminders, higher = fewer.</p>
-                        </div>
-
-                        {/* Toggles */}
-                        <div className="space-y-2">
-                            <label className="flex items-center gap-3 cursor-pointer group">
-                                <input
-                                    type="checkbox"
-                                    checked={autoCharacterAnalysis}
-                                    onChange={e => setAutoCharacterAnalysis(e.target.checked)}
-                                    className="w-5 h-5 accent-blue-600 cursor-pointer"
-                                    aria-label="Auto character analysis"
-                                />
-                                <div>
-                                    <span className="font-comic text-xs font-bold text-blue-800 uppercase group-hover:text-blue-600">Auto Character Analysis</span>
-                                    <p className="font-comic text-[10px] text-gray-500">Automatically run AI visual analysis when starting generation. Disable for faster start.</p>
+                        {consistencyOpen && (
+                            <div className="px-4 pb-4">
+                                {/* Consistency Strength */}
+                                <div className="mb-4">
+                                    <div className="flex justify-between items-center mb-1">
+                                        <label className="font-comic text-xs font-bold text-blue-800 uppercase">Strength</label>
+                                        <span className="font-comic text-xs font-bold text-blue-700 bg-blue-100 px-2 py-0.5 border border-blue-300 rounded">
+                                            {currentStrengthLevel.label}
+                                        </span>
+                                    </div>
+                                    <input
+                                        type="range"
+                                        min="0"
+                                        max="3"
+                                        step="1"
+                                        value={STRENGTH_LEVELS.findIndex(l => l.value === currentStrengthLevel.value)}
+                                        onChange={e => setConsistencyStrength(STRENGTH_LEVELS[parseInt(e.target.value)].value)}
+                                        className="w-full accent-blue-600"
+                                        aria-label="Consistency strength"
+                                    />
+                                    <div className="flex justify-between mt-0.5">
+                                        {STRENGTH_LEVELS.map(l => (
+                                            <span key={l.value} className="font-comic text-[9px] text-blue-500">{l.label}</span>
+                                        ))}
+                                    </div>
+                                    <p className="font-comic text-[10px] text-gray-500 mt-1">{currentStrengthLevel.desc} — controls how strictly character reference data is enforced in prompts.</p>
                                 </div>
-                            </label>
 
-                            <label className="flex items-center gap-3 cursor-pointer group">
-                                <input
-                                    type="checkbox"
-                                    checked={referenceImagePriority}
-                                    onChange={e => setReferenceImagePriority(e.target.checked)}
-                                    className="w-5 h-5 accent-blue-600 cursor-pointer"
-                                    aria-label="Reference image priority"
-                                />
-                                <div>
-                                    <span className="font-comic text-xs font-bold text-blue-800 uppercase group-hover:text-blue-600">Portrait-First Priority</span>
-                                    <p className="font-comic text-[10px] text-gray-500">Place character portraits last in prompt (highest AI weight). Disable to prioritize scene continuity instead.</p>
+                                {/* Re-anchor Every N */}
+                                <div className="mb-4">
+                                    <div className="flex justify-between items-center mb-1">
+                                        <label className="font-comic text-xs font-bold text-blue-800 uppercase">Re-Anchor Every</label>
+                                        <span className="font-comic text-xs font-bold text-blue-700">{reAnchorEveryN} page{reAnchorEveryN !== 1 ? 's' : ''}</span>
+                                    </div>
+                                    <input
+                                        type="range"
+                                        min="1"
+                                        max="5"
+                                        step="1"
+                                        value={reAnchorEveryN}
+                                        onChange={e => setReAnchorEveryN(parseInt(e.target.value))}
+                                        className="w-full accent-blue-600"
+                                        aria-label="Re-anchor character reference every N pages"
+                                    />
+                                    <p className="font-comic text-[10px] text-gray-500 mt-1">Re-inject full character references every {reAnchorEveryN} pages to prevent long-run drift. Lower = more reminders, higher = fewer.</p>
                                 </div>
-                            </label>
-                        </div>
+
+                                {/* Toggles */}
+                                <div className="space-y-2">
+                                    <label className="flex items-center gap-3 cursor-pointer group">
+                                        <input
+                                            type="checkbox"
+                                            checked={autoCharacterAnalysis}
+                                            onChange={e => setAutoCharacterAnalysis(e.target.checked)}
+                                            className="w-5 h-5 accent-blue-600 cursor-pointer"
+                                            aria-label="Auto character analysis"
+                                        />
+                                        <div>
+                                            <span className="font-comic text-xs font-bold text-blue-800 uppercase group-hover:text-blue-600">Auto Character Analysis</span>
+                                            <p className="font-comic text-[10px] text-gray-500">Automatically run AI visual analysis when starting generation. Disable for faster start.</p>
+                                        </div>
+                                    </label>
+
+                                    <label className="flex items-center gap-3 cursor-pointer group">
+                                        <input
+                                            type="checkbox"
+                                            checked={referenceImagePriority}
+                                            onChange={e => setReferenceImagePriority(e.target.checked)}
+                                            className="w-5 h-5 accent-blue-600 cursor-pointer"
+                                            aria-label="Reference image priority"
+                                        />
+                                        <div>
+                                            <span className="font-comic text-xs font-bold text-blue-800 uppercase group-hover:text-blue-600">Portrait-First Priority</span>
+                                            <p className="font-comic text-[10px] text-gray-500">Place character portraits last in prompt (highest AI weight). Disable to prioritize scene continuity instead.</p>
+                                        </div>
+                                    </label>
+                                </div>
+                            </div>
+                        )}
                     </div>
 
                     {/* Help & Resources */}
