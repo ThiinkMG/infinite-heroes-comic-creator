@@ -27,7 +27,7 @@ import { detectImageMimeType } from '../claudeHelpers';
 import { useCharacterStore } from '../stores/useCharacterStore';
 import { useSettingsStore } from '../stores/useSettingsStore';
 import { useMetricsStore } from '../stores/useMetricsStore';
-import type { CharacterLockState } from '../types';
+import type { CharacterLockState, CharacterReferenceObject } from '../types';
 
 // ============================================================================
 // TYPES
@@ -80,6 +80,8 @@ export interface GenerateImageParams {
   compactMode?: boolean;
   /** Adjacent page images for scene/outfit continuity (placed before character portraits) */
   adjacentPageImages?: Array<{ base64: string; label: string }>;
+  /** Feature F: Reroll consistency mode — forces maximum strength for this call */
+  consistencyMode?: boolean;
 }
 
 /** Result from image generation */
@@ -188,6 +190,7 @@ export const useGenerateImage = (config: GenerateImageConfig) => {
   const getAdditionalChars = () => useCharacterStore.getState().additionalCharacters;
   const getProfilesArray = () => useCharacterStore.getState().getProfilesArray();
   const getCharacterLocks = () => useCharacterStore.getState().characterLocks;
+  const getReferencesArray = () => useCharacterStore.getState().getReferencesArray();
 
   /**
    * Generate a comic panel image.
@@ -209,6 +212,7 @@ export const useGenerateImage = (config: GenerateImageConfig) => {
       currentImageToPreserve,
       compactMode = false,
       adjacentPageImages,
+      consistencyMode = false,
     } = params;
 
     const startTime = Date.now();
@@ -218,15 +222,18 @@ export const useGenerateImage = (config: GenerateImageConfig) => {
     const {
       selectedGenre,
       selectedLanguage,
-      consistencyStrength = 1.0,
       reAnchorEveryN = 2,
       referenceImagePriority = true,
     } = useSettingsStore.getState();
+    // Feature F: consistencyMode forces maximum strength for this generation call
+    const consistencyStrength = consistencyMode ? 1.0 : (useSettingsStore.getState().consistencyStrength ?? 1.0);
 
     const hero = getHero();
     const friend = getFriend();
     const additionalChars = getAdditionalChars();
     const profiles = getProfilesArray();
+    // Feature A: compiled reference objects (built once after profile generation)
+    const compiledRefs = getReferencesArray();
 
     const contents: Array<{ text: string } | { inlineData: { mimeType: string; data: string } }> = [];
 
@@ -619,6 +626,16 @@ export const useGenerateImage = (config: GenerateImageConfig) => {
       // Face drift prevention reminder (reinforces the scene-context warning already in the image block)
       if (prevImage && pageIndex !== undefined && pageIndex >= 2) {
         promptText += `\n[FACE ANCHOR — Page ${pageIndex}] The scene-context image shown at the start is for background/pose ONLY. All character faces MUST match the portrait images shown last in the reference block above.\n`;
+      }
+
+      // Feature A: Inject compiled reference descriptors (outfit, weapon, emblem, colors).
+      // These are pre-compiled at session start from persona + profile — injected at every page.
+      if (compiledRefs.length > 0 && consistencyStrength >= 0.5) {
+        promptText += '\n--- COMPILED CHARACTER REFERENCES ---\n';
+        compiledRefs.forEach((ref: CharacterReferenceObject) => {
+          promptText += ref.compiledDescriptor + '\n';
+        });
+        promptText += '--- END COMPILED REFERENCES ---\n';
       }
 
       // Layer 2/4 blocks in non-compact mode, gated by consistencyStrength (Feature E).

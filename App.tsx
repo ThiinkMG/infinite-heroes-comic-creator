@@ -591,7 +591,8 @@ const App: React.FC = () => {
     comicOverrides?: { shotTypeOverride?: ShotType; balloonShapeOverride?: BalloonShape; applyFlashbackStyle?: boolean },
     useOnlySelectedRefs?: boolean,
     currentImageToPreserve?: string,
-    adjacentPageImages?: Array<{ base64: string; label: string }>
+    adjacentPageImages?: Array<{ base64: string; label: string }>,
+    consistencyMode?: boolean
   ): Promise<{ imageUrl: string; originalPrompt: string; failureReason?: string }> => {
     return hookGenerateImage({
       beat,
@@ -605,6 +606,7 @@ const App: React.FC = () => {
       useOnlySelectedRefs,
       currentImageToPreserve,
       adjacentPageImages,
+      consistencyMode,
       storyContext,
       storyOutline,
     });
@@ -729,7 +731,7 @@ const App: React.FC = () => {
       if (idx !== -1) historyRef.current[idx] = { ...historyRef.current[idx], ...updates };
   };
 
-  const generateSinglePage = async (faceId: string, pageNum: number, type: ComicFace['type'], instruction?: string, extraRefImages?: string[], previousChoices?: string[], comicOverrides?: ComicOverrides, useOnlySelectedRefs?: boolean, currentImageToPreserve?: string, adjacentPageImages?: Array<{ base64: string; label: string }>) => {
+  const generateSinglePage = async (faceId: string, pageNum: number, type: ComicFace['type'], instruction?: string, extraRefImages?: string[], previousChoices?: string[], comicOverrides?: ComicOverrides, useOnlySelectedRefs?: boolean, currentImageToPreserve?: string, adjacentPageImages?: Array<{ base64: string; label: string }>, consistencyMode?: boolean) => {
       // Use ref (not state) — this async function can be called from generateBatch or handleChoice
       // where the React state closure may be stale from the render that created the caller.
       const isNovelMode = !generateFromOutlineRef.current;
@@ -766,7 +768,7 @@ const App: React.FC = () => {
           }
       }
 
-      const result = await generateImage(beat, type, instruction, extraRefImages, prevImage, prevBeat, pageNum, comicOverrides, useOnlySelectedRefs, currentImageToPreserve, adjacentPageImages);
+      const result = await generateImage(beat, type, instruction, extraRefImages, prevImage, prevBeat, pageNum, comicOverrides, useOnlySelectedRefs, currentImageToPreserve, adjacentPageImages, consistencyMode);
       if (isStoppedRef.current) return;
       if (!result.imageUrl) {
           updateFaceState(faceId, { isLoading: false, hasFailed: true, originalPrompt: result.originalPrompt, failureReason: result.failureReason });
@@ -1009,7 +1011,9 @@ const App: React.FC = () => {
     // Basic validation already done in handleStartAdventure
     if (!getHero()) return;
 
-    if (skipProfileAnalysis) {
+    // Feature E: autoCharacterAnalysis setting also controls whether to skip AI analysis
+    const autoAnalysisEnabled = useSettingsStore.getState().autoCharacterAnalysis;
+    if (skipProfileAnalysis || !autoAnalysisEnabled) {
         // Skip AI analysis - use blank profiles for manual entry
         const profiles = generateBlankProfiles();
         setTempProfiles(profiles);
@@ -1498,7 +1502,7 @@ Create a powerful, memorable conclusion that honors the user's story path.
 
   const handleRerollSubmit = (options: RerollOptions) => {
       if (rerollTarget === null) return;
-      const { instruction, negativePrompt, selectedRefImages, selectedProfileIds, regenerationModes, shotTypeOverride, balloonShapeOverride, applyFlashbackStyle, reinforceWithReferenceImages, useSelectedRefsOnly, prevPageImageUrl, nextPageImageUrl } = options;
+      const { instruction, negativePrompt, selectedRefImages, selectedProfileIds, regenerationModes, shotTypeOverride, balloonShapeOverride, applyFlashbackStyle, reinforceWithReferenceImages, useSelectedRefsOnly, prevPageImageUrl, nextPageImageUrl, consistencyMode } = options;
 
       const pageIndex = rerollTarget;
       setRerollTarget(null);
@@ -1582,7 +1586,7 @@ Create a powerful, memorable conclusion that honors the user's story path.
           rerollAdjacentImages.push({ base64, label: `NEXT PAGE (page ${pageIndex + 1})` });
       }
 
-      generateSinglePage(faceId, pageIndex, type, finalInstruction || undefined, selectedRefImages.length > 0 ? selectedRefImages : undefined, allPreviousChoices.length > 0 ? allPreviousChoices : undefined, comicOverrides, useSelectedRefsOnly && selectedRefImages.length > 0, currentImage, rerollAdjacentImages.length > 0 ? rerollAdjacentImages : undefined)
+      generateSinglePage(faceId, pageIndex, type, finalInstruction || undefined, selectedRefImages.length > 0 ? selectedRefImages : undefined, allPreviousChoices.length > 0 ? allPreviousChoices : undefined, comicOverrides, useSelectedRefsOnly && selectedRefImages.length > 0, currentImage, rerollAdjacentImages.length > 0 ? rerollAdjacentImages : undefined, consistencyMode)
           .then(() => {
               // Restore preserved choices in Novel Mode after image regeneration
               if (preservedChoices && preservedChoices.length > 0 && isNovelMode) {
