@@ -27,6 +27,7 @@ import { detectImageMimeType } from '../claudeHelpers';
 import { useCharacterStore } from '../stores/useCharacterStore';
 import { useSettingsStore } from '../stores/useSettingsStore';
 import { useMetricsStore } from '../stores/useMetricsStore';
+import type { CharacterLockState } from '../types';
 
 // ============================================================================
 // TYPES
@@ -77,6 +78,8 @@ export interface GenerateImageParams {
   currentImageToPreserve?: string;
   /** Use compact prompt mode (shorter prompts, less text before images) */
   compactMode?: boolean;
+  /** Adjacent page images for scene/outfit continuity (placed before character portraits) */
+  adjacentPageImages?: Array<{ base64: string; label: string }>;
 }
 
 /** Result from image generation */
@@ -184,6 +187,7 @@ export const useGenerateImage = (config: GenerateImageConfig) => {
   const getFriend = () => useCharacterStore.getState().friend;
   const getAdditionalChars = () => useCharacterStore.getState().additionalCharacters;
   const getProfilesArray = () => useCharacterStore.getState().getProfilesArray();
+  const getCharacterLocks = () => useCharacterStore.getState().characterLocks;
 
   /**
    * Generate a comic panel image.
@@ -204,13 +208,20 @@ export const useGenerateImage = (config: GenerateImageConfig) => {
       useOnlySelectedRefs,
       currentImageToPreserve,
       compactMode = false,
+      adjacentPageImages,
     } = params;
 
     const startTime = Date.now();
     console.log(`[generateImage] Starting - Type: ${type}, Page: ${pageIndex ?? 'N/A'}, Instruction: ${instruction ? 'Yes' : 'No'}`);
 
-    // Read settings from store
-    const { selectedGenre, selectedLanguage } = useSettingsStore.getState();
+    // Read settings from store (including consistency settings)
+    const {
+      selectedGenre,
+      selectedLanguage,
+      consistencyStrength = 1.0,
+      reAnchorEveryN = 2,
+      referenceImagePriority = true,
+    } = useSettingsStore.getState();
 
     const hero = getHero();
     const friend = getFriend();
@@ -366,35 +377,106 @@ export const useGenerateImage = (config: GenerateImageConfig) => {
     const preImageText = buildCharacterSummary();
     contents.push({ text: preImageText });
 
-    // STEP 2: Previous page image goes FIRST — before character portraits.
-    // Gemini weights later images more heavily, so character portraits must be
-    // the LAST images the model sees. Previous page = scene context only, not face reference.
+    // -------------------------------------------------------------------------
+    // Feature D: Build locked-attribute constraints to prepend as hard rules.
+    // Read from useCharacterStore.characterLocks and matching profiles.
+    // -------------------------------------------------------------------------
+    const buildLockedConstraints = (): string => {
+      const locks = getCharacterLocks();
+      if (locks.size === 0) return '';
+
+      const lines: string[] = [];
+      locks.forEach((lock: CharacterLockState, charId: string) => {
+        const anyLocked = lock.lockFace || lock.lockOutfit || lock.lockWeapon || lock.lockEmblem;
+        if (!anyLocked) return;
+
+        const profile = profiles.find(p => p.id === charId);
+        const charName = profile?.name ?? charId;
+
+        if (lock.lockFace && profile?.identityHeader) {
+          const ih = profile.identityHeader;
+          lines.push(`[ABSOLUTE CONSTRAINT — ${charName.toUpperCase()} FACE] Face: ${ih.face} | Eyes: ${ih.eyes} | Hair: ${ih.hair} | Skin: ${ih.skin} — MUST NOT CHANGE across any page.`);
+        }
+        if (lock.lockOutfit && profile?.clothing) {
+          lines.push(`[ABSOLUTE CONSTRAINT — ${charName.toUpperCase()} OUTFIT] ${profile.clothing} — MUST NOT CHANGE. Same colors, materials, and accessories as reference.`);
+        }
+        if (lock.lockEmblem && profile?.emblemDescription) {
+          const placement = profile.emblemPlacement ? ` at ${profile.emblemPlacement}` : '';
+          lines.push(`[ABSOLUTE CONSTRAINT — ${charName.toUpperCase()} EMBLEM] ${profile.emblemDescription}${placement} — MUST BE PRESENT AND UNCHANGED.`);
+        }
+        if (lock.lockWeapon && profile?.weaponDescription) {
+          lines.push(`[ABSOLUTE CONSTRAINT — ${charName.toUpperCase()} WEAPON] ${profile.weaponDescription} — MUST BE PRESENT AND UNCHANGED.`);
+        }
+      });
+
+      if (lines.length === 0) return '';
+      return `\n=== LOCKED CHARACTER ATTRIBUTES (IMMUTABLE — DO NOT CHANGE) ===\n${lines.join('\n')}\n===\n`;
+    };
+
+    // When referenceImagePriority=true (default): portraits appear LAST (highest weight).
+    // When false: scene context images appear last (prioritize scene continuity over face accuracy).
+    if (!referenceImagePriority) {
+      // Scene-first order: portraits go before context images
+      if (useOnlySelectedRefs && extraRefImages && extraRefImages.length > 0) {
+        contents.push({ text: "\n=== SELECTED REFERENCES (Use ONLY these) ===" });
+        extraRefImages.forEach((ref, i) => {
+          contents.push({ text: `[SELECTED REF ${i + 1}]:` });
+          contents.push(createInlineImage(ref));
+        });
+      } else {
+        pushCharacterReferences();
+        if (extraRefImages && extraRefImages.length > 0) {
+          extraRefImages.forEach((ref, i) => {
+            contents.push({ text: `[ADDITIONAL REF ${i + 1}]:` });
+            contents.push(createInlineImage(ref));
+          });
+        }
+      }
+    }
+
+    // STEP 2: Previous page image — scene context only, placed before portraits when referenceImagePriority=true.
     if (prevImage && prevBeat) {
       contents.push({ text: "\n[SCENE CONTEXT — previous page. For background/lighting/pose continuity ONLY.]\n⚠️ Do NOT copy face, hair, or skin from this. Faces come from the CHARACTER PORTRAITS below." });
       contents.push(createInlineImage(prevImage.split(',')[1] || prevImage));
     }
 
-    // STEP 3: CHARACTER PORTRAITS (last images — highest weight in model's visual context)
-    if (useOnlySelectedRefs && extraRefImages && extraRefImages.length > 0) {
-      contents.push({ text: "\n=== SELECTED REFERENCES (Use ONLY these) ===" });
-      extraRefImages.forEach((ref, i) => {
-        contents.push({ text: `[SELECTED REF ${i + 1}]:` });
-        contents.push(createInlineImage(ref));
-      });
-    } else {
-      pushCharacterReferences();
-
-      // Re-anchor every 2 pages — remind model to read portraits, not previous page
-      if (pageIndex !== undefined && pageIndex >= 2 && pageIndex % 2 === 0) {
-        const charList = profiles.map(p => p.name.toUpperCase()).join(', ');
-        contents.push({ text: `\n[RE-ANCHOR — Page ${pageIndex}] Faces MUST match the PORTRAIT images immediately above for ${charList}.` });
+    // STEP 2b: Adjacent page images (prev/next) for scene/outfit continuity.
+    if (adjacentPageImages && adjacentPageImages.length > 0) {
+      for (const adj of adjacentPageImages) {
+        contents.push({ text: `\n[${adj.label} — SCENE & OUTFIT CONTINUITY ONLY. Do NOT copy faces, hair, or skin from this. Faces come from character portraits below.]\n` });
+        contents.push(createInlineImage(adj.base64));
       }
+    }
 
-      if (extraRefImages && extraRefImages.length > 0) {
+    // STEP 3: CHARACTER PORTRAITS (last images when referenceImagePriority=true — highest weight)
+    if (referenceImagePriority) {
+      if (useOnlySelectedRefs && extraRefImages && extraRefImages.length > 0) {
+        contents.push({ text: "\n=== SELECTED REFERENCES (Use ONLY these) ===" });
         extraRefImages.forEach((ref, i) => {
-          contents.push({ text: `[ADDITIONAL REF ${i + 1}]:` });
+          contents.push({ text: `[SELECTED REF ${i + 1}]:` });
           contents.push(createInlineImage(ref));
         });
+      } else {
+        pushCharacterReferences();
+
+        // Configurable re-anchor interval (Feature E): uses reAnchorEveryN from settings
+        if (pageIndex !== undefined && pageIndex >= reAnchorEveryN && pageIndex % reAnchorEveryN === 0) {
+          const charList = profiles.map(p => p.name.toUpperCase()).join(', ');
+          contents.push({ text: `\n[RE-ANCHOR — Page ${pageIndex}] Faces MUST match the PORTRAIT images immediately above for ${charList}.` });
+        }
+
+        if (extraRefImages && extraRefImages.length > 0) {
+          extraRefImages.forEach((ref, i) => {
+            contents.push({ text: `[ADDITIONAL REF ${i + 1}]:` });
+            contents.push(createInlineImage(ref));
+          });
+        }
+      }
+    } else {
+      // Scene-first: re-anchor still fires but after scene images
+      if (!useOnlySelectedRefs && pageIndex !== undefined && pageIndex >= reAnchorEveryN && pageIndex % reAnchorEveryN === 0) {
+        const charList = profiles.map(p => p.name.toUpperCase()).join(', ');
+        contents.push({ text: `\n[RE-ANCHOR — Page ${pageIndex}] Faces MUST match the PORTRAIT images shown above for ${charList}.` });
       }
     }
 
@@ -428,6 +510,13 @@ export const useGenerateImage = (config: GenerateImageConfig) => {
     } else {
       promptText += `\n[GENRE: ${selectedGenre}] [STYLE: ${storyContext.artStyle || 'Comic Book'}]\n`;
       promptText += `${styleEra} comic art${artStyleTag}, detailed ink, vibrant colors.\n`;
+    }
+
+    // Feature D: Inject locked attribute constraints immediately after style tag.
+    // These are the highest-priority rules — prepended before any scene description.
+    const lockedConstraints = buildLockedConstraints();
+    if (lockedConstraints) {
+      promptText += lockedConstraints;
     }
 
     // STEP 4: Scene description (varies by page type)
@@ -532,8 +621,9 @@ export const useGenerateImage = (config: GenerateImageConfig) => {
         promptText += `\n[FACE ANCHOR — Page ${pageIndex}] The scene-context image shown at the start is for background/pose ONLY. All character faces MUST match the portrait images shown last in the reference block above.\n`;
       }
 
-      // Layer 2/4 blocks only in non-compact mode (Task 5.2.4)
-      if (!compactMode && profiles.length > 0) {
+      // Layer 2/4 blocks in non-compact mode, gated by consistencyStrength (Feature E).
+      // strength >= 0.5: include full identity blocks. strength < 0.5: skip verbose layers.
+      if (!compactMode && profiles.length > 0 && consistencyStrength >= 0.5) {
         promptText += '\n--- CHARACTER IDENTITY BLOCKS ---\n';
         profiles.forEach(cp => {
           promptText += formatIdentityHeader(cp) + '\n';
@@ -545,6 +635,15 @@ export const useGenerateImage = (config: GenerateImageConfig) => {
           promptText += formatConsistencyInstruction(cp, storyContext.artStyle || 'Comic Book') + '\n';
         });
         promptText += '---\n';
+      }
+
+      // Maximum consistency: add extra face-lock reinforcement line (Feature E, strength = 1.0)
+      if (consistencyStrength >= 1.0 && profiles.length > 0) {
+        const faceList = profiles.map(p => {
+          const ih = p.identityHeader;
+          return ih ? `${p.name.toUpperCase()} (${ih.face}, ${ih.hair})` : p.name.toUpperCase();
+        }).join('; ');
+        promptText += `\n[MAXIMUM CONSISTENCY] Every character's face MUST be an EXACT visual match to their portrait reference: ${faceList}. No exceptions.\n`;
       }
 
       // Final anchor (shortened)

@@ -58,6 +58,15 @@ export const QUICK_PRESETS: QuickPreset[] = [
         modes: ['full'],
         useRefs: true,
         prompt: ''
+    },
+    {
+        id: 'consistency-mode',
+        icon: '🔒',
+        label: 'Lock Mode',
+        description: 'Enforce all locked character attributes as hard constraints',
+        modes: ['full'],
+        useRefs: true,
+        prompt: 'Maintain all character appearances EXACTLY as shown in reference images. Same face, same outfit, same emblem, same weapon. No creative changes to character appearance.',
     }
 ];
 

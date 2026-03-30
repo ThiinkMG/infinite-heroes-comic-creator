@@ -17,12 +17,14 @@ import {
     CurrentImagePreview,
     QuickPresets,
     StrengthSlider,
+    ConsistencyPreview,
     QUICK_PRESETS,
     getStrengthPrompt,
     type RefImage,
     type QuickPreset
 } from './components/reroll';
 import { usePageHistory, type RerollHistoryEntry } from './stores/useRerollHistory';
+import { useCharacterStore } from './stores/useCharacterStore';
 
 interface RerollModalProps {
     pageIndex: number;
@@ -49,6 +51,10 @@ interface RerollModalProps {
     onImproveText?: (text: string, context?: string, purpose?: 'story_description' | 'regeneration_instruction' | 'backstory') => Promise<string>;
     /** Callback to revert to a previous attempt's image */
     onRevert?: (imageUrl: string, entry: RerollHistoryEntry) => void;
+    /** Previous page image URL for scene continuity option */
+    prevPageImageUrl?: string;
+    /** Next page image URL for scene continuity option */
+    nextPageImageUrl?: string;
 }
 
 export const RerollModal: React.FC<RerollModalProps> = ({
@@ -70,10 +76,15 @@ export const RerollModal: React.FC<RerollModalProps> = ({
     onAnalyzeProfile,
     onAddNewCharacter,
     onImproveText,
-    onRevert
+    onRevert,
+    prevPageImageUrl,
+    nextPageImageUrl,
 }) => {
     // === HISTORY HOOK (2.3.x) ===
     const pageHistory = usePageHistory(pageIndex);
+
+    // Feature F: Read character lock state for consistency preview and handleSubmit injection
+    const characterLocks = useCharacterStore((state) => state.characterLocks);
     // Ref for scrolling to submit button
     const submitRef = useRef<HTMLButtonElement>(null);
     // Track initial mount to avoid calling onProfileSelectionChange on first render
@@ -115,6 +126,10 @@ export const RerollModal: React.FC<RerollModalProps> = ({
     const [shotTypeOverride, setShotTypeOverride] = useState<ShotType | undefined>(undefined);
     const [balloonShapeOverride, setBalloonShapeOverride] = useState<BalloonShape | undefined>(undefined);
     const [applyFlashbackStyle, setApplyFlashbackStyle] = useState(false);
+
+    // === SCENE CONTINUITY STATE ===
+    const [usePrevPage, setUsePrevPage] = useState(false);
+    const [useNextPage, setUseNextPage] = useState(false);
 
     // === UI STATE ===
     const [showTips, setShowTips] = useState(false);
@@ -204,6 +219,27 @@ export const RerollModal: React.FC<RerollModalProps> = ({
             finalInstruction = `${strengthPrompt} the following: ${finalInstruction}`;
         }
 
+        // Feature F: Prepend locked character attribute constraints to the instruction.
+        // This ensures locked attributes are enforced even when using custom instructions.
+        const lockedLines: string[] = [];
+        characterLocks.forEach((lock, charId) => {
+            const anyLocked = lock.lockFace || lock.lockOutfit || lock.lockWeapon || lock.lockEmblem;
+            if (!anyLocked) return;
+            const profile = fullProfiles.find(p => p.id === charId);
+            const charName = profile?.name ?? charId;
+            const lockedParts: string[] = [];
+            if (lock.lockFace) lockedParts.push('face');
+            if (lock.lockOutfit) lockedParts.push('outfit');
+            if (lock.lockEmblem) lockedParts.push('emblem');
+            if (lock.lockWeapon) lockedParts.push('weapon');
+            lockedLines.push(`[LOCKED — ${charName.toUpperCase()}: keep ${lockedParts.join(', ')} EXACTLY as reference]`);
+        });
+        if (lockedLines.length > 0) {
+            finalInstruction = `${lockedLines.join(' ')} ${finalInstruction}`.trim();
+        }
+
+        const isConsistencyMode = selectedPresetId === 'consistency-mode';
+
         const options: RerollOptions = {
             regenerationModes: regenerationModes.size > 0 ? Array.from(regenerationModes) : undefined,
             instruction: finalInstruction.trim(),
@@ -216,6 +252,9 @@ export const RerollModal: React.FC<RerollModalProps> = ({
             // Simplified: selection IS the control
             reinforceWithReferenceImages: selectedIds.size > 0 || undefined,
             useSelectedRefsOnly: selectedIds.size > 0 || undefined, // Always use only selected
+            prevPageImageUrl: usePrevPage ? prevPageImageUrl : undefined,
+            nextPageImageUrl: useNextPage ? nextPageImageUrl : undefined,
+            consistencyMode: isConsistencyMode || lockedLines.length > 0 || undefined,
         };
 
         onSubmit(options);
@@ -386,6 +425,12 @@ export const RerollModal: React.FC<RerollModalProps> = ({
                         />
                     )}
 
+                    {/* Feature F: Consistency Preview — show locked attributes before user submits */}
+                    <ConsistencyPreview
+                        characterLocks={characterLocks}
+                        profiles={fullProfiles}
+                    />
+
                     {/* 2. QUICK PRESETS (Speed) */}
                     <QuickPresets
                         selectedPresetId={selectedPresetId}
@@ -427,6 +472,42 @@ export const RerollModal: React.FC<RerollModalProps> = ({
                         onUploadRef={onUploadRef}
                     />
 
+                    {/* 5. SCENE CONTINUITY — adjacent page references */}
+                    {(prevPageImageUrl || nextPageImageUrl) && (
+                        <div className="border-[3px] border-blue-400 p-3 bg-blue-50 shadow-[3px_3px_0px_rgba(0,0,0,1)]">
+                            <h3 className="font-comic text-sm font-bold uppercase mb-1 text-blue-900">📎 Scene Continuity</h3>
+                            <p className="text-xs text-gray-600 mb-2">
+                                Include adjacent pages as costume/scene reference. Character faces always come from portraits — these images guide outfit, pose, and background continuity only.
+                            </p>
+                            <div className="flex flex-col gap-2">
+                                {prevPageImageUrl && (
+                                    <label className="flex items-center gap-3 cursor-pointer">
+                                        <input
+                                            type="checkbox"
+                                            checked={usePrevPage}
+                                            onChange={e => setUsePrevPage(e.target.checked)}
+                                            className="w-4 h-4 accent-blue-600"
+                                        />
+                                        <img src={prevPageImageUrl} alt="prev page" className="w-14 h-14 object-cover border-2 border-black rounded" />
+                                        <span className="text-sm font-semibold">Use previous page (#{pageIndex - 1}) for continuity</span>
+                                    </label>
+                                )}
+                                {nextPageImageUrl && (
+                                    <label className="flex items-center gap-3 cursor-pointer">
+                                        <input
+                                            type="checkbox"
+                                            checked={useNextPage}
+                                            onChange={e => setUseNextPage(e.target.checked)}
+                                            className="w-4 h-4 accent-blue-600"
+                                        />
+                                        <img src={nextPageImageUrl} alt="next page" className="w-14 h-14 object-cover border-2 border-black rounded" />
+                                        <span className="text-sm font-semibold">Use next page (#{pageIndex + 1}) for continuity</span>
+                                    </label>
+                                )}
+                            </div>
+                        </div>
+                    )}
+
                     {/* 6. ADVANCED OPTIONS - Only visible in Expert Mode (2.1.2) */}
                     {expertMode && (
                         <details className="border-[3px] border-purple-400 bg-purple-50 group" open>
@@ -458,6 +539,7 @@ export const RerollModal: React.FC<RerollModalProps> = ({
                                     onProfileUpdate={onProfileUpdate}
                                     onAnalyzeProfile={onAnalyzeProfile}
                                     onAddNewCharacter={onAddNewCharacter}
+                                    showLockToggles={true}
                                 />
                             </div>
                         </details>

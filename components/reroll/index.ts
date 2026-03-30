@@ -17,6 +17,9 @@ export { QuickPresets, QUICK_PRESETS, type QuickPreset } from './QuickPresets';
 export { StrengthSlider, STRENGTH_LEVELS, getStrengthPrompt } from './StrengthSlider';
 export { FocusAreaSelector, FOCUS_AREAS, getFocusAreaPrompt, type FocusArea } from './FocusAreaSelector';
 
+// Feature F - Consistency Preview
+export { ConsistencyPreview } from './ConsistencyPreview';
+
 // Phase 2 - V2 Batch Plan components (Task 2.1.x, 2.2.x)
 export {
     WizardMode,

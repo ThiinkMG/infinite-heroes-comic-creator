@@ -2,6 +2,7 @@ import React, { useRef, useState } from 'react';
 import { CharacterProfile } from './types';
 import { validateProfileCompleteness } from './utils/profileValidation';
 import { ProfileQualityIndicator } from './components/ProfileQualityIndicator';
+import { useCharacterStore } from './stores/useCharacterStore';
 
 // Bulk import match result
 interface BulkMatch {
@@ -24,6 +25,18 @@ export const ProfilesDialog: React.FC<Props> = ({ profiles, onUpdate, onAnalyze,
     const [bulkMatches, setBulkMatches] = useState<BulkMatch[] | null>(null);
     const [bulkError, setBulkError] = useState<string | null>(null);
     const bulkFileRef = useRef<HTMLInputElement>(null);
+
+    // Feature D: Character lock state
+    const characterLocks = useCharacterStore((state) => state.characterLocks);
+    const updateCharacterLock = useCharacterStore((state) => state.updateCharacterLock);
+
+    const getLock = (id: string) =>
+        characterLocks.get(id) ?? { characterId: id, lockFace: false, lockOutfit: false, lockWeapon: false, lockEmblem: false };
+
+    const handleLockToggle = (id: string, field: 'lockFace' | 'lockOutfit' | 'lockWeapon' | 'lockEmblem') => {
+        const current = getLock(id);
+        updateCharacterLock(id, { [field]: !current[field] });
+    };
     
     const handleDownloadIndividual = (profile: CharacterProfile) => {
         const data = JSON.stringify(profile, null, 2);
@@ -226,18 +239,52 @@ export const ProfilesDialog: React.FC<Props> = ({ profiles, onUpdate, onAnalyze,
                                 </div>
                             )}
 
-                            <div className="flex justify-between items-center border-b-2 border-black pb-1 mb-2">
-                                <div className="flex items-center gap-3">
-                                    <h3 className="font-comic text-2xl font-bold uppercase text-blue-800">{p.name || 'Unknown'}</h3>
-                                    <ProfileQualityIndicator profile={p} />
-                                    {profileQuality.score < 80 && (
-                                        <span
-                                            className="text-[10px] font-comic text-orange-600 font-bold cursor-default"
-                                            title={`Profile could be improved. Missing: ${profileQuality.missingFields.join(', ')}`}
-                                        >
-                                            ↗ Improve
-                                        </span>
-                                    )}
+                            <div className="flex justify-between items-start border-b-2 border-black pb-1 mb-2">
+                                <div className="flex flex-col gap-1.5">
+                                    <div className="flex items-center gap-3">
+                                        <h3 className="font-comic text-2xl font-bold uppercase text-blue-800">{p.name || 'Unknown'}</h3>
+                                        <ProfileQualityIndicator profile={p} />
+                                        {profileQuality.score < 80 && (
+                                            <span
+                                                className="text-[10px] font-comic text-orange-600 font-bold cursor-default"
+                                                title={`Profile could be improved. Missing: ${profileQuality.missingFields.join(', ')}`}
+                                            >
+                                                ↗ Improve
+                                            </span>
+                                        )}
+                                    </div>
+                                    {/* Feature D: Lock toggles */}
+                                    {(() => {
+                                        const lock = getLock(p.id);
+                                        return (
+                                            <div className="flex flex-wrap gap-1 items-center">
+                                                <span className="font-comic text-[10px] text-gray-400 uppercase mr-1">Lock:</span>
+                                                {[
+                                                    { key: 'lockFace' as const, icon: '😊', label: 'Face' },
+                                                    { key: 'lockOutfit' as const, icon: '⭐', label: 'Outfit' },
+                                                    { key: 'lockEmblem' as const, icon: '🔰', label: 'Emblem' },
+                                                    { key: 'lockWeapon' as const, icon: '⚔️', label: 'Weapon' },
+                                                ].map(({ key, icon, label }) => (
+                                                    <button
+                                                        key={key}
+                                                        onClick={() => handleLockToggle(p.id, key)}
+                                                        className={`flex items-center gap-0.5 px-2 py-0.5 text-[10px] font-bold font-comic border-2 rounded-sm touch-manipulation transition-colors ${
+                                                            lock[key]
+                                                                ? 'bg-blue-600 border-blue-800 text-white'
+                                                                : 'bg-white border-gray-300 text-gray-400 hover:border-blue-400'
+                                                        }`}
+                                                        title={lock[key] ? `Unlock ${label} — allow changes` : `Lock ${label} — freeze as immutable constraint`}
+                                                        aria-pressed={lock[key]}
+                                                        aria-label={`${lock[key] ? 'Unlock' : 'Lock'} ${p.name}'s ${label}`}
+                                                    >
+                                                        <span>{icon}</span>
+                                                        <span>{lock[key] ? '🔒' : '🔓'}</span>
+                                                        <span>{label}</span>
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        );
+                                    })()}
                                 </div>
                                 <div className="flex items-center gap-2">
                                     <button

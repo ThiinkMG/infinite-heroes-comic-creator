@@ -45,6 +45,10 @@ import { useGenerateProfile } from './hooks/useGenerateProfile';
 import { useGenerateOutline } from './hooks/useGenerateOutline';
 import { useExportImport } from './hooks/useExportImport';
 
+// --- Feature G: Visual Drift Detection ---
+import { checkVisualDrift } from './utils/visualDriftDetector';
+import { DriftWarningToast } from './components/DriftWarningToast';
+
 // --- Constants ---
 const MODEL_IMAGE_GEN_NAME = "gemini-3-pro-image-preview";
 const MODEL_TEXT_NAME = "gemini-2.5-pro"; // Gemini fallback
@@ -586,7 +590,8 @@ const App: React.FC = () => {
     pageIndex?: number,
     comicOverrides?: { shotTypeOverride?: ShotType; balloonShapeOverride?: BalloonShape; applyFlashbackStyle?: boolean },
     useOnlySelectedRefs?: boolean,
-    currentImageToPreserve?: string
+    currentImageToPreserve?: string,
+    adjacentPageImages?: Array<{ base64: string; label: string }>
   ): Promise<{ imageUrl: string; originalPrompt: string; failureReason?: string }> => {
     return hookGenerateImage({
       beat,
@@ -599,6 +604,7 @@ const App: React.FC = () => {
       comicOverrides,
       useOnlySelectedRefs,
       currentImageToPreserve,
+      adjacentPageImages,
       storyContext,
       storyOutline,
     });
@@ -723,7 +729,7 @@ const App: React.FC = () => {
       if (idx !== -1) historyRef.current[idx] = { ...historyRef.current[idx], ...updates };
   };
 
-  const generateSinglePage = async (faceId: string, pageNum: number, type: ComicFace['type'], instruction?: string, extraRefImages?: string[], previousChoices?: string[], comicOverrides?: ComicOverrides, useOnlySelectedRefs?: boolean, currentImageToPreserve?: string) => {
+  const generateSinglePage = async (faceId: string, pageNum: number, type: ComicFace['type'], instruction?: string, extraRefImages?: string[], previousChoices?: string[], comicOverrides?: ComicOverrides, useOnlySelectedRefs?: boolean, currentImageToPreserve?: string, adjacentPageImages?: Array<{ base64: string; label: string }>) => {
       // Use ref (not state) — this async function can be called from generateBatch or handleChoice
       // where the React state closure may be stale from the render that created the caller.
       const isNovelMode = !generateFromOutlineRef.current;
@@ -760,12 +766,23 @@ const App: React.FC = () => {
           }
       }
 
-      const result = await generateImage(beat, type, instruction, extraRefImages, prevImage, prevBeat, pageNum, comicOverrides, useOnlySelectedRefs, currentImageToPreserve);
+      const result = await generateImage(beat, type, instruction, extraRefImages, prevImage, prevBeat, pageNum, comicOverrides, useOnlySelectedRefs, currentImageToPreserve, adjacentPageImages);
       if (isStoppedRef.current) return;
       if (!result.imageUrl) {
           updateFaceState(faceId, { isLoading: false, hasFailed: true, originalPrompt: result.originalPrompt, failureReason: result.failureReason });
       } else {
           updateFaceState(faceId, { imageUrl: result.imageUrl, isLoading: false, hasFailed: false, originalPrompt: result.originalPrompt, failureReason: undefined });
+
+          // Feature G: Fire-and-forget visual drift check for story pages (not cover/back_cover).
+          // Uses canvas pixel sampling — no AI call, non-blocking.
+          if (type === 'story' && prevImage && pageNum !== undefined && pageNum >= 2) {
+              const profiles = useCharacterStore.getState().getProfilesArray();
+              checkVisualDrift(result.imageUrl, prevImage, pageNum, profiles).then(warnings => {
+                  if (warnings.length > 0) {
+                      warnings.forEach(w => useComicStore.getState().addDriftWarning(w));
+                  }
+              });
+          }
       }
   };
 
@@ -1481,7 +1498,7 @@ Create a powerful, memorable conclusion that honors the user's story path.
 
   const handleRerollSubmit = (options: RerollOptions) => {
       if (rerollTarget === null) return;
-      const { instruction, negativePrompt, selectedRefImages, selectedProfileIds, regenerationModes, shotTypeOverride, balloonShapeOverride, applyFlashbackStyle, reinforceWithReferenceImages, useSelectedRefsOnly } = options;
+      const { instruction, negativePrompt, selectedRefImages, selectedProfileIds, regenerationModes, shotTypeOverride, balloonShapeOverride, applyFlashbackStyle, reinforceWithReferenceImages, useSelectedRefsOnly, prevPageImageUrl, nextPageImageUrl } = options;
 
       const pageIndex = rerollTarget;
       setRerollTarget(null);
@@ -1554,7 +1571,18 @@ Create a powerful, memorable conclusion that honors the user's story path.
           ? (currentFace.originalChoices || cachedChoicesRef.current.get(pageIndex) || currentFace.choices)
           : undefined;
 
-      generateSinglePage(faceId, pageIndex, type, finalInstruction || undefined, selectedRefImages.length > 0 ? selectedRefImages : undefined, allPreviousChoices.length > 0 ? allPreviousChoices : undefined, comicOverrides, useSelectedRefsOnly && selectedRefImages.length > 0, currentImage)
+      // Build adjacent page images for scene/outfit continuity
+      const rerollAdjacentImages: Array<{ base64: string; label: string }> = [];
+      if (prevPageImageUrl) {
+          const base64 = prevPageImageUrl.includes(',') ? prevPageImageUrl.split(',')[1] : prevPageImageUrl;
+          rerollAdjacentImages.push({ base64, label: `PREVIOUS PAGE (page ${pageIndex - 1})` });
+      }
+      if (nextPageImageUrl) {
+          const base64 = nextPageImageUrl.includes(',') ? nextPageImageUrl.split(',')[1] : nextPageImageUrl;
+          rerollAdjacentImages.push({ base64, label: `NEXT PAGE (page ${pageIndex + 1})` });
+      }
+
+      generateSinglePage(faceId, pageIndex, type, finalInstruction || undefined, selectedRefImages.length > 0 ? selectedRefImages : undefined, allPreviousChoices.length > 0 ? allPreviousChoices : undefined, comicOverrides, useSelectedRefsOnly && selectedRefImages.length > 0, currentImage, rerollAdjacentImages.length > 0 ? rerollAdjacentImages : undefined)
           .then(() => {
               // Restore preserved choices in Novel Mode after image regeneration
               if (preservedChoices && preservedChoices.length > 0 && isNovelMode) {
@@ -2736,6 +2764,8 @@ Return ONLY the improved description text. No explanations, no markdown, no quot
               availableProfiles={getProfilesArray().map(p => ({ id: p.id, name: p.name }))}
               fullProfiles={getProfilesArray()}
               originalPrompt={comicFaces.find(f => f.pageIndex === rerollTarget)?.originalPrompt}
+              prevPageImageUrl={comicFaces.find(f => f.pageIndex === rerollTarget - 1)?.imageUrl}
+              nextPageImageUrl={comicFaces.find(f => f.pageIndex === rerollTarget + 1)?.imageUrl}
               initialSelectedProfileIds={rerollProfileSelection}
               onProfileSelectionChange={setRerollProfileSelection}
               onSubmit={handleRerollSubmit}
@@ -3032,6 +3062,8 @@ Return ONLY the improved description text. No explanations, no markdown, no quot
           onGenerateMore={() => generateCoverVariants(3)}
         />
       )}
+
+      <DriftWarningToast onReroll={(pageIndex) => handleReroll(pageIndex)} />
     </div>
   );
 };

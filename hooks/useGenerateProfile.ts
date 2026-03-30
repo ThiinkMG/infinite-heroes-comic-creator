@@ -15,6 +15,7 @@ import {
   IdentityHeader,
   generateHardNegatives,
 } from '../types';
+import { buildAllCharacterReferences } from '../utils/buildCharacterReference';
 import {
   createTextContent,
   createImageContent,
@@ -328,6 +329,23 @@ export const useGenerateProfile = (config: GenerateProfileConfig) => {
       ? persona.emblemPlacementCustom || 'custom location'
       : persona.emblemPlacement?.replace(/-/g, ' ') || undefined;
 
+    // Parse extractedColors (Feature B)
+    const rawExtractedColors = parsed.extractedColors as Record<string, unknown> | undefined;
+    let extractedColors: CharacterProfile['extractedColors'];
+    if (rawExtractedColors && typeof rawExtractedColors === 'object') {
+      extractedColors = {
+        skin: ensureString(rawExtractedColors.skin),
+        hair: ensureString(rawExtractedColors.hair),
+        eyes: ensureString(rawExtractedColors.eyes),
+        outfit: Array.isArray(rawExtractedColors.outfit)
+          ? rawExtractedColors.outfit.map(String).filter(Boolean)
+          : [],
+        emblem: Array.isArray(rawExtractedColors.emblem)
+          ? rawExtractedColors.emblem.map(String).filter(Boolean)
+          : [],
+      };
+    }
+
     return {
       id: persona.id,
       name: persona.name || 'Unknown',
@@ -344,6 +362,7 @@ export const useGenerateProfile = (config: GenerateProfileConfig) => {
       identityHeader,
       hardNegatives,
       contrastFeatures: [],
+      extractedColors,
     };
   };
 
@@ -474,6 +493,13 @@ OUTPUT JSON ONLY (no markdown):
     "skin": "Skin tone, any visible marks (scars, tattoos, moles)",
     "build": "Body type, height impression, posture",
     "signature": ["item1 always worn/visible", "emblem/logo if provided", "mask if worn", "item3 if any"]
+  },
+  "extractedColors": {
+    "skin": "Primary skin tone, e.g. 'warm olive'",
+    "hair": "Primary hair color, e.g. 'deep auburn'",
+    "eyes": "Eye color, e.g. 'emerald green'",
+    "outfit": ["primary outfit color 1", "primary outfit color 2"],
+    "emblem": ["emblem color 1 if present"]
   },
   "hardNegatives": ["feature to never include based on what you see - e.g. if no glasses, add 'no glasses'"]
 }
@@ -614,6 +640,17 @@ For hardNegatives, analyze the image and add negatives for:
     // Sync all profiles to Zustand store
     useCharacterStore.getState().setAllProfiles(profiles);
     console.log('[Character Profiles Generated]', profiles);
+
+    // Feature A: Compile and store character reference objects from persona + profile pairs.
+    // These frozen references are read by useGenerateImage for every subsequent generation call.
+    try {
+      const refs = buildAllCharacterReferences(personas, profiles);
+      useCharacterStore.getState().setAllReferences(refs);
+      console.log('[Character References Compiled]', refs.length, 'references');
+    } catch (e) {
+      console.warn('[Character References] Failed to compile references:', e);
+    }
+
     return profiles;
   };
 

@@ -4,7 +4,8 @@
  */
 
 import React, { useState } from 'react';
-import { CharacterProfile } from '../../types';
+import { CharacterProfile, CharacterLockState } from '../../types';
+import { useCharacterStore } from '../../stores/useCharacterStore';
 
 interface ProfileSelectorProps {
     availableProfiles: { id: string; name: string }[];
@@ -16,6 +17,8 @@ interface ProfileSelectorProps {
     onProfileUpdate?: (profileId: string, updates: Partial<CharacterProfile>) => void;
     onAnalyzeProfile?: (profileId: string) => Promise<void>;
     onAddNewCharacter?: () => void;
+    /** Show lock toggles for outfit/weapon/emblem/face per character (Feature D) */
+    showLockToggles?: boolean;
 }
 
 export const ProfileSelector: React.FC<ProfileSelectorProps> = ({
@@ -27,10 +30,23 @@ export const ProfileSelector: React.FC<ProfileSelectorProps> = ({
     onSelectNone,
     onProfileUpdate,
     onAnalyzeProfile,
-    onAddNewCharacter
+    onAddNewCharacter,
+    showLockToggles = false,
 }) => {
     const [expandedProfileId, setExpandedProfileId] = useState<string | null>(null);
     const [analyzingProfileId, setAnalyzingProfileId] = useState<string | null>(null);
+
+    // Feature D: Read and update character lock state from Zustand store
+    const characterLocks = useCharacterStore((state) => state.characterLocks);
+    const updateCharacterLock = useCharacterStore((state) => state.updateCharacterLock);
+
+    const getLock = (id: string): CharacterLockState =>
+        characterLocks.get(id) ?? { characterId: id, lockFace: false, lockOutfit: false, lockWeapon: false, lockEmblem: false };
+
+    const handleLockToggle = (id: string, field: keyof Omit<CharacterLockState, 'characterId'>) => {
+        const current = getLock(id);
+        updateCharacterLock(id, { [field]: !current[field] });
+    };
 
     const getFullProfile = (id: string) => fullProfiles.find(p => p.id === id);
 
@@ -116,6 +132,40 @@ export const ProfileSelector: React.FC<ProfileSelectorProps> = ({
                                         <span className="ml-2 flex-shrink-0">{isExpanded ? '▼' : '▶'}</span>
                                     </button>
                                 </div>
+
+                                {/* Feature D: Lock Toggles (shown when showLockToggles=true) */}
+                                {showLockToggles && (() => {
+                                    const lock = getLock(p.id);
+                                    const hasLocks = lock.lockFace || lock.lockOutfit || lock.lockEmblem || lock.lockWeapon;
+                                    return (
+                                        <div className={`flex flex-wrap gap-1 px-3 pb-2 ${hasLocks ? 'bg-blue-50' : ''}`}>
+                                            <span className="font-comic text-[10px] text-gray-500 uppercase w-full mb-0.5">Lock:</span>
+                                            {[
+                                                { key: 'lockFace' as const, icon: '😊', label: 'Face' },
+                                                { key: 'lockOutfit' as const, icon: '⭐', label: 'Outfit' },
+                                                { key: 'lockEmblem' as const, icon: '🔰', label: 'Emblem' },
+                                                { key: 'lockWeapon' as const, icon: '⚔️', label: 'Weapon' },
+                                            ].map(({ key, icon, label }) => (
+                                                <button
+                                                    key={key}
+                                                    onClick={() => handleLockToggle(p.id, key)}
+                                                    className={`flex items-center gap-1 px-2 py-1 text-[10px] font-bold font-comic border-2 rounded-sm touch-manipulation transition-colors ${
+                                                        lock[key]
+                                                            ? 'bg-blue-600 border-blue-800 text-white'
+                                                            : 'bg-white border-gray-300 text-gray-500 hover:border-blue-400'
+                                                    }`}
+                                                    title={lock[key] ? `Unlock ${label}` : `Lock ${label} — keeps this unchanged across all pages`}
+                                                    aria-pressed={lock[key]}
+                                                    aria-label={`${lock[key] ? 'Unlock' : 'Lock'} ${p.name}'s ${label}`}
+                                                >
+                                                    <span>{icon}</span>
+                                                    <span>{lock[key] ? '🔒' : '🔓'}</span>
+                                                    <span className="hidden sm:inline">{label}</span>
+                                                </button>
+                                            ))}
+                                        </div>
+                                    );
+                                })()}
 
                                 {/* Expanded Profile Editor */}
                                 {isExpanded && fullProfile && (

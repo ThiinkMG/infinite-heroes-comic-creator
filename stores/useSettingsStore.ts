@@ -33,6 +33,28 @@ export interface SettingsState {
 
   // UI settings
   showApiCostEstimate: boolean;
+
+  // === Consistency Settings (Feature E) ===
+  /**
+   * How strictly character reference data is weighted in generation prompts.
+   * 0.3 = Minimal (allow creative drift), 0.5 = Moderate, 0.7 = Strong, 1.0 = Maximum (default).
+   */
+  consistencyStrength: number;
+  /**
+   * Re-inject full character reference every N pages to prevent long-run drift.
+   * Default: 2 (every other page). Range: 1–5.
+   */
+  reAnchorEveryN: number;
+  /**
+   * Automatically run AI character analysis pass on portrait upload.
+   * When false, generation proceeds without profile analysis (faster but less consistent).
+   */
+  autoCharacterAnalysis: boolean;
+  /**
+   * When true, uploaded reference images are weighted more heavily than text descriptions.
+   * Portraits appear last in the content array (highest weight position).
+   */
+  referenceImagePriority: boolean;
 }
 
 export interface ComicConfig {
@@ -56,6 +78,10 @@ export interface SettingsActions {
   setGenerateFromOutline: (value: boolean) => void;
   setSkipProfileAnalysis: (value: boolean) => void;
   setShowApiCostEstimate: (value: boolean) => void;
+  setConsistencyStrength: (value: number) => void;
+  setReAnchorEveryN: (value: number) => void;
+  setAutoCharacterAnalysis: (value: boolean) => void;
+  setReferenceImagePriority: (value: boolean) => void;
 
   // Bulk operations
   resetSettings: () => void;
@@ -84,6 +110,10 @@ const getDefaultSettings = (): SettingsState => ({
   generateFromOutline: true, // Outline Mode by default
   skipProfileAnalysis: false,
   showApiCostEstimate: true, // Show by default
+  consistencyStrength: 1.0,  // Maximum consistency by default
+  reAnchorEveryN: 2,         // Re-inject full reference every 2 pages
+  autoCharacterAnalysis: true,
+  referenceImagePriority: true,
 });
 
 // ============================================================================
@@ -118,6 +148,17 @@ export const useSettingsStore = create<SettingsStore>()(
       setSkipProfileAnalysis: (value) => set({ skipProfileAnalysis: value }),
 
       setShowApiCostEstimate: (value) => set({ showApiCostEstimate: value }),
+
+      setConsistencyStrength: (value) => set({ consistencyStrength: Math.max(0.3, Math.min(1.0, value)) }),
+
+      setReAnchorEveryN: (value) => set({ reAnchorEveryN: Math.max(1, Math.min(5, Math.round(value))) }),
+
+      setAutoCharacterAnalysis: (value) => set({
+        autoCharacterAnalysis: value,
+        skipProfileAnalysis: !value, // Keep in sync with legacy field
+      }),
+
+      setReferenceImagePriority: (value) => set({ referenceImagePriority: value }),
 
       // Reset to defaults
       resetSettings: () => set(getDefaultSettings()),
@@ -162,6 +203,10 @@ export const useSettingsStore = create<SettingsStore>()(
         generateFromOutline: state.generateFromOutline,
         skipProfileAnalysis: state.skipProfileAnalysis,
         showApiCostEstimate: state.showApiCostEstimate,
+        consistencyStrength: state.consistencyStrength,
+        reAnchorEveryN: state.reAnchorEveryN,
+        autoCharacterAnalysis: state.autoCharacterAnalysis,
+        referenceImagePriority: state.referenceImagePriority,
       }),
     }
   )
@@ -185,3 +230,9 @@ export const useIsNovelMode = () => useSettingsStore((state) => !state.generateF
 
 // UI settings selectors
 export const useShowApiCostEstimate = () => useSettingsStore((state) => state.showApiCostEstimate);
+
+// Consistency settings selectors (Feature E)
+export const useConsistencyStrength = () => useSettingsStore((state) => state.consistencyStrength);
+export const useReAnchorEveryN = () => useSettingsStore((state) => state.reAnchorEveryN);
+export const useAutoCharacterAnalysis = () => useSettingsStore((state) => state.autoCharacterAnalysis);
+export const useReferenceImagePriority = () => useSettingsStore((state) => state.referenceImagePriority);

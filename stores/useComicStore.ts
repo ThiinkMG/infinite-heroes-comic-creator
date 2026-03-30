@@ -5,7 +5,7 @@
 
 import { create } from 'zustand';
 import { immer } from 'zustand/middleware/immer';
-import type { ComicFace, PageCharacterPlan } from '../types';
+import type { ComicFace, PageCharacterPlan, VisualDriftWarning } from '../types';
 
 // ============================================================================
 // TYPES
@@ -60,6 +60,12 @@ export interface ComicState {
   currentPageIndex: number;
   /** Generation progress state */
   generationState: GenerationState;
+  /**
+   * Visual drift warnings (Feature G).
+   * Non-blocking — surfaced as toast when character appearance deviates from reference.
+   * Session-only, cleared on reset.
+   */
+  visualDriftWarnings: VisualDriftWarning[];
 
   // === Actions ===
   /** Replace all comic faces */
@@ -94,6 +100,13 @@ export interface ComicState {
   /** Update full generation state */
   updateGenerationState: (state: Partial<GenerationState>) => void;
 
+  /** Add a visual drift warning for a page/character (Feature G) */
+  addDriftWarning: (warning: VisualDriftWarning) => void;
+  /** Dismiss a specific drift warning */
+  dismissDriftWarning: (pageIndex: number, characterId: string) => void;
+  /** Clear all drift warnings */
+  clearDriftWarnings: () => void;
+
   /** Reset all comic state to initial values */
   resetComic: () => void;
 }
@@ -124,6 +137,7 @@ const initialState = {
   storyOutline: initialStoryOutline,
   currentPageIndex: 0,
   generationState: initialGenerationState,
+  visualDriftWarnings: [] as VisualDriftWarning[],
 };
 
 // ============================================================================
@@ -233,6 +247,33 @@ export const useComicStore = create<ComicState>()(
         state.generationState = { ...state.generationState, ...newState };
       }),
 
+    // === Visual Drift Warning Actions (Feature G) ===
+    addDriftWarning: (warning) =>
+      set((state) => {
+        // Avoid duplicate warnings for same page+character
+        const exists = state.visualDriftWarnings.some(
+          w => w.pageIndex === warning.pageIndex && w.characterId === warning.characterId
+        );
+        if (!exists) {
+          state.visualDriftWarnings.push(warning);
+        }
+      }),
+
+    dismissDriftWarning: (pageIndex, characterId) =>
+      set((state) => {
+        const idx = state.visualDriftWarnings.findIndex(
+          w => w.pageIndex === pageIndex && w.characterId === characterId
+        );
+        if (idx !== -1) {
+          state.visualDriftWarnings[idx].dismissedAt = Date.now();
+        }
+      }),
+
+    clearDriftWarnings: () =>
+      set((state) => {
+        state.visualDriftWarnings = [];
+      }),
+
     // === Reset Action ===
     resetComic: () =>
       set((state) => {
@@ -240,6 +281,7 @@ export const useComicStore = create<ComicState>()(
         state.storyOutline = { ...initialStoryOutline };
         state.currentPageIndex = 0;
         state.generationState = { ...initialGenerationState };
+        state.visualDriftWarnings = [];
       }),
   }))
 );

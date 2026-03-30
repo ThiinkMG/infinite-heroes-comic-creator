@@ -4,7 +4,7 @@
  */
 
 import { create } from 'zustand';
-import { Persona, CharacterProfile } from '../types';
+import { Persona, CharacterProfile, CharacterLockState, CharacterReferenceObject } from '../types';
 
 // ============================================================================
 // TYPES
@@ -19,6 +19,16 @@ export interface CharacterState {
   additionalCharacters: Persona[];
   /** AI-analyzed character profiles, keyed by character ID */
   characterProfiles: Map<string, CharacterProfile>;
+  /**
+   * Per-character attribute lock state (session-only, NOT persisted).
+   * Locked attributes are prepended as hard constraints in every generation prompt.
+   */
+  characterLocks: Map<string, CharacterLockState>;
+  /**
+   * Compiled character reference objects (session-only, NOT persisted).
+   * Built once at session start from Persona + CharacterProfile.
+   */
+  characterReferences: Map<string, CharacterReferenceObject>;
 }
 
 export interface CharacterActions {
@@ -43,6 +53,18 @@ export interface CharacterActions {
   /** Bulk set all profiles from an array (clears existing and sets new) */
   setAllProfiles: (profiles: CharacterProfile[]) => void;
 
+  // Character lock actions (Feature D)
+  setCharacterLock: (id: string, lock: CharacterLockState) => void;
+  updateCharacterLock: (id: string, partial: Partial<Omit<CharacterLockState, 'characterId'>>) => void;
+  getCharacterLock: (id: string) => CharacterLockState;
+  clearCharacterLocks: () => void;
+
+  // Character reference actions (Feature A)
+  setCharacterReference: (id: string, ref: CharacterReferenceObject) => void;
+  setAllReferences: (refs: CharacterReferenceObject[]) => void;
+  getReferencesArray: () => CharacterReferenceObject[];
+  clearCharacterReferences: () => void;
+
   // Utility actions
   resetCharacters: () => void;
 }
@@ -58,6 +80,8 @@ export interface CharacterSelectors {
   getProfilesArray: () => CharacterProfile[];
   /** Check if all main characters have profiles generated */
   hasAllProfiles: () => boolean;
+  /** Get all locked characters as a map (for prompt injection) */
+  getLockedCharacters: () => Map<string, CharacterLockState>;
 }
 
 export type CharacterStore = CharacterState & CharacterActions & CharacterSelectors;
@@ -71,6 +95,8 @@ const initialState: CharacterState = {
   friend: null,
   additionalCharacters: [],
   characterProfiles: new Map(),
+  characterLocks: new Map(),
+  characterReferences: new Map(),
 };
 
 // ============================================================================
@@ -198,6 +224,70 @@ export const useCharacterStore = create<CharacterStore>((set, get) => ({
   },
 
   // -------------------------------------------------------------------------
+  // CHARACTER LOCK ACTIONS (Feature D)
+  // -------------------------------------------------------------------------
+
+  setCharacterLock: (id: string, lock: CharacterLockState) => {
+    set((state) => {
+      const newLocks = new Map(state.characterLocks);
+      newLocks.set(id, lock);
+      return { characterLocks: newLocks };
+    });
+  },
+
+  updateCharacterLock: (id: string, partial: Partial<Omit<CharacterLockState, 'characterId'>>) => {
+    set((state) => {
+      const existing = state.characterLocks.get(id) ?? {
+        characterId: id,
+        lockFace: false,
+        lockOutfit: false,
+        lockWeapon: false,
+        lockEmblem: false,
+      };
+      const newLocks = new Map(state.characterLocks);
+      newLocks.set(id, { ...existing, ...partial });
+      return { characterLocks: newLocks };
+    });
+  },
+
+  getCharacterLock: (id: string) => {
+    const lock = get().characterLocks.get(id);
+    return lock ?? { characterId: id, lockFace: false, lockOutfit: false, lockWeapon: false, lockEmblem: false };
+  },
+
+  clearCharacterLocks: () => {
+    set({ characterLocks: new Map() });
+  },
+
+  // -------------------------------------------------------------------------
+  // CHARACTER REFERENCE ACTIONS (Feature A)
+  // -------------------------------------------------------------------------
+
+  setCharacterReference: (id: string, ref: CharacterReferenceObject) => {
+    set((state) => {
+      const newRefs = new Map(state.characterReferences);
+      newRefs.set(id, ref);
+      return { characterReferences: newRefs };
+    });
+  },
+
+  setAllReferences: (refs: CharacterReferenceObject[]) => {
+    set(() => {
+      const newRefs = new Map<string, CharacterReferenceObject>();
+      refs.forEach((r) => newRefs.set(r.characterId, r));
+      return { characterReferences: newRefs };
+    });
+  },
+
+  getReferencesArray: () => {
+    return Array.from(get().characterReferences.values());
+  },
+
+  clearCharacterReferences: () => {
+    set({ characterReferences: new Map() });
+  },
+
+  // -------------------------------------------------------------------------
   // UTILITY ACTIONS
   // -------------------------------------------------------------------------
 
@@ -207,6 +297,8 @@ export const useCharacterStore = create<CharacterStore>((set, get) => ({
       friend: null,
       additionalCharacters: [],
       characterProfiles: new Map(),
+      characterLocks: new Map(),
+      characterReferences: new Map(),
     });
   },
 
@@ -255,6 +347,10 @@ export const useCharacterStore = create<CharacterStore>((set, get) => ({
   getProfilesArray: () => {
     const { characterProfiles } = get();
     return Array.from(characterProfiles.values());
+  },
+
+  getLockedCharacters: () => {
+    return get().characterLocks;
   },
 
   hasAllProfiles: () => {
@@ -325,7 +421,27 @@ export const useCharacterActions = () =>
     updateCharacterProfile: state.updateCharacterProfile,
     clearCharacterProfile: state.clearCharacterProfile,
     setAllProfiles: state.setAllProfiles,
+    setCharacterLock: state.setCharacterLock,
+    updateCharacterLock: state.updateCharacterLock,
+    clearCharacterLocks: state.clearCharacterLocks,
+    setCharacterReference: state.setCharacterReference,
+    setAllReferences: state.setAllReferences,
+    clearCharacterReferences: state.clearCharacterReferences,
     resetCharacters: state.resetCharacters,
   }));
+
+/** Select character locks map */
+export const useCharacterLocks = () =>
+  useCharacterStore((state) => state.characterLocks);
+
+/** Select lock state for a specific character */
+export const useCharacterLock = (id: string) =>
+  useCharacterStore((state) => state.characterLocks.get(id) ?? {
+    characterId: id,
+    lockFace: false,
+    lockOutfit: false,
+    lockWeapon: false,
+    lockEmblem: false,
+  });
 
 export default useCharacterStore;

@@ -206,6 +206,14 @@ export interface RerollOptions {
 
   /** Use ONLY selected reference images (skip default character refs) - Batch 1.3 */
   useSelectedRefsOnly?: boolean;
+
+  /** Previous page image URL for scene continuity reference (optional) */
+  prevPageImageUrl?: string;
+  /** Next page image URL for scene continuity reference (optional) */
+  nextPageImageUrl?: string;
+
+  /** When true, locked character attributes are automatically prepended as hard constraints */
+  consistencyMode?: boolean;
 }
 
 export interface Persona {
@@ -399,6 +407,68 @@ export interface CharacterProfile {
   hardNegatives?: string[];
   /** What makes this character visually distinct from others */
   contrastFeatures?: string[];
+
+  // === AI Character Analysis (Feature B) ===
+  /** Structured color palette extracted during AI analysis pass */
+  extractedColors?: {
+    skin: string;
+    hair: string;
+    eyes: string;
+    outfit: string[];
+    emblem: string[];
+  };
+}
+
+// ============================================================================
+// CHARACTER CONSISTENCY SYSTEM TYPES (Features A, D)
+// ============================================================================
+
+/**
+ * Per-character attribute lock state.
+ * Locked attributes are injected as immutable hard constraints in every generation prompt.
+ * Session-only — not persisted to localStorage.
+ */
+export interface CharacterLockState {
+  characterId: string;
+  lockFace: boolean;
+  lockOutfit: boolean;
+  lockWeapon: boolean;
+  lockEmblem: boolean;
+}
+
+/**
+ * Compiled, frozen character reference object assembled once at session start.
+ * Built from Persona + CharacterProfile and passed into every image generation call.
+ */
+export interface CharacterReferenceObject {
+  characterId: string;
+  characterName: string;
+  /** Full compiled descriptor string for prompt injection */
+  compiledDescriptor: string;
+  /** Primary colors array for drift detection */
+  primaryColors: string[];
+  outfitSummary: string;
+  weaponSummary: string;
+  emblemSummary: string;
+  /** Timestamp when this reference was compiled */
+  compiledAt: number;
+}
+
+// ============================================================================
+// VISUAL DRIFT DETECTION TYPES (Feature G)
+// ============================================================================
+
+/**
+ * Non-blocking warning surfaced when visual drift is detected between consecutive pages.
+ */
+export interface VisualDriftWarning {
+  pageIndex: number;
+  characterId: string;
+  characterName: string;
+  driftType: 'color' | 'composition' | 'unknown';
+  severity: 'low' | 'high';
+  /** Timestamp when this warning was dismissed by the user */
+  dismissedAt?: number;
 }
 
 export interface RerollPayload {
