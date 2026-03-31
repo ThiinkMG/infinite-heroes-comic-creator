@@ -307,6 +307,9 @@ export const CharacterCard: React.FC<CharacterCardProps> = ({
                         + ADD REFERENCE{(persona?.referenceImages?.length || 0) > 0 ? ` (${persona!.referenceImages!.length})` : ''}
                         <input type="file" accept="image/*" multiple className="hidden" onChange={(e) => e.target.files && e.target.files.length > 0 && onRefUpload(e.target.files)} aria-label="Add reference images" />
                     </label>
+                    <p className="font-comic text-[9px] text-gray-400 mt-0.5 leading-tight">
+                        All refs used for profile analysis. Only 1 sent per generation call.
+                    </p>
                 </div>
 
                 {/* Emblem/Logo Section */}

@@ -340,6 +340,7 @@ const App: React.FC = () => {
   const [tempProfiles, setTempProfiles] = useState<CharacterProfile[]>([]);
   const [skipProfileAnalysis, setSkipProfileAnalysis] = useState(false);
   const [useSavedProfiles, setUseSavedProfiles] = useState(true); // Use saved profiles if available
+  const [hasStaleSavedProfiles, setHasStaleSavedProfiles] = useState(false); // True if any saved profile is >24h old
   const [extraPages, setExtraPages] = useState(0);
 
   // Novel Mode page-by-page interactive state
@@ -592,7 +593,8 @@ const App: React.FC = () => {
     useOnlySelectedRefs?: boolean,
     currentImageToPreserve?: string,
     adjacentPageImages?: Array<{ base64: string; label: string }>,
-    consistencyMode?: boolean
+    consistencyMode?: boolean,
+    profileOverrides?: CharacterProfile[]
   ): Promise<{ imageUrl: string; originalPrompt: string; failureReason?: string }> => {
     return hookGenerateImage({
       beat,
@@ -607,6 +609,7 @@ const App: React.FC = () => {
       currentImageToPreserve,
       adjacentPageImages,
       consistencyMode,
+      profileOverrides,
       storyContext,
       storyOutline,
     });
@@ -731,7 +734,7 @@ const App: React.FC = () => {
       if (idx !== -1) historyRef.current[idx] = { ...historyRef.current[idx], ...updates };
   };
 
-  const generateSinglePage = async (faceId: string, pageNum: number, type: ComicFace['type'], instruction?: string, extraRefImages?: string[], previousChoices?: string[], comicOverrides?: ComicOverrides, useOnlySelectedRefs?: boolean, currentImageToPreserve?: string, adjacentPageImages?: Array<{ base64: string; label: string }>, consistencyMode?: boolean) => {
+  const generateSinglePage = async (faceId: string, pageNum: number, type: ComicFace['type'], instruction?: string, extraRefImages?: string[], previousChoices?: string[], comicOverrides?: ComicOverrides, useOnlySelectedRefs?: boolean, currentImageToPreserve?: string, adjacentPageImages?: Array<{ base64: string; label: string }>, consistencyMode?: boolean, profileOverrides?: CharacterProfile[]) => {
       // Use ref (not state) — this async function can be called from generateBatch or handleChoice
       // where the React state closure may be stale from the render that created the caller.
       const isNovelMode = !generateFromOutlineRef.current;
@@ -740,9 +743,14 @@ const App: React.FC = () => {
       let beat: Beat = { scene: "", choices: [], focus_char: 'other' };
 
       if (type === 'cover') {
-           // Cover beat is handled in generateImage
+           // GAP-14: Build a character-anchored scene description for the cover.
+           const heroName = getHero()?.name || 'the hero';
+           const friendName = getFriend()?.name;
+           const coverScene = `Comic book cover for "${storyContext.title || 'Untitled'}" featuring ${heroName}${friendName ? ` and ${friendName}` : ''}.${storyContext.descriptionText ? ` ${storyContext.descriptionText.slice(0, 120)}` : ''}`;
+           beat = { scene: coverScene, choices: [], focus_char: 'hero' };
       } else if (type === 'back_cover') {
-           beat = { scene: "Thematic teaser image", choices: [], focus_char: 'other' };
+           const backCoverHeroName = getHero()?.name || 'the hero';
+           beat = { scene: `Teaser panel: ${backCoverHeroName} faces what comes next. End of issue. Dramatic closing image.`, choices: [], focus_char: 'hero' };
       } else {
            beat = await generateBeat(historyRef.current, pageNum % 2 === 0, pageNum, isDecision, instruction, previousChoices);
       }
@@ -768,7 +776,7 @@ const App: React.FC = () => {
           }
       }
 
-      const result = await generateImage(beat, type, instruction, extraRefImages, prevImage, prevBeat, pageNum, comicOverrides, useOnlySelectedRefs, currentImageToPreserve, adjacentPageImages, consistencyMode);
+      const result = await generateImage(beat, type, instruction, extraRefImages, prevImage, prevBeat, pageNum, comicOverrides, useOnlySelectedRefs, currentImageToPreserve, adjacentPageImages, consistencyMode, profileOverrides);
       if (isStoppedRef.current) return;
       if (!result.imageUrl) {
           updateFaceState(faceId, { isLoading: false, hasFailed: true, originalPrompt: result.originalPrompt, failureReason: result.failureReason });
@@ -798,7 +806,11 @@ const App: React.FC = () => {
     setSelectedCoverIndex(null);
 
     const variants: { imageUrl: string; prompt: string }[] = [];
-    const coverBeat: Beat = { scene: "", choices: [], focus_char: 'other' };
+    // GAP-14: Anchor cover with character names and story description for better composition.
+    const heroName = getHero()?.name || 'the hero';
+    const friendName = getFriend()?.name;
+    const coverScene = `Comic book cover for "${storyContext.title || 'Untitled'}" featuring ${heroName}${friendName ? ` and ${friendName}` : ''}.${storyContext.descriptionText ? ` ${storyContext.descriptionText.slice(0, 120)}` : ''}`;
+    const coverBeat: Beat = { scene: coverScene, choices: [], focus_char: 'hero' };
 
     // Different cover style variations
     const styleVariations = [
@@ -1030,6 +1042,19 @@ const App: React.FC = () => {
             const existingProfileIds = new Set(existingProfiles.map(p => p.id));
             const charsWithProfiles = allChars.filter(c => existingProfileIds.has(c.id));
             const charsWithoutProfiles = allChars.filter(c => !existingProfileIds.has(c.id));
+
+            // Staleness detection: check compiled references for age (GAP-DISCONNECT-5)
+            const STALE_THRESHOLD_MS = 24 * 60 * 60 * 1000; // 24 hours
+            const existingRefs = store.getReferencesArray();
+            const now = Date.now();
+            const staleRefs = existingRefs.filter(ref => ref.compiledAt && (now - ref.compiledAt) > STALE_THRESHOLD_MS);
+            if (staleRefs.length > 0) {
+                const staleNames = staleRefs.map(r => r.characterName || r.characterId).join(', ');
+                console.warn(`[Profile] Stale saved profiles detected (>24h old): ${staleNames}. Consider re-analyzing.`);
+                setHasStaleSavedProfiles(true);
+            } else {
+                setHasStaleSavedProfiles(false);
+            }
 
             let finalProfiles: CharacterProfile[] = [];
 
@@ -1564,10 +1589,11 @@ Create a powerful, memorable conclusion that honors the user's story path.
 
       updateFaceState(faceId, { isLoading: true, imageUrl: undefined, hasFailed: false, previousChoices: allPreviousChoices });
 
-      const savedProfiles = getProfilesArray();
-      const filteredProfiles = savedProfiles.filter(p => selectedProfileIds.includes(p.id));
-      // Temporarily set filtered profiles for this regeneration
-      useCharacterStore.getState().setAllProfiles(filteredProfiles);
+      // DISCONNECT-6 FIX: Pass filtered profiles as an override instead of mutating the global store.
+      // The previous pattern (setAllProfiles(filtered) → generate → setAllProfiles(restored)) was
+      // fragile under concurrent rerolls or errors. profileOverrides is used only for this call.
+      const allProfiles = getProfilesArray();
+      const profileOverrides = allProfiles.filter(p => selectedProfileIds.includes(p.id));
 
       // In Novel Mode, preserve original choices instead of regenerating them
       const isNovelMode = !generateFromOutline;
@@ -1586,7 +1612,7 @@ Create a powerful, memorable conclusion that honors the user's story path.
           rerollAdjacentImages.push({ base64, label: `NEXT PAGE (page ${pageIndex + 1})` });
       }
 
-      generateSinglePage(faceId, pageIndex, type, finalInstruction || undefined, selectedRefImages.length > 0 ? selectedRefImages : undefined, allPreviousChoices.length > 0 ? allPreviousChoices : undefined, comicOverrides, useSelectedRefsOnly && selectedRefImages.length > 0, currentImage, rerollAdjacentImages.length > 0 ? rerollAdjacentImages : undefined, consistencyMode)
+      generateSinglePage(faceId, pageIndex, type, finalInstruction || undefined, selectedRefImages.length > 0 ? selectedRefImages : undefined, allPreviousChoices.length > 0 ? allPreviousChoices : undefined, comicOverrides, useSelectedRefsOnly && selectedRefImages.length > 0, currentImage, rerollAdjacentImages.length > 0 ? rerollAdjacentImages : undefined, consistencyMode, profileOverrides.length > 0 ? profileOverrides : undefined)
           .then(() => {
               // Restore preserved choices in Novel Mode after image regeneration
               if (preservedChoices && preservedChoices.length > 0 && isNovelMode) {
@@ -1599,10 +1625,6 @@ Create a powerful, memorable conclusion that honors the user's story path.
           })
           .catch((error) => {
               console.error(`Reroll failed for page ${pageIndex}:`, error);
-          })
-          .finally(() => {
-              // Restore original profiles after regeneration
-              useCharacterStore.getState().setAllProfiles(savedProfiles);
           });
   };
 
@@ -2713,6 +2735,7 @@ Return ONLY the improved description text. No explanations, no markdown, no quot
           onSkipProfileAnalysisChange={setSkipProfileAnalysis}
           useSavedProfiles={useSavedProfiles}
           onUseSavedProfilesChange={setUseSavedProfiles}
+          hasStaleSavedProfiles={hasStaleSavedProfiles}
           onPresetSelect={handlePresetSelect}
           onSettingsOpen={() => setShowSettings(true)}
       />

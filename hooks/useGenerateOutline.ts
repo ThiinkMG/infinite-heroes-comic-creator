@@ -343,6 +343,38 @@ export const useGenerateOutline = (config: GenerateOutlineConfig) => {
       ...getAdditionalChars().map(c => `${c.name}: ${c.backstoryText || 'Unknown'}.`)
     ].filter(Boolean).join('\n');
 
+    // GAP-18: Inject compact visual summaries so outline scene descriptions are visually accurate.
+    // Prevents AI-written scenes from contradicting character reference images.
+    const profiles = useCharacterStore.getState().getProfilesArray();
+    const buildOutlineVisualSummary = (): string => {
+      const lines: string[] = [];
+      const hero = getHero();
+      const friend = getFriend();
+      const additionalChars = getAdditionalChars();
+
+      const addSummaryLine = (persona: typeof hero, roleLabel: string) => {
+        if (!persona) return;
+        const profile = profiles.find(p => p.id === persona.id || p.name === persona.name);
+        if (!profile?.identityHeader) return;
+        const ih = profile.identityHeader;
+        const hairDesc = ih.hair || '';
+        const outfitDesc = profile.clothing ? profile.clothing.slice(0, 60) : '';
+        const nevers = profile.hardNegatives?.slice(0, 3).join(', ') || '';
+        const parts = [hairDesc, outfitDesc].filter(Boolean);
+        if (parts.length === 0) return;
+        lines.push(`• ${roleLabel}: ${parts.join(', ')}${nevers ? `. NEVER describe as: ${nevers}` : ''}`);
+      };
+
+      addSummaryLine(hero, `HERO [${hero?.name || 'Hero'}]`);
+      addSummaryLine(friend, `CO-STAR [${friend?.name || 'Co-Star'}]`);
+      additionalChars.forEach(c => addSummaryLine(c, `[${c.name}]`));
+
+      return lines.length > 0
+        ? `\nVISUAL REFERENCE (for scene writing accuracy):\n${lines.join('\n')}`
+        : '';
+    };
+    const visualRefBlock = buildOutlineVisualSummary();
+
     // Enhanced outline prompt with comic fundamentals
     const prompt = `
 You are a professional comic book writer planning a ${comicConfig.MAX_STORY_PAGES}-page story.
@@ -352,7 +384,7 @@ GENRE: ${selectedGenre}
 LANGUAGE: ${langName}
 ART STYLE: ${storyContext.artStyle}
 CHARACTERS: ${characterNames.join(', ')}
-${charContext}
+${charContext}${visualRefBlock}
 STORY DESCRIPTION: ${storyContext.descriptionText}
 ${userNotes ? `USER NOTES: ${userNotes}` : ''}
 

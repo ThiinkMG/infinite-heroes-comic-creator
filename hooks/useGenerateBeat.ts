@@ -214,10 +214,64 @@ export const useGenerateBeat = (config: GenerateBeatConfig) => {
 
     // Character Context
     const charContext = [
-      `HERO: ${hero.name || 'Main Hero'}. Role: ${getRoleLabel(hero) || 'Hero'}. Backstory: ${hero.backstoryText || 'Unknown'}.`,
-      friend ? `CO-STAR: ${friend.name || 'Sidekick'}. Role: ${getRoleLabel(friend) || 'Sidekick'}. Backstory: ${friend.backstoryText || 'Unknown'}.` : null,
-      ...additionalChars.map(c => `${c.name}: Role: ${getRoleLabel(c) || 'Supporting'}. ${c.backstoryText || 'Unknown'}.`)
+      `HERO: ${hero.name || 'Main Hero'}. Role: ${getRoleLabel(hero) || 'Hero'}. Backstory: ${hero.backstoryText || hero.desc || 'Unknown'}.`,
+      friend ? `CO-STAR: ${friend.name || 'Sidekick'}. Role: ${getRoleLabel(friend) || 'Sidekick'}. Backstory: ${friend.backstoryText || friend.desc || 'Unknown'}.` : null,
+      ...additionalChars.map(c => `${c.name}: Role: ${getRoleLabel(c) || 'Supporting'}. ${c.backstoryText || c.desc || 'Unknown'}.`)
     ].filter(Boolean).join('\n');
+
+    // GAP-11 FIX: Visual Profile Context for Scene Writing
+    // Inject compact visual summaries so beat generator writes scenes consistent
+    // with character reference images (prevents hair/outfit contradictions in scene text).
+    const profiles = useCharacterStore.getState().getProfilesArray();
+    const buildVisualSummary = (persona: Persona, roleLabel: string): string | null => {
+      const profile = profiles.find(p => p.id === persona.id || p.name === persona.name);
+      if (!profile) return null;
+      const ih = profile.identityHeader;
+      const hairDesc = ih?.hair
+        || (profile.hairDetails ? `${profile.hairDetails.color} ${profile.hairDetails.style} hair`.trim() : '')
+        || '';
+      const outfitDesc = profile.clothing ? profile.clothing.slice(0, 60) : '';
+      const nevers = profile.hardNegatives?.slice(0, 3).join(', ') || '';
+      const parts = [hairDesc, outfitDesc].filter(Boolean);
+      if (parts.length === 0) return null;
+      return `• ${roleLabel}: ${parts.join(' | ')}${nevers ? `. NEVER describe as: ${nevers}` : ''}`;
+    };
+    const visualSummaries: string[] = [];
+    const heroVis = buildVisualSummary(hero, `HERO [${hero.name || 'Hero'}]`);
+    if (heroVis) visualSummaries.push(heroVis);
+    if (friend) {
+      const friendVis = buildVisualSummary(friend, `CO-STAR [${friend.name || 'Co-Star'}]`);
+      if (friendVis) visualSummaries.push(friendVis);
+    }
+    additionalChars.forEach(c => {
+      const vis = buildVisualSummary(c, `[${c.name}]`);
+      if (vis) visualSummaries.push(vis);
+    });
+    const visualRefBlock = visualSummaries.length > 0
+      ? `\nVISUAL REFERENCE (match in scene descriptions — do not contradict reference images):\n${visualSummaries.join('\n')}`
+      : '';
+
+    // GAP-10: Inject lock visual constraints so beat generator doesn't write scenes
+    // that contradict locked attributes (e.g., "removes helmet" when outfit is locked).
+    const characterLocks = useCharacterStore.getState().characterLocks;
+    const lockLines: string[] = [];
+    characterLocks.forEach((lock, charId) => {
+      const anyLocked = lock.lockFace || lock.lockOutfit || lock.lockWeapon || lock.lockEmblem;
+      if (!anyLocked) return;
+      const persona = ([hero, friend].filter(Boolean) as Persona[])
+        .concat(additionalChars)
+        .find(p => p.id === charId);
+      if (!persona) return;
+      const lockedParts: string[] = [];
+      if (lock.lockFace) lockedParts.push('face');
+      if (lock.lockOutfit) lockedParts.push('outfit/costume');
+      if (lock.lockWeapon) lockedParts.push('weapon');
+      if (lock.lockEmblem) lockedParts.push('emblem');
+      lockLines.push(`[${persona.name.toUpperCase()}: ${lockedParts.join(', ')} locked — do not write scenes where these change or are removed]`);
+    });
+    const lockConstraintsBlock = lockLines.length > 0
+      ? `\nVISUAL CONSTRAINTS (do not contradict in scene descriptions):\n${lockLines.join('\n')}`
+      : '';
 
     // Story Context
     const storyInfo = `
@@ -239,7 +293,7 @@ MAINTAIN STRONG CONTINUITY with the other pages in this batch. The 3 pages shoul
 
     // Build base instruction
     let baseInstruction = `You are the Lead Writer for a mature comic book. Write ONE single, vivid, narrative beat for the NEXT page. ALL OUTPUT TEXT (Captions, Dialogue, Choices) MUST BE IN ${langName.toUpperCase()}. ${coreDriver} ${guardrails}`;
-    baseInstruction += `\nCONTEXT: ${storyInfo}\nCHARACTERS:\n${charContext}`;
+    baseInstruction += `\nCONTEXT: ${storyInfo}\nCHARACTERS:\n${charContext}${visualRefBlock}${lockConstraintsBlock}`;
     baseInstruction += batchContext;
 
     if (richMode) {

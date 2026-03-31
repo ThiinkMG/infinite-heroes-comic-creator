@@ -4,7 +4,9 @@
  */
 
 import { create } from 'zustand';
+import { persist } from 'zustand/middleware';
 import { Persona, CharacterProfile, CharacterLockState, CharacterReferenceObject } from '../types';
+import { buildCharacterReference } from '../utils/buildCharacterReference';
 
 // ============================================================================
 // TYPES
@@ -103,7 +105,9 @@ const initialState: CharacterState = {
 // STORE
 // ============================================================================
 
-export const useCharacterStore = create<CharacterStore>((set, get) => ({
+export const useCharacterStore = create<CharacterStore>()(
+  persist(
+    (set, get) => ({
   // Initial state
   ...initialState,
 
@@ -196,12 +200,25 @@ export const useCharacterStore = create<CharacterStore>((set, get) => ({
   updateCharacterProfile: (id: string, partial: Partial<CharacterProfile>) => {
     set((state) => {
       const existing = state.characterProfiles.get(id);
-      if (existing) {
-        const newProfiles = new Map(state.characterProfiles);
-        newProfiles.set(id, { ...existing, ...partial });
-        return { characterProfiles: newProfiles };
+      if (!existing) return state;
+
+      const updatedProfile = { ...existing, ...partial };
+      const newProfiles = new Map(state.characterProfiles);
+      newProfiles.set(id, updatedProfile);
+
+      // GAP-6 FIX: Rebuild compiled reference whenever a profile is edited so
+      // the descriptor injected into generation prompts stays in sync.
+      const newRefs = new Map(state.characterReferences);
+      const persona = state.hero?.id === id
+        ? state.hero
+        : state.friend?.id === id
+          ? state.friend
+          : state.additionalCharacters.find(c => c.id === id);
+      if (persona) {
+        newRefs.set(id, buildCharacterReference(persona, updatedProfile));
       }
-      return state;
+
+      return { characterProfiles: newProfiles, characterReferences: newRefs };
     });
   },
 
@@ -375,7 +392,24 @@ export const useCharacterStore = create<CharacterStore>((set, get) => ({
 
     return true;
   },
-}));
+    }),
+    {
+      name: 'infinite-heroes-character-locks',
+      partialize: (state) => ({
+        characterLocks: Array.from(state.characterLocks.entries()),
+      }),
+      merge: (persistedState: unknown, currentState) => {
+        const ps = persistedState as { characterLocks?: Array<[string, CharacterLockState]> };
+        return {
+          ...currentState,
+          characterLocks: ps?.characterLocks
+            ? new Map(ps.characterLocks)
+            : new Map(),
+        };
+      },
+    }
+  )
+);
 
 // ============================================================================
 // SELECTOR HOOKS (for optimized re-renders)

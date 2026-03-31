@@ -81,6 +81,7 @@ interface SetupProps {
     onSkipProfileAnalysisChange?: (val: boolean) => void;
     useSavedProfiles?: boolean;
     onUseSavedProfilesChange?: (val: boolean) => void;
+    hasStaleSavedProfiles?: boolean;
     onPresetSelect?: (preset: ComicPreset) => void;
     onSettingsOpen?: () => void;
 }
@@ -886,6 +887,11 @@ export const Setup: React.FC<SetupProps> = (props) => {
                                     <span>💾 Use Saved Profiles</span>
                                     <Tooltip text="Reuses saved character analysis. Auto-generates missing profiles." />
                                 </label>
+                            )}
+                            {props.useSavedProfiles && props.hasStaleSavedProfiles && (
+                                <p className="font-comic text-[10px] text-amber-700 font-bold mt-0.5">
+                                    Some saved profiles are &gt;24h old — consider re-analyzing.
+                                </p>
                             )}
 
                             {props.onSkipProfileAnalysisChange && (

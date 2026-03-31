@@ -82,6 +82,8 @@ export interface GenerateImageParams {
   adjacentPageImages?: Array<{ base64: string; label: string }>;
   /** Feature F: Reroll consistency mode — forces maximum strength for this call */
   consistencyMode?: boolean;
+  /** Override profiles for this call only — avoids mutating the global store (DISCONNECT-6 fix) */
+  profileOverrides?: CharacterProfile[];
 }
 
 /** Result from image generation */
@@ -213,6 +215,7 @@ export const useGenerateImage = (config: GenerateImageConfig) => {
       compactMode = false,
       adjacentPageImages,
       consistencyMode = false,
+      profileOverrides,
     } = params;
 
     const startTime = Date.now();
@@ -231,7 +234,20 @@ export const useGenerateImage = (config: GenerateImageConfig) => {
     const hero = getHero();
     const friend = getFriend();
     const additionalChars = getAdditionalChars();
-    const profiles = getProfilesArray();
+    // Use profileOverrides when provided (e.g. reroll with filtered characters) to avoid global store mutation
+    const profiles = profileOverrides ?? getProfilesArray();
+
+    // DISCONNECT-4 FIX: Filter profiles to only characters appearing on this page
+    // when PageCharacterPlan data is available. This reduces prompt tokens and
+    // prevents absent characters from appearing in generated images.
+    const pagePlanForFilter = storyOutline.pageBreakdown?.find(p => p.pageIndex === pageIndex);
+    const activeProfiles = (pagePlanForFilter && (pagePlanForFilter.primaryCharacters.length > 0 || (pagePlanForFilter.secondaryCharacters?.length ?? 0) > 0))
+      ? profiles.filter(p =>
+          pagePlanForFilter.primaryCharacters.includes(p.id) ||
+          (pagePlanForFilter.secondaryCharacters ?? []).includes(p.id)
+        )
+      : profiles;
+
     // Feature A: compiled reference objects (built once after profile generation)
     const compiledRefs = getReferencesArray();
 
@@ -262,21 +278,30 @@ export const useGenerateImage = (config: GenerateImageConfig) => {
     // but for image generation fewer focused refs work better than many.
     const MAX_COSTUME_REFS = 1;
 
+    // Helper to get character's actual role label (Villain, Sidekick, etc.) from Persona
+    const getRoleLabel = (p: { role?: string; customRole?: string }): string => {
+      if (!p.role) return '';
+      if (p.role === 'Family/Friend' || p.role === 'Custom') return p.customRole || p.role;
+      return p.role;
+    };
+
     // Helper to get inline identity from profile — all 5 fields to minimize guessing
-    const getInlineIdentity = (name: string, role: 'HERO' | 'CO-STAR' | 'CHARACTER' = 'CHARACTER'): string => {
+    // characterRoleDesc: actual Persona role (Villain, Sidekick, etc.) for visual context
+    const getInlineIdentity = (name: string, role: 'HERO' | 'CO-STAR' | 'CHARACTER' = 'CHARACTER', characterRoleDesc?: string): string => {
       const profile = findProfileByName(name, profiles);
+      const roleTag = characterRoleDesc ? ` — ${characterRoleDesc}` : '';
       if (profile) {
         const ih = profile.identityHeader;
         if (ih) {
           const sigStr = ih.signature?.length ? `\nSignature: ${ih.signature.slice(0, 2).join(', ')}` : '';
-          return `[${role}: ${profile.name.toUpperCase()}]\nFace: ${ih.face} | Eyes: ${ih.eyes} | Hair: ${ih.hair} | Skin: ${ih.skin} | Build: ${ih.build}${sigStr}\n[PORTRAIT — COPY THIS FACE EXACTLY]:`;
+          return `[${role}: ${profile.name.toUpperCase()}${roleTag}]\nFace: ${ih.face} | Eyes: ${ih.eyes} | Hair: ${ih.hair} | Skin: ${ih.skin} | Build: ${ih.build}${sigStr}\n[PORTRAIT — COPY THIS FACE EXACTLY]:`;
         }
         const hairInfo = profile.hairDetails
           ? `${profile.hairDetails.style} ${profile.hairDetails.color} hair`
           : 'match portrait';
-        return `[${role}: ${profile.name.toUpperCase()}]\nFace: ${profile.faceDescription || 'match portrait'} | Hair: ${hairInfo} | Skin: match portrait\n[PORTRAIT — COPY THIS FACE EXACTLY]:`;
+        return `[${role}: ${profile.name.toUpperCase()}${roleTag}]\nFace: ${profile.faceDescription || 'match portrait'} | Hair: ${hairInfo} | Skin: match portrait\n[PORTRAIT — COPY THIS FACE EXACTLY]:`;
       }
-      return `[${role}: ${name.toUpperCase()}]\n[PORTRAIT — COPY THIS FACE EXACTLY]:`;
+      return `[${role}: ${name.toUpperCase()}${roleTag}]\n[PORTRAIT — COPY THIS FACE EXACTLY]:`;
     };
 
     // Push character references with inline identity headers (Task 5.2.3 - identity immediately before each image)
@@ -285,7 +310,7 @@ export const useGenerateImage = (config: GenerateImageConfig) => {
 
       if (hero?.base64) {
         // Inline identity immediately before portrait image (Task 5.2.3)
-        contents.push({ text: `\n${getInlineIdentity(hero.name, 'HERO')}` });
+        contents.push({ text: `\n${getInlineIdentity(hero.name, 'HERO', getRoleLabel(hero) || undefined)}` });
         contents.push(createInlineImage(hero.base64));
         getAllRefs(hero).slice(0, MAX_COSTUME_REFS).forEach((ref, i) => {
           contents.push({ text: `[${hero.name.toUpperCase()} COSTUME REF ${i + 1}]:` });
@@ -305,7 +330,7 @@ export const useGenerateImage = (config: GenerateImageConfig) => {
 
       if (friend?.base64) {
         // Inline identity immediately before portrait image (Task 5.2.3)
-        contents.push({ text: `\n${getInlineIdentity(friend.name, 'CO-STAR')}` });
+        contents.push({ text: `\n${getInlineIdentity(friend.name, 'CO-STAR', getRoleLabel(friend) || undefined)}` });
         contents.push(createInlineImage(friend.base64));
         getAllRefs(friend).slice(0, MAX_COSTUME_REFS).forEach((ref, i) => {
           contents.push({ text: `[${friend.name.toUpperCase()} COSTUME REF ${i + 1}]:` });
@@ -326,7 +351,7 @@ export const useGenerateImage = (config: GenerateImageConfig) => {
       additionalChars.forEach((c) => {
         if (c.base64) {
           // Inline identity immediately before portrait image (Task 5.2.3)
-          contents.push({ text: `\n${getInlineIdentity(c.name, 'CHARACTER')}` });
+          contents.push({ text: `\n${getInlineIdentity(c.name, 'CHARACTER', getRoleLabel(c) || undefined)}` });
           contents.push(createInlineImage(c.base64));
         }
         getAllRefs(c).slice(0, MAX_COSTUME_REFS).forEach((ref, ri) => {
@@ -640,18 +665,49 @@ export const useGenerateImage = (config: GenerateImageConfig) => {
 
       // Layer 2/4 blocks in non-compact mode, gated by consistencyStrength (Feature E).
       // strength >= 0.5: include full identity blocks. strength < 0.5: skip verbose layers.
-      if (!compactMode && profiles.length > 0 && consistencyStrength >= 0.5) {
+      // Uses activeProfiles (page-scoped) to reduce tokens and avoid absent character bleed.
+      if (!compactMode && activeProfiles.length > 0 && consistencyStrength >= 0.5) {
         promptText += '\n--- CHARACTER IDENTITY BLOCKS ---\n';
-        profiles.forEach(cp => {
+        activeProfiles.forEach(cp => {
           promptText += formatIdentityHeader(cp) + '\n';
         });
         promptText += '--- END IDENTITY BLOCKS ---\n';
 
+        // GAP-17 FIX: Inject extractedColors as a dedicated color enforcement block.
+        // Color drift is a common failure — explicit palette reinforcement anchors the model.
+        const colorBlocks = activeProfiles
+          .filter(cp => cp.extractedColors && (
+            cp.extractedColors.skin || cp.extractedColors.hair || cp.extractedColors.eyes ||
+            cp.extractedColors.outfit.length > 0 || cp.extractedColors.emblem.length > 0
+          ))
+          .map(cp => {
+            const c = cp.extractedColors!;
+            const outfitStr = c.outfit.length > 0 ? c.outfit.join(', ') : '—';
+            const emblemStr = c.emblem.length > 0 ? c.emblem.join(', ') : '—';
+            return `COLOR PALETTE — ${cp.name.toUpperCase()}: Skin: ${c.skin || '—'} | Hair: ${c.hair || '—'} | Eyes: ${c.eyes || '—'} | Outfit: ${outfitStr} | Emblem: ${emblemStr}`;
+          });
+        if (colorBlocks.length > 0) {
+          promptText += '\n--- CHARACTER COLOR PALETTES (match exactly) ---\n';
+          promptText += colorBlocks.join('\n') + '\n';
+          promptText += '--- END COLOR PALETTES ---\n';
+        }
+
         promptText += '\n--- CONSISTENCY REQUIREMENTS ---\n';
-        profiles.forEach(cp => {
+        activeProfiles.forEach(cp => {
           promptText += formatConsistencyInstruction(cp, storyContext.artStyle || 'Comic Book') + '\n';
         });
         promptText += '---\n';
+
+        // GAP-13: CHARACTER DISAMBIGUATION — inject contrastFeatures when multiple profiles present.
+        // Helps model distinguish characters in shared scenes (e.g., "only one with red suit").
+        if (activeProfiles.length > 1) {
+          const contrastLines = activeProfiles
+            .filter(p => p.contrastFeatures && p.contrastFeatures.length > 0)
+            .map(p => `• ${p.name.toUpperCase()}: ${p.contrastFeatures!.slice(0, 2).join('; ')}`);
+          if (contrastLines.length > 0) {
+            promptText += `\n[CHARACTER DISAMBIGUATION]\n${contrastLines.join('\n')}\nDo not mix up these characters.\n`;
+          }
+        }
       }
 
       // Maximum consistency: add extra face-lock reinforcement line (Feature E, strength = 1.0)

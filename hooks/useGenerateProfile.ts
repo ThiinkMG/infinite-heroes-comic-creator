@@ -361,7 +361,9 @@ export const useGenerateProfile = (config: GenerateProfileConfig) => {
       weaponDescription: parsed.weaponDescription ? ensureString(parsed.weaponDescription) : undefined,
       identityHeader,
       hardNegatives,
-      contrastFeatures: [],
+      contrastFeatures: Array.isArray(parsed.contrastFeatures)
+        ? (parsed.contrastFeatures as string[]).filter(s => typeof s === 'string' && s.length > 0).slice(0, 3)
+        : [],
       extractedColors,
     };
   };
@@ -501,8 +503,11 @@ OUTPUT JSON ONLY (no markdown):
     "outfit": ["primary outfit color 1", "primary outfit color 2"],
     "emblem": ["emblem color 1 if present"]
   },
-  "hardNegatives": ["feature to never include based on what you see - e.g. if no glasses, add 'no glasses'"]
+  "hardNegatives": ["feature to never include based on what you see - e.g. if no glasses, add 'no glasses'"],
+  "contrastFeatures": ["visual feature 1 that distinguishes this character in a group scene", "feature 2", "optional feature 3"]
 }
+
+For contrastFeatures, list 2-3 visual features that make this character visually distinct from other characters who might appear in the same scene (e.g., "only character with red outfit", "tallest character with distinctive silhouette", "unique glowing blue eyes", "only character wearing a mask").
 
 For hardNegatives, analyze the image and add negatives for:
 - If they have a specific hairstyle, add "no [opposite style]" (e.g., curly hair -> "no straight hair")
