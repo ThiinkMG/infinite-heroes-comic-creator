@@ -21,6 +21,7 @@ import {
   createImageContent,
   extractJsonFromResponse,
   ClaudeContentBlock,
+  detectImageMimeType,
 } from '../claudeHelpers';
 import { useCharacterStore } from '../stores/useCharacterStore';
 import { validateProfileCompleteness } from '../utils/profileValidation';
@@ -389,41 +390,45 @@ export const useGenerateProfile = (config: GenerateProfileConfig) => {
     let hasData = false;
 
     if (persona.base64) {
+      const portraitMime = detectImageMimeType(persona.base64);
       claudeContent.push(createTextContent(`Analyze this character portrait for: ${persona.name || 'Unknown'}`));
-      claudeContent.push(createImageContent(persona.base64, 'image/jpeg'));
+      claudeContent.push(createImageContent(persona.base64, portraitMime));
       geminiContent.push({ text: `Analyze this character portrait for: ${persona.name || 'Unknown'}` });
-      geminiContent.push({ inlineData: { mimeType: 'image/jpeg', data: persona.base64 } });
+      geminiContent.push({ inlineData: { mimeType: portraitMime, data: persona.base64 } });
       hasData = true;
     }
 
     const allRefs = persona.referenceImages || (persona.referenceImage ? [persona.referenceImage] : []);
     allRefs.forEach((ref, i) => {
+      const refMime = detectImageMimeType(ref);
       claudeContent.push(createTextContent(`Additional reference ${i + 1}:`));
-      claudeContent.push(createImageContent(ref, 'image/jpeg'));
+      claudeContent.push(createImageContent(ref, refMime));
       geminiContent.push({ text: `Additional reference ${i + 1}:` });
-      geminiContent.push({ inlineData: { mimeType: 'image/jpeg', data: ref } });
+      geminiContent.push({ inlineData: { mimeType: refMime, data: ref } });
       hasData = true;
     });
 
     // Include emblem/logo if provided
     if (persona.emblemImage) {
+      const emblemMime = detectImageMimeType(persona.emblemImage);
       const placementDesc = persona.emblemPlacement === 'other'
         ? persona.emblemPlacementCustom || 'custom location'
         : persona.emblemPlacement?.replace('-', ' ') || 'unspecified location';
       claudeContent.push(createTextContent(`EMBLEM/LOGO (placed on ${placementDesc}):`));
-      claudeContent.push(createImageContent(persona.emblemImage, 'image/jpeg'));
+      claudeContent.push(createImageContent(persona.emblemImage, emblemMime));
       geminiContent.push({ text: `EMBLEM/LOGO (placed on ${placementDesc}):` });
-      geminiContent.push({ inlineData: { mimeType: 'image/jpeg', data: persona.emblemImage } });
+      geminiContent.push({ inlineData: { mimeType: emblemMime, data: persona.emblemImage } });
       hasData = true;
     }
 
     // Include weapon reference if provided
     if (persona.weaponImage) {
+      const weaponMime = detectImageMimeType(persona.weaponImage);
       const weaponDesc = persona.weaponDescriptionText || 'signature weapon';
       claudeContent.push(createTextContent(`SIGNATURE WEAPON (${weaponDesc}):`));
-      claudeContent.push(createImageContent(persona.weaponImage, 'image/jpeg'));
+      claudeContent.push(createImageContent(persona.weaponImage, weaponMime));
       geminiContent.push({ text: `SIGNATURE WEAPON (${weaponDesc}):` });
-      geminiContent.push({ inlineData: { mimeType: 'image/jpeg', data: persona.weaponImage } });
+      geminiContent.push({ inlineData: { mimeType: weaponMime, data: persona.weaponImage } });
       hasData = true;
     }
 
