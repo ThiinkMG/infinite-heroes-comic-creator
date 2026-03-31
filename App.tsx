@@ -26,7 +26,7 @@ import { CoverVariantSelector } from './components';
 import { createImageContent, createTextContent, extractJsonFromResponse, getTextFromClaudeResponse, ClaudeContentBlock, detectImageMimeType } from './claudeHelpers';
 
 // --- Zustand Stores ---
-import { useCharacterStore } from './stores/useCharacterStore';
+import { useCharacterStore, useHero, useFriend, useAdditionalCharacters } from './stores/useCharacterStore';
 import { useComicStore } from './stores/useComicStore';
 import { useSettingsStore } from './stores/useSettingsStore';
 import { useSessionHistoryStore } from './stores/useSessionHistoryStore';
@@ -92,31 +92,21 @@ const App: React.FC = () => {
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
-        if (parsed.hero) {
-          setHeroState(parsed.hero);
-          // Sync to Zustand store (store is now the source of truth)
-          useCharacterStore.getState().setHero(parsed.hero);
-        }
-        if (parsed.friend) {
-          setFriendState(parsed.friend);
-          // Sync to Zustand store (store is now the source of truth)
-          useCharacterStore.getState().setFriend(parsed.friend);
-        }
+        const store = useCharacterStore.getState();
+        if (parsed.hero) store.setHero(parsed.hero);
+        if (parsed.friend) store.setFriend(parsed.friend);
         if (parsed.additionalCharacters) {
-          setAdditionalCharacters(parsed.additionalCharacters);
-          // Sync to Zustand store (store is now the source of truth)
-          parsed.additionalCharacters.forEach((char: Persona) => {
-            useCharacterStore.getState().addCharacter(char);
-          });
+          parsed.additionalCharacters.forEach((char: Persona) => store.addCharacter(char));
         }
       } catch(e){ console.error("Failed to load cast", e); }
     }
     isCastLoadedRef.current = true;
   }, []);
 
-  const [hero, setHeroState] = useState<Persona | null>(null);
-  const [friend, setFriendState] = useState<Persona | null>(null);
-  const [additionalCharacters, setAdditionalCharacters] = useState<Persona[]>([]);
+  // Zustand selector hooks — single source of truth for character data
+  const hero = useHero();
+  const friend = useFriend();
+  const additionalCharacters = useAdditionalCharacters();
   const [storyContext, setStoryContext] = useState<StoryContext>({
     title: "",
     descriptionText: "",
@@ -191,7 +181,7 @@ const App: React.FC = () => {
       const strippedPayload = JSON.stringify({
         hero: stripStr(hero),
         friend: stripStr(friend),
-        additionalCharacters: additionalCharacters.map(c => stripStr(c)).filter((c): c is Persona => c !== null)
+        additionalCharacters: additionalCharacters.map(c => stripStr(c)).filter(Boolean) as Persona[]
       });
 
       try {
@@ -218,22 +208,13 @@ const App: React.FC = () => {
     }
   }, [hero, friend, additionalCharacters]);
 
-  // --- Character State Setters (synced to Zustand stores) ---
+  // --- Character State Setters (Zustand is the single source of truth) ---
   const setHero = (p: Persona | null) => {
-    setHeroState(p);
-    // Sync to Zustand store (store is now the source of truth for refs)
-    if (p) {
-      useCharacterStore.getState().setHero(p);
-    }
+    useCharacterStore.getState().setHero(p);
   };
   const setFriend = (p: Persona | null) => {
-    setFriendState(p);
-    // Sync to Zustand store (store is now the source of truth for refs)
-    if (p) {
-      useCharacterStore.getState().setFriend(p);
-    } else {
-      useCharacterStore.getState().clearFriend();
-    }
+    if (p) useCharacterStore.getState().setFriend(p);
+    else useCharacterStore.getState().clearFriend();
   };
 
   const handleAddCharacter = () => {
@@ -244,20 +225,14 @@ const App: React.FC = () => {
       desc: "Additional Character",
       backstoryFiles: []
     };
-    setAdditionalCharacters(prev => [...prev, newChar]);
-    // Sync to Zustand store (store is now the source of truth for refs)
     useCharacterStore.getState().addCharacter(newChar);
   };
 
   const handleUpdateCharacter = (id: string, updates: Partial<Persona>) => {
-    setAdditionalCharacters(prev => prev.map(c => c.id === id ? { ...c, ...updates } : c));
-    // Sync to Zustand store (store is now the source of truth for refs)
     useCharacterStore.getState().updateCharacter(id, updates);
   };
 
   const handleDeleteCharacter = (id: string) => {
-    setAdditionalCharacters(prev => prev.filter(c => c.id !== id));
-    // Sync to Zustand store (store is now the source of truth for refs)
     useCharacterStore.getState().removeCharacter(id);
   };
 
@@ -1693,7 +1668,7 @@ Create a powerful, memorable conclusion that honors the user's story path.
       generatingPages.current.clear();
       setHero(null);
       setFriend(null);
-      setAdditionalCharacters([]);
+      useCharacterStore.getState().clearAdditionalCharacters();
       setExtraPages(0);
   };
 
@@ -1713,7 +1688,7 @@ Create a powerful, memorable conclusion that honors the user's story path.
       if (!window.confirm("Are you sure you want to completely clear the setup and characters?")) return;
       setHero(null);
       setFriend(null);
-      setAdditionalCharacters([]);
+      useCharacterStore.getState().clearAdditionalCharacters();
       setStoryContext({
         title: "",
         descriptionText: "",
@@ -2132,20 +2107,23 @@ Create a powerful, memorable conclusion that honors the user's story path.
   };
 
   const exportDraft = () => {
-    const data = JSON.stringify({ 
-        comicFaces, 
-        history: historyRef.current, 
-        hero, 
-        friend, 
-        additionalCharacters, 
-        storyContext, 
+    const store = useCharacterStore.getState();
+    const data = JSON.stringify({
+        comicFaces,
+        history: historyRef.current,
+        hero,
+        friend,
+        additionalCharacters,
+        storyContext,
         extraPages,
         storyOutline,
         generateFromOutline,
         richMode,
         selectedGenre,
         selectedLanguage,
-        customPremise
+        customPremise,
+        characterProfiles: Array.from(store.characterProfiles.entries()),
+        characterLocks: Array.from(store.characterLocks.entries()),
     });
     const blob = new Blob([data], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
@@ -2175,7 +2153,9 @@ Create a powerful, memorable conclusion that honors the user's story path.
           historyRef.current = parsed.history || [];
           setHero(parsed.hero || null);
           setFriend(parsed.friend || null);
-          setAdditionalCharacters(parsed.additionalCharacters || []);
+          const importCharsStore = useCharacterStore.getState();
+          importCharsStore.clearAdditionalCharacters();
+          (parsed.additionalCharacters || []).forEach((c: Persona) => importCharsStore.addCharacter(c));
           setStoryContext(prev => ({ ...prev, ...(parsed.storyContext || {}) }));
           setExtraPages(parsed.extraPages || 0);
 
@@ -2185,6 +2165,20 @@ Create a powerful, memorable conclusion that honors the user's story path.
           if (parsed.selectedGenre) setSelectedGenre(parsed.selectedGenre);
           if (parsed.selectedLanguage) setSelectedLanguage(parsed.selectedLanguage);
           if (parsed.customPremise !== undefined) setCustomPremise(parsed.customPremise);
+
+          // Sync character profiles to Zustand (clear stale data from previous session)
+          const importStore = useCharacterStore.getState();
+          if (parsed.characterProfiles && Array.isArray(parsed.characterProfiles)) {
+            // Restore profiles from draft (new format with profiles included)
+            importStore.setAllProfiles(
+              (parsed.characterProfiles as [string, CharacterProfile][]).map(([, p]) => p)
+            );
+          } else {
+            // Old format draft or no profiles — clear stale profiles from previous session
+            importStore.setAllProfiles([]);
+          }
+          // Always clear compiled references on import (rebuilt fresh from profiles)
+          importStore.clearCharacterReferences();
 
           if (parsed.comicFaces && parsed.comicFaces.length > 0) {
               setIsStarted(true);

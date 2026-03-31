@@ -35,7 +35,7 @@ export interface CharacterState {
 
 export interface CharacterActions {
   // Hero actions
-  setHero: (persona: Persona) => void;
+  setHero: (persona: Persona | null) => void;
   updateHero: (partial: Partial<Persona>) => void;
 
   // Friend (co-star) actions
@@ -47,6 +47,9 @@ export interface CharacterActions {
   addCharacter: (persona: Persona) => void;
   updateCharacter: (id: string, partial: Partial<Persona>) => void;
   removeCharacter: (id: string) => void;
+
+  /** Remove all additional characters (and their profiles) */
+  clearAdditionalCharacters: () => void;
 
   // Character profile actions
   setCharacterProfile: (id: string, profile: CharacterProfile) => void;
@@ -115,7 +118,7 @@ export const useCharacterStore = create<CharacterStore>()(
   // HERO ACTIONS
   // -------------------------------------------------------------------------
 
-  setHero: (persona: Persona) => {
+  setHero: (persona: Persona | null) => {
     set({ hero: persona });
   },
 
@@ -182,6 +185,14 @@ export const useCharacterStore = create<CharacterStore>()(
         ),
         characterProfiles: newProfiles,
       };
+    });
+  },
+
+  clearAdditionalCharacters: () => {
+    set((state) => {
+      const newProfiles = new Map(state.characterProfiles);
+      state.additionalCharacters.forEach(c => newProfiles.delete(c.id));
+      return { additionalCharacters: [], characterProfiles: newProfiles };
     });
   },
 
