@@ -97,7 +97,7 @@ export const RerollModal: React.FC<RerollModalProps> = ({
     const [isImprovingNegative, setIsImprovingNegative] = useState(false);
 
     // === PHASE 1 NEW STATE (V2 Batch Plan) ===
-    const [selectedPresetId, setSelectedPresetId] = useState<string | undefined>(undefined);
+    const [selectedPresetIds, setSelectedPresetIds] = useState<string[]>([]);
     const [strengthValue, setStrengthValue] = useState(1.0); // Full by default
 
     // === SELECTION STATE ===
@@ -139,14 +139,13 @@ export const RerollModal: React.FC<RerollModalProps> = ({
 
     // === SMART BEHAVIOR: Auto-select all refs when preset uses them (1.3.1) ===
     useEffect(() => {
-        if (selectedPresetId) {
-            const preset = QUICK_PRESETS.find(p => p.id === selectedPresetId);
-            if (preset?.useRefs && selectedIds.size === 0) {
-                // Auto-select all refs if none selected and preset needs refs
+        if (selectedPresetIds.length > 0) {
+            const anyUsesRefs = selectedPresetIds.some(id => QUICK_PRESETS.find(p => p.id === id)?.useRefs);
+            if (anyUsesRefs && selectedIds.size === 0) {
                 setSelectedIds(new Set(allRefImages.map(r => r.id)));
             }
         }
-    }, [selectedPresetId, allRefImages]);
+    }, [selectedPresetIds, allRefImages]);
 
     // === HANDLERS ===
 
@@ -184,25 +183,19 @@ export const RerollModal: React.FC<RerollModalProps> = ({
     }, [selectedProfileIds]);
 
     const handlePresetSelect = (preset: QuickPreset) => {
-        // Toggle off if clicking the same preset
-        if (selectedPresetId === preset.id) {
-            setSelectedPresetId(undefined);
-            setRegenerationModes(new Set(['full'])); // Reset to default
-            setInstruction(''); // Clear preset instruction
+        // Toggle off if clicking an already-selected preset
+        if (selectedPresetIds.includes(preset.id)) {
+            setSelectedPresetIds(prev => prev.filter(id => id !== preset.id));
             return;
         }
-
-        setSelectedPresetId(preset.id);
-        // Apply preset's regeneration modes
-        setRegenerationModes(new Set(preset.modes));
-        // Set preset's instruction if provided
-        if (preset.prompt) {
-            setInstruction(preset.prompt);
+        // Toggle on: add to selection
+        setSelectedPresetIds(prev => [...prev, preset.id]);
+        // Smart behavior: Auto-scroll to submit when first preset selected
+        if (selectedPresetIds.length === 0) {
+            setTimeout(() => {
+                submitRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }, 100);
         }
-        // Smart behavior: Auto-scroll to submit (1.3.2)
-        setTimeout(() => {
-            submitRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        }, 100);
     };
 
     const handleSubmit = () => {
@@ -212,6 +205,15 @@ export const RerollModal: React.FC<RerollModalProps> = ({
 
         // Build final instruction with strength and focus area prompts
         let finalInstruction = instruction;
+
+        // Combine all selected preset instructions (multi-preset support)
+        const presetInstructions = selectedPresetIds
+            .map(id => QUICK_PRESETS.find(p => p.id === id)?.prompt ?? '')
+            .filter(Boolean)
+            .join(' ');
+        if (presetInstructions) {
+            finalInstruction = presetInstructions + (finalInstruction ? ' ' + finalInstruction : '');
+        }
 
         // Prepend strength modifier if not full
         if (strengthValue < 1.0) {
@@ -238,10 +240,16 @@ export const RerollModal: React.FC<RerollModalProps> = ({
             finalInstruction = `${lockedLines.join(' ')} ${finalInstruction}`.trim();
         }
 
-        const isConsistencyMode = selectedPresetId === 'consistency-mode';
+        const isConsistencyMode = selectedPresetIds.includes('consistency-mode');
+
+        const allPresetModes: RegenerationMode[] = selectedPresetIds.flatMap(
+            id => (QUICK_PRESETS.find(p => p.id === id)?.modes ?? []) as RegenerationMode[]
+        );
+        const combinedPresetModes: RegenerationMode[] = allPresetModes.filter((m, i) => allPresetModes.indexOf(m) === i);
+        const finalModes: RegenerationMode[] | undefined = combinedPresetModes.length > 0 ? combinedPresetModes : (regenerationModes.size > 0 ? Array.from(regenerationModes) : undefined);
 
         const options: RerollOptions = {
-            regenerationModes: regenerationModes.size > 0 ? Array.from(regenerationModes) : undefined,
+            regenerationModes: finalModes,
             instruction: finalInstruction.trim(),
             negativePrompt: negativePrompt.trim() || undefined,
             selectedRefImages,
@@ -433,7 +441,7 @@ export const RerollModal: React.FC<RerollModalProps> = ({
 
                     {/* 2. QUICK PRESETS (Speed) */}
                     <QuickPresets
-                        selectedPresetId={selectedPresetId}
+                        selectedPresetIds={selectedPresetIds}
                         onSelectPreset={handlePresetSelect}
                     />
 

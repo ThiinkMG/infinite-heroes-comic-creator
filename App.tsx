@@ -718,10 +718,17 @@ const App: React.FC = () => {
       let beat: Beat = { scene: "", choices: [], focus_char: 'other' };
 
       if (type === 'cover') {
-           // GAP-14: Build a character-anchored scene description for the cover.
-           const heroName = getHero()?.name || 'the hero';
+           // GAP-14 + Phase 3.1: Build a character-anchored scene description for the cover.
+           // Inject visual profile context (hair, outfit) when available so the image generator
+           // has concrete visual anchors even in the beat text.
+           const coverHero = getHero();
+           const heroName = coverHero?.name || 'the hero';
+           const heroProfile = coverHero ? useCharacterStore.getState().characterProfiles.get(coverHero.id) : undefined;
+           const heroVisual = heroProfile?.identityHeader
+             ? ` (${heroProfile.identityHeader.hair}${heroProfile.clothing ? `, ${heroProfile.clothing.slice(0, 60)}` : ''})`
+             : '';
            const friendName = getFriend()?.name;
-           const coverScene = `Comic book cover for "${storyContext.title || 'Untitled'}" featuring ${heroName}${friendName ? ` and ${friendName}` : ''}.${storyContext.descriptionText ? ` ${storyContext.descriptionText.slice(0, 120)}` : ''}`;
+           const coverScene = `Comic book cover for "${storyContext.title || 'Untitled'}" featuring ${heroName}${heroVisual}${friendName ? ` and ${friendName}` : ''}.${storyContext.descriptionText ? ` ${storyContext.descriptionText.slice(0, 120)}` : ''}`;
            beat = { scene: coverScene, choices: [], focus_char: 'hero' };
       } else if (type === 'back_cover') {
            const backCoverHeroName = getHero()?.name || 'the hero';

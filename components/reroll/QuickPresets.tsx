@@ -71,8 +71,8 @@ export const QUICK_PRESETS: QuickPreset[] = [
 ];
 
 interface QuickPresetsProps {
-    /** Currently selected preset ID */
-    selectedPresetId?: string;
+    /** Currently selected preset IDs (multi-select) */
+    selectedPresetIds: string[];
     /** Callback when a preset is selected */
     onSelectPreset: (preset: QuickPreset) => void;
     /** Whether presets are disabled (e.g., during generation) */
@@ -80,7 +80,7 @@ interface QuickPresetsProps {
 }
 
 export const QuickPresets: React.FC<QuickPresetsProps> = ({
-    selectedPresetId,
+    selectedPresetIds,
     onSelectPreset,
     disabled = false
 }) => {
@@ -97,7 +97,7 @@ export const QuickPresets: React.FC<QuickPresetsProps> = ({
 
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3">
                 {QUICK_PRESETS.map((preset) => {
-                    const isSelected = selectedPresetId === preset.id;
+                    const isSelected = selectedPresetIds.includes(preset.id);
 
                     return (
                         <button
@@ -137,16 +137,21 @@ export const QuickPresets: React.FC<QuickPresetsProps> = ({
                 })}
             </div>
 
-            {/* Selected preset description */}
-            {selectedPresetId && (
-                <div className="mt-3 p-2 bg-yellow-100 border-2 border-yellow-400 rounded-sm">
-                    <p className="font-comic text-xs sm:text-sm text-yellow-800">
-                        <strong>
-                            {QUICK_PRESETS.find(p => p.id === selectedPresetId)?.icon}{' '}
-                            {QUICK_PRESETS.find(p => p.id === selectedPresetId)?.label}:
-                        </strong>{' '}
-                        {QUICK_PRESETS.find(p => p.id === selectedPresetId)?.description}
-                    </p>
+            {/* Selected preset descriptions — one chip per selected preset */}
+            {selectedPresetIds.length > 0 && (
+                <div className="mt-3 flex flex-col gap-1">
+                    {selectedPresetIds.map(id => {
+                        const preset = QUICK_PRESETS.find(p => p.id === id);
+                        if (!preset) return null;
+                        return (
+                            <div key={id} className="p-2 bg-yellow-100 border-2 border-yellow-400 rounded-sm">
+                                <p className="font-comic text-xs sm:text-sm text-yellow-800">
+                                    <strong>{preset.icon} {preset.label}:</strong>{' '}
+                                    {preset.description}
+                                </p>
+                            </div>
+                        );
+                    })}
                 </div>
             )}
         </div>

@@ -241,11 +241,21 @@ export const useGenerateImage = (config: GenerateImageConfig) => {
     // when PageCharacterPlan data is available. This reduces prompt tokens and
     // prevents absent characters from appearing in generated images.
     const pagePlanForFilter = storyOutline.pageBreakdown?.find(p => p.pageIndex === pageIndex);
+    // Phase 1.3 FIX: Resolve role strings ('hero', 'friend') to actual persona UUIDs before filtering.
+    // pageBreakdown.primaryCharacters stores role strings from outline parsing, but
+    // CharacterProfile.id stores the Persona's UUID — they must be reconciled for the filter to work.
+    const resolvePageCharIds = (roleIds: string[]): string[] =>
+      roleIds.map(id => {
+        if (id === 'hero') return hero?.id ?? '';
+        if (id === 'friend') return friend?.id ?? '';
+        return id; // additional character UUID — used as-is
+      }).filter(Boolean);
     const activeProfiles = (pagePlanForFilter && (pagePlanForFilter.primaryCharacters.length > 0 || (pagePlanForFilter.secondaryCharacters?.length ?? 0) > 0))
-      ? profiles.filter(p =>
-          pagePlanForFilter.primaryCharacters.includes(p.id) ||
-          (pagePlanForFilter.secondaryCharacters ?? []).includes(p.id)
-        )
+      ? profiles.filter(p => {
+          const resolvedPrimary = resolvePageCharIds(pagePlanForFilter.primaryCharacters);
+          const resolvedSecondary = resolvePageCharIds(pagePlanForFilter.secondaryCharacters ?? []);
+          return resolvedPrimary.includes(p.id) || resolvedSecondary.includes(p.id);
+        })
       : profiles;
 
     // Feature A: compiled reference objects (built once after profile generation)
@@ -305,70 +315,56 @@ export const useGenerateImage = (config: GenerateImageConfig) => {
     };
 
     // Push character references with inline identity headers (Task 5.2.3 - identity immediately before each image)
+    // Phase 3.2: Focus-character portrait ordering — Gemini weights later images most heavily,
+    // so the focus character's portraits appear LAST for maximum face/costume accuracy.
     const pushCharacterReferences = () => {
       contents.push({ text: "\n=== CHARACTER VISUAL REFERENCES (Match these EXACTLY) ===" });
 
-      if (hero?.base64) {
-        // Inline identity immediately before portrait image (Task 5.2.3)
-        contents.push({ text: `\n${getInlineIdentity(hero.name, 'HERO', getRoleLabel(hero) || undefined)}` });
-        contents.push(createInlineImage(hero.base64));
-        getAllRefs(hero).slice(0, MAX_COSTUME_REFS).forEach((ref, i) => {
-          contents.push({ text: `[${hero.name.toUpperCase()} COSTUME REF ${i + 1}]:` });
+      // Unified helper: push one character's full reference block
+      const pushCharBlock = (persona: Persona, role: 'HERO' | 'CO-STAR' | 'CHARACTER', requirePortrait = false) => {
+        if (requirePortrait && !persona.base64) return;
+        if (persona.base64) {
+          contents.push({ text: `\n${getInlineIdentity(persona.name, role, getRoleLabel(persona) || undefined)}` });
+          contents.push(createInlineImage(persona.base64));
+        }
+        getAllRefs(persona).slice(0, MAX_COSTUME_REFS).forEach((ref, i) => {
+          contents.push({ text: `[${persona.name.toUpperCase()} COSTUME REF ${i + 1}]:` });
           contents.push(createInlineImage(ref));
         });
-        const heroEmblem = getEmblemDesc(hero);
-        if (heroEmblem) {
-          contents.push({ text: `[${hero.name.toUpperCase()} EMBLEM - place on ${heroEmblem.placement}]:` });
-          contents.push(createInlineImage(heroEmblem.image));
+        const emb = getEmblemDesc(persona);
+        if (emb) {
+          contents.push({ text: `[${persona.name.toUpperCase()} EMBLEM - place on ${emb.placement}]:` });
+          contents.push(createInlineImage(emb.image));
         }
-        const heroWeapon = getWeaponDesc(hero);
-        if (heroWeapon) {
-          contents.push({ text: `[${hero.name.toUpperCase()} WEAPON - ${heroWeapon.description}]:` });
-          contents.push(createInlineImage(heroWeapon.image));
+        const wpn = getWeaponDesc(persona);
+        if (wpn) {
+          contents.push({ text: `[${persona.name.toUpperCase()} WEAPON - ${wpn.description}]:` });
+          contents.push(createInlineImage(wpn.image));
         }
-      }
+      };
 
-      if (friend?.base64) {
-        // Inline identity immediately before portrait image (Task 5.2.3)
-        contents.push({ text: `\n${getInlineIdentity(friend.name, 'CO-STAR', getRoleLabel(friend) || undefined)}` });
-        contents.push(createInlineImage(friend.base64));
-        getAllRefs(friend).slice(0, MAX_COSTUME_REFS).forEach((ref, i) => {
-          contents.push({ text: `[${friend.name.toUpperCase()} COSTUME REF ${i + 1}]:` });
-          contents.push(createInlineImage(ref));
-        });
-        const friendEmblem = getEmblemDesc(friend);
-        if (friendEmblem) {
-          contents.push({ text: `[${friend.name.toUpperCase()} EMBLEM - place on ${friendEmblem.placement}]:` });
-          contents.push(createInlineImage(friendEmblem.image));
-        }
-        const friendWeapon = getWeaponDesc(friend);
-        if (friendWeapon) {
-          contents.push({ text: `[${friend.name.toUpperCase()} WEAPON - ${friendWeapon.description}]:` });
-          contents.push(createInlineImage(friendWeapon.image));
-        }
-      }
+      // Determine focus character persona (hero, friend, or additional char by name)
+      const focusKey = beat.focus_char;
+      const focusPersona: Persona | null =
+        focusKey === 'hero' ? (hero ?? null) :
+        focusKey === 'friend' ? (friend ?? null) :
+        focusKey ? (additionalChars.find(c => c.name === focusKey || c.id === focusKey) ?? null) :
+        null;
 
-      additionalChars.forEach((c) => {
-        if (c.base64) {
-          // Inline identity immediately before portrait image (Task 5.2.3)
-          contents.push({ text: `\n${getInlineIdentity(c.name, 'CHARACTER', getRoleLabel(c) || undefined)}` });
-          contents.push(createInlineImage(c.base64));
-        }
-        getAllRefs(c).slice(0, MAX_COSTUME_REFS).forEach((ref, ri) => {
-          contents.push({ text: `[${c.name.toUpperCase()} COSTUME REF ${ri + 1}]:` });
-          contents.push(createInlineImage(ref));
-        });
-        const charEmblem = getEmblemDesc(c);
-        if (charEmblem) {
-          contents.push({ text: `[${c.name.toUpperCase()} EMBLEM - place on ${charEmblem.placement}]:` });
-          contents.push(createInlineImage(charEmblem.image));
-        }
-        const charWeapon = getWeaponDesc(c);
-        if (charWeapon) {
-          contents.push({ text: `[${c.name.toUpperCase()} WEAPON - ${charWeapon.description}]:` });
-          contents.push(createInlineImage(charWeapon.image));
-        }
+      // Push non-focus characters first, focus character last (highest weight for Gemini)
+      if (hero && hero !== focusPersona) pushCharBlock(hero, 'HERO', true);
+      if (friend && friend !== focusPersona) pushCharBlock(friend, 'CO-STAR', true);
+      additionalChars.forEach(c => {
+        if (c !== focusPersona) pushCharBlock(c, 'CHARACTER', false);
       });
+      // Focus character pushed last
+      if (focusPersona) {
+        const focusRole: 'HERO' | 'CO-STAR' | 'CHARACTER' =
+          focusPersona === hero ? 'HERO' :
+          focusPersona === friend ? 'CO-STAR' : 'CHARACTER';
+        const requirePortrait = focusPersona === hero || focusPersona === friend;
+        pushCharBlock(focusPersona, focusRole, requirePortrait);
+      }
     };
 
     // ==========================================================================
@@ -389,9 +385,10 @@ export const useGenerateImage = (config: GenerateImageConfig) => {
 
     // Build compact character identity summary for front-loading (most critical info first).
     // Include all 5 identity fields so the model has specific values to lock onto before seeing images.
+    // Phase 1.1 FIX: Use activeProfiles (page-scoped) not all profiles — avoids injecting absent characters.
     const buildCharacterSummary = (): string => {
       const summaries: string[] = [];
-      profiles.forEach(profile => {
+      activeProfiles.forEach(profile => {
         const ih = profile.identityHeader;
         if (ih) {
           const negatives = profile.hardNegatives?.length ? ` | NEVER: ${profile.hardNegatives.slice(0, 3).join(', ')}` : '';
@@ -645,8 +642,9 @@ export const useGenerateImage = (config: GenerateImageConfig) => {
     }
 
     // STEP 5: CRITICAL DIRECTIVES V2 (Task 5.2.2 - 2 focused directives, not 4 verbose)
+    // Phase 1.2 FIX: Use activeProfiles (page-scoped) — absent characters' hardNegatives should not bleed in.
     if (type !== 'back_cover') {
-      promptText += buildCriticalDirectivesV2(profiles);
+      promptText += buildCriticalDirectivesV2(activeProfiles);
 
       // Face drift prevention reminder (reinforces the scene-context warning already in the image block)
       if (prevImage && pageIndex !== undefined && pageIndex >= 2) {
@@ -699,13 +697,22 @@ export const useGenerateImage = (config: GenerateImageConfig) => {
         promptText += '---\n';
 
         // GAP-13: CHARACTER DISAMBIGUATION — inject contrastFeatures when multiple profiles present.
-        // Helps model distinguish characters in shared scenes (e.g., "only one with red suit").
+        // Phase 3.3 FIX: Fall back to extractedColors when contrastFeatures is empty,
+        // ensuring SOME visual distinction info is always present for multi-character pages.
         if (activeProfiles.length > 1) {
-          const contrastLines = activeProfiles
-            .filter(p => p.contrastFeatures && p.contrastFeatures.length > 0)
-            .map(p => `• ${p.name.toUpperCase()}: ${p.contrastFeatures!.slice(0, 2).join('; ')}`);
-          if (contrastLines.length > 0) {
-            promptText += `\n[CHARACTER DISAMBIGUATION]\n${contrastLines.join('\n')}\nDo not mix up these characters.\n`;
+          const disambigLines = activeProfiles.map(p => {
+            if (p.contrastFeatures && p.contrastFeatures.length > 0) {
+              return `• ${p.name.toUpperCase()}: ${p.contrastFeatures.slice(0, 2).join('; ')}`;
+            }
+            if (p.extractedColors) {
+              const c = p.extractedColors;
+              const fallback = [c.hair, c.outfit?.[0]].filter(Boolean).join(', ');
+              if (fallback) return `• ${p.name.toUpperCase()}: ${fallback}`;
+            }
+            return null;
+          }).filter((line): line is string => line !== null);
+          if (disambigLines.length > 0) {
+            promptText += `\n[CHARACTER DISAMBIGUATION]\n${disambigLines.join('\n')}\nDo not mix up these characters.\n`;
           }
         }
       }
