@@ -214,6 +214,11 @@ export interface RerollOptions {
 
   /** When true, locked character attributes are automatically prepended as hard constraints */
   consistencyMode?: boolean;
+
+  /** Character IDs to preserve from the current panel (others will be regenerated) */
+  preserveCharacterIds?: string[];
+  /** Base64 image of the current panel — auto-included when preserveCharacterIds is non-empty */
+  currentPageImageUrl?: string;
 }
 
 export interface Persona {

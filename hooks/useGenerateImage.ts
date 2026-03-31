@@ -84,6 +84,8 @@ export interface GenerateImageParams {
   consistencyMode?: boolean;
   /** Override profiles for this call only — avoids mutating the global store (DISCONNECT-6 fix) */
   profileOverrides?: CharacterProfile[];
+  /** Character IDs to preserve from currentImageToPreserve reference */
+  preserveCharacterIds?: string[];
 }
 
 /** Result from image generation */
@@ -351,14 +353,25 @@ export const useGenerateImage = (config: GenerateImageConfig) => {
         focusKey ? (additionalChars.find(c => c.name === focusKey || c.id === focusKey) ?? null) :
         null;
 
-      // Push non-focus characters first, focus character last (highest weight for Gemini)
-      if (hero && hero !== focusPersona) pushCharBlock(hero, 'HERO', true);
-      if (friend && friend !== focusPersona) pushCharBlock(friend, 'CO-STAR', true);
-      additionalChars.forEach(c => {
-        if (c !== focusPersona) pushCharBlock(c, 'CHARACTER', false);
-      });
-      // Focus character pushed last
-      if (focusPersona) {
+      // Build ordered character list: preserve chars first (lowest weight), focus/fix chars last (highest weight)
+      const preserveSet = new Set(params.preserveCharacterIds ?? []);
+
+      const allChars: Array<{ persona: Persona; role: 'HERO' | 'CO-STAR' | 'CHARACTER'; requirePortrait: boolean }> = [
+        ...(hero ? [{ persona: hero, role: 'HERO' as const, requirePortrait: true }] : []),
+        ...(friend ? [{ persona: friend, role: 'CO-STAR' as const, requirePortrait: true }] : []),
+        ...additionalChars.map(c => ({ persona: c, role: 'CHARACTER' as const, requirePortrait: false })),
+      ];
+
+      // 1. Preserve characters first (lowest Gemini weight — reference panel is source of truth for them)
+      allChars.filter(c => preserveSet.has(c.persona.id))
+        .forEach(c => pushCharBlock(c.persona, c.role, c.requirePortrait));
+
+      // 2. Non-preserve, non-focus characters in middle
+      allChars.filter(c => !preserveSet.has(c.persona.id) && c.persona !== focusPersona)
+        .forEach(c => pushCharBlock(c.persona, c.role, c.requirePortrait));
+
+      // 3. Focus/fix character last (highest Gemini weight) — only if not preserved
+      if (focusPersona && !preserveSet.has(focusPersona.id)) {
         const focusRole: 'HERO' | 'CO-STAR' | 'CHARACTER' =
           focusPersona === hero ? 'HERO' :
           focusPersona === friend ? 'CO-STAR' : 'CHARACTER';
@@ -517,6 +530,30 @@ export const useGenerateImage = (config: GenerateImageConfig) => {
       contents.push({ text: "\n=== CURRENT PANEL (PRESERVE SCENE) ===" });
       contents.push({ text: "[PRESERVE] Keep background, lighting, composition. Only modify as specified." });
       contents.push(createInlineImage(preserveData));
+    }
+
+    // Character-targeted preservation: explicit directives for which characters to copy vs regenerate
+    if (params.preserveCharacterIds && params.preserveCharacterIds.length > 0) {
+      const preservedProfiles = activeProfiles.filter(p =>
+        params.preserveCharacterIds!.includes(p.id)
+      );
+      const fixProfiles = activeProfiles.filter(p =>
+        !params.preserveCharacterIds!.includes(p.id)
+      );
+
+      const lines: string[] = ['\n[CHARACTER TARGETING]'];
+
+      if (preservedProfiles.length > 0) {
+        lines.push('PRESERVE exactly from the reference panel above — do NOT change these characters:');
+        preservedProfiles.forEach(p => lines.push(`  • ${p.name.toUpperCase()} — copy face, outfit, and colors exactly`));
+      }
+
+      if (fixProfiles.length > 0) {
+        lines.push('REGENERATE these characters to match their portrait images below:');
+        fixProfiles.forEach(p => lines.push(`  • ${p.name.toUpperCase()} — fix face, outfit, and colors to match portrait`));
+      }
+
+      contents.push({ text: lines.join('\n') });
     }
 
     // Publisher logo for cover (if applicable, add near other images)

@@ -569,7 +569,8 @@ const App: React.FC = () => {
     currentImageToPreserve?: string,
     adjacentPageImages?: Array<{ base64: string; label: string }>,
     consistencyMode?: boolean,
-    profileOverrides?: CharacterProfile[]
+    profileOverrides?: CharacterProfile[],
+    preserveCharacterIds?: string[]
   ): Promise<{ imageUrl: string; originalPrompt: string; failureReason?: string }> => {
     return hookGenerateImage({
       beat,
@@ -585,6 +586,7 @@ const App: React.FC = () => {
       adjacentPageImages,
       consistencyMode,
       profileOverrides,
+      preserveCharacterIds,
       storyContext,
       storyOutline,
     });
@@ -709,7 +711,7 @@ const App: React.FC = () => {
       if (idx !== -1) historyRef.current[idx] = { ...historyRef.current[idx], ...updates };
   };
 
-  const generateSinglePage = async (faceId: string, pageNum: number, type: ComicFace['type'], instruction?: string, extraRefImages?: string[], previousChoices?: string[], comicOverrides?: ComicOverrides, useOnlySelectedRefs?: boolean, currentImageToPreserve?: string, adjacentPageImages?: Array<{ base64: string; label: string }>, consistencyMode?: boolean, profileOverrides?: CharacterProfile[]) => {
+  const generateSinglePage = async (faceId: string, pageNum: number, type: ComicFace['type'], instruction?: string, extraRefImages?: string[], previousChoices?: string[], comicOverrides?: ComicOverrides, useOnlySelectedRefs?: boolean, currentImageToPreserve?: string, adjacentPageImages?: Array<{ base64: string; label: string }>, consistencyMode?: boolean, profileOverrides?: CharacterProfile[], preserveCharacterIds?: string[]) => {
       // Use ref (not state) — this async function can be called from generateBatch or handleChoice
       // where the React state closure may be stale from the render that created the caller.
       const isNovelMode = !generateFromOutlineRef.current;
@@ -758,7 +760,7 @@ const App: React.FC = () => {
           }
       }
 
-      const result = await generateImage(beat, type, instruction, extraRefImages, prevImage, prevBeat, pageNum, comicOverrides, useOnlySelectedRefs, currentImageToPreserve, adjacentPageImages, consistencyMode, profileOverrides);
+      const result = await generateImage(beat, type, instruction, extraRefImages, prevImage, prevBeat, pageNum, comicOverrides, useOnlySelectedRefs, currentImageToPreserve, adjacentPageImages, consistencyMode, profileOverrides, preserveCharacterIds);
       if (isStoppedRef.current) return;
       if (!result.imageUrl) {
           updateFaceState(faceId, { isLoading: false, hasFailed: true, originalPrompt: result.originalPrompt, failureReason: result.failureReason });
@@ -1509,7 +1511,7 @@ Create a powerful, memorable conclusion that honors the user's story path.
 
   const handleRerollSubmit = (options: RerollOptions) => {
       if (rerollTarget === null) return;
-      const { instruction, negativePrompt, selectedRefImages, selectedProfileIds, regenerationModes, shotTypeOverride, balloonShapeOverride, applyFlashbackStyle, reinforceWithReferenceImages, useSelectedRefsOnly, prevPageImageUrl, nextPageImageUrl, consistencyMode } = options;
+      const { instruction, negativePrompt, selectedRefImages, selectedProfileIds, regenerationModes, shotTypeOverride, balloonShapeOverride, applyFlashbackStyle, reinforceWithReferenceImages, useSelectedRefsOnly, prevPageImageUrl, nextPageImageUrl, consistencyMode, preserveCharacterIds } = options;
 
       const pageIndex = rerollTarget;
       setRerollTarget(null);
@@ -1540,8 +1542,10 @@ Create a powerful, memorable conclusion that honors the user's story path.
       };
 
       // BATCH 1.4.1: Pass current image for non-full modes to help preserve scene
+      // Also include when preserve characters are selected (need reference panel for copying them)
       const isNonFullMode = regenerationModes && regenerationModes.some(m => m !== 'full');
-      const currentImage = isNonFullMode && currentFace?.imageUrl ? currentFace.imageUrl : undefined;
+      const hasPreserveMode = preserveCharacterIds && preserveCharacterIds.length > 0;
+      const currentImage = (isNonFullMode || hasPreserveMode) && currentFace?.imageUrl ? currentFace.imageUrl : undefined;
 
       // Combine instructions from all selected modes (excluding 'full')
       if (regenerationModes && regenerationModes.length > 0) {
@@ -1594,7 +1598,7 @@ Create a powerful, memorable conclusion that honors the user's story path.
           rerollAdjacentImages.push({ base64, label: `NEXT PAGE (page ${pageIndex + 1})` });
       }
 
-      generateSinglePage(faceId, pageIndex, type, finalInstruction || undefined, selectedRefImages.length > 0 ? selectedRefImages : undefined, allPreviousChoices.length > 0 ? allPreviousChoices : undefined, comicOverrides, useSelectedRefsOnly && selectedRefImages.length > 0, currentImage, rerollAdjacentImages.length > 0 ? rerollAdjacentImages : undefined, consistencyMode, profileOverrides.length > 0 ? profileOverrides : undefined)
+      generateSinglePage(faceId, pageIndex, type, finalInstruction || undefined, selectedRefImages.length > 0 ? selectedRefImages : undefined, allPreviousChoices.length > 0 ? allPreviousChoices : undefined, comicOverrides, useSelectedRefsOnly && selectedRefImages.length > 0, currentImage, rerollAdjacentImages.length > 0 ? rerollAdjacentImages : undefined, consistencyMode, profileOverrides.length > 0 ? profileOverrides : undefined, hasPreserveMode ? preserveCharacterIds : undefined)
           .then(() => {
               // Restore preserved choices in Novel Mode after image regeneration
               if (preservedChoices && preservedChoices.length > 0 && isNovelMode) {
@@ -2794,6 +2798,7 @@ Return ONLY the improved description text. No explanations, no markdown, no quot
               originalPrompt={comicFaces.find(f => f.pageIndex === rerollTarget)?.originalPrompt}
               prevPageImageUrl={comicFaces.find(f => f.pageIndex === rerollTarget - 1)?.imageUrl}
               nextPageImageUrl={comicFaces.find(f => f.pageIndex === rerollTarget + 1)?.imageUrl}
+              currentPageImageUrl={comicFaces.find(f => f.pageIndex === rerollTarget)?.imageUrl}
               initialSelectedProfileIds={rerollProfileSelection}
               onProfileSelectionChange={setRerollProfileSelection}
               onSubmit={handleRerollSubmit}

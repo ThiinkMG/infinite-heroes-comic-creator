@@ -23,6 +23,7 @@ import {
     type RefImage,
     type QuickPreset
 } from './components/reroll';
+import { CharacterFocusSelector } from './components/reroll/CharacterFocusSelector';
 import { usePageHistory, type RerollHistoryEntry } from './stores/useRerollHistory';
 import { useCharacterStore } from './stores/useCharacterStore';
 
@@ -55,6 +56,8 @@ interface RerollModalProps {
     prevPageImageUrl?: string;
     /** Next page image URL for scene continuity option */
     nextPageImageUrl?: string;
+    /** Current panel base64 image — used as preservation reference when characters are locked */
+    currentPageImageUrl?: string;
 }
 
 export const RerollModal: React.FC<RerollModalProps> = ({
@@ -79,6 +82,7 @@ export const RerollModal: React.FC<RerollModalProps> = ({
     onRevert,
     prevPageImageUrl,
     nextPageImageUrl,
+    currentPageImageUrl,
 }) => {
     // === HISTORY HOOK (2.3.x) ===
     const pageHistory = usePageHistory(pageIndex);
@@ -130,6 +134,9 @@ export const RerollModal: React.FC<RerollModalProps> = ({
     // === SCENE CONTINUITY STATE ===
     const [usePrevPage, setUsePrevPage] = useState(false);
     const [useNextPage, setUseNextPage] = useState(false);
+
+    // === CHARACTER PRESERVE STATE ===
+    const [preserveCharacterIds, setPreserveCharacterIds] = useState<string[]>([]);
 
     // === UI STATE ===
     const [showTips, setShowTips] = useState(false);
@@ -263,6 +270,8 @@ export const RerollModal: React.FC<RerollModalProps> = ({
             prevPageImageUrl: usePrevPage ? prevPageImageUrl : undefined,
             nextPageImageUrl: useNextPage ? nextPageImageUrl : undefined,
             consistencyMode: isConsistencyMode || lockedLines.length > 0 || undefined,
+            preserveCharacterIds: preserveCharacterIds.length > 0 ? preserveCharacterIds : undefined,
+            currentPageImageUrl: preserveCharacterIds.length > 0 ? currentPageImageUrl : undefined,
         };
 
         onSubmit(options);
@@ -438,6 +447,19 @@ export const RerollModal: React.FC<RerollModalProps> = ({
                         characterLocks={characterLocks}
                         profiles={fullProfiles}
                     />
+
+                    {/* Character Fix Targeting — preserve specific characters, regenerate others */}
+                    {availableProfiles.length >= 2 && (
+                        <CharacterFocusSelector
+                            characters={availableProfiles}
+                            preserveIds={preserveCharacterIds}
+                            onToggle={(id) => {
+                                setPreserveCharacterIds(prev =>
+                                    prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
+                                );
+                            }}
+                        />
+                    )}
 
                     {/* 2. QUICK PRESETS (Speed) */}
                     <QuickPresets
