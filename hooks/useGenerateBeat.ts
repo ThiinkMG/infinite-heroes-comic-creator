@@ -77,6 +77,27 @@ const MODEL_TEXT_NAME = "gemini-2.5-pro";
 const MODEL_TEXT_NAME_CLAUDE = "claude-sonnet-4-5-20250929";
 
 // ============================================================================
+// HELPERS
+// ============================================================================
+
+/**
+ * Builds a rolling story summary from recent story pages for narrative continuity.
+ * Injects into beat prompts so the AI maintains coherent story context.
+ */
+const buildStorySummary = (history: ComicFace[], maxPages = 3): string => {
+  const recent = history
+    .filter(f => f.narrative && f.type === 'story')
+    .slice(-maxPages);
+  if (recent.length === 0) return '';
+  const lines = recent.map((f) => {
+    const scene = f.narrative?.scene ?? '';
+    const caption = f.narrative?.caption ?? '';
+    return `Page ${f.pageIndex}: ${scene}${caption ? ` — "${caption}"` : ''}`;
+  });
+  return `[STORY SO FAR]\n${lines.join('\n')}\n[END SUMMARY]`;
+};
+
+// ============================================================================
 // HOOK
 // ============================================================================
 
@@ -291,6 +312,9 @@ This is page ${batchPosition} of a 3-page narrative batch (Pages ${batchStart}-$
 - Page 3 of batch: PAYOFF - Mini-climax, resolution of this beat, or cliffhanger for next batch
 MAINTAIN STRONG CONTINUITY with the other pages in this batch. The 3 pages should feel like a cohesive mini-chapter.`;
 
+    // Rolling story summary for narrative continuity (last 3 story pages)
+    const storySummary = buildStorySummary(history);
+
     // Build base instruction
     let baseInstruction = `You are the Lead Writer for a mature comic book. Write ONE single, vivid, narrative beat for the NEXT page. ALL OUTPUT TEXT (Captions, Dialogue, Choices) MUST BE IN ${langName.toUpperCase()}. ${coreDriver} ${guardrails}`;
     baseInstruction += `\nCONTEXT: ${storyInfo}\nCHARACTERS:\n${charContext}${visualRefBlock}${lockConstraintsBlock}`;
@@ -377,7 +401,7 @@ CHARACTERS:
 - HERO: Active.
 - CO-STAR: ${friendInstruction}
 
-PREVIOUS PANELS (READ CAREFULLY):
+${storySummary ? storySummary + '\n\n' : ''}PREVIOUS PANELS (READ CAREFULLY):
 ${historyText.length > 0 ? historyText : "Start the adventure."}
 
 RULES:

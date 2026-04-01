@@ -20,6 +20,8 @@ interface InstructionInputProps {
     onPoseChange: (poseId: string) => void;
     onImproveInstruction?: () => void;
     onImproveNegative?: () => void;
+    /** When true, hides negative prompt and pose/location sections (Zone 2 mode) */
+    hideAdvanced?: boolean;
 }
 
 export const InstructionInput: React.FC<InstructionInputProps> = ({
@@ -34,7 +36,8 @@ export const InstructionInput: React.FC<InstructionInputProps> = ({
     onLocationChange,
     onPoseChange,
     onImproveInstruction,
-    onImproveNegative
+    onImproveNegative,
+    hideAdvanced = false,
 }) => {
     const handleLocationSelect = (e: React.ChangeEvent<HTMLSelectElement>) => {
         const locationId = e.target.value;
@@ -105,7 +108,8 @@ export const InstructionInput: React.FC<InstructionInputProps> = ({
                 </p>
             </div>
 
-            {/* Negative Prompt - Second most used */}
+            {/* Negative Prompt + Pose/Location — hidden in Zone 2 (hideAdvanced mode) */}
+            {!hideAdvanced && (
             <div className="border-[3px] border-black bg-red-50 p-3 sm:p-4">
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-2">
                     <p className="font-comic text-sm sm:text-base font-bold uppercase text-red-900">
@@ -133,9 +137,10 @@ export const InstructionInput: React.FC<InstructionInputProps> = ({
                     aria-label="Negative prompt - elements to exclude"
                 />
             </div>
+            )}
 
-            {/* Pose & Location - Collapsible on mobile */}
-            <details className="border-[3px] border-black bg-teal-50 group sm:border-0 sm:bg-transparent sm:p-0">
+            {/* Pose & Location - Collapsible on mobile (hidden in Zone 2 / hideAdvanced mode) */}
+            {!hideAdvanced && <details className="border-[3px] border-black bg-teal-50 group sm:border-0 sm:bg-transparent sm:p-0">
                 <summary className="sm:hidden p-3 cursor-pointer flex justify-between items-center list-none touch-manipulation min-h-[48px]">
                     <span className="font-comic text-sm font-bold uppercase text-teal-900">
                         🧍 Pose & Location (Optional)
@@ -214,7 +219,7 @@ export const InstructionInput: React.FC<InstructionInputProps> = ({
                         )}
                     </div>
                 </div>
-            </details>
+            </details>}
         </>
     );
 };

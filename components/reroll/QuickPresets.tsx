@@ -35,7 +35,7 @@ export const QUICK_PRESETS: QuickPreset[] = [
     {
         id: 'keep-scene',
         icon: '👥',
-        label: 'Keep Scene',
+        label: 'Keep Background',
         description: 'Fix characters while preserving background',
         modes: ['characters_only'],
         useRefs: true,
@@ -44,7 +44,7 @@ export const QUICK_PRESETS: QuickPreset[] = [
     {
         id: 'fix-costume',
         icon: '⭐',
-        label: 'Fix Costume',
+        label: 'Fix Outfit',
         description: 'Correct outfit, emblem, and accessories',
         modes: ['outfit_only', 'emblem_only'],
         useRefs: true,
@@ -62,11 +62,20 @@ export const QUICK_PRESETS: QuickPreset[] = [
     {
         id: 'consistency-mode',
         icon: '🔒',
-        label: 'Lock Mode',
+        label: 'Lock Everything',
         description: 'Enforce all locked character attributes as hard constraints',
         modes: ['full'],
         useRefs: true,
         prompt: 'Maintain all character appearances EXACTLY as shown in reference images. Same face, same outfit, same emblem, same weapon. No creative changes to character appearance.',
+    },
+    {
+        id: 'fix-background',
+        icon: '🌆',
+        label: 'Fix Background',
+        description: 'Improve environment and lighting while keeping all characters unchanged',
+        modes: ['full'],
+        useRefs: false,
+        prompt: 'Preserve all characters exactly as-is — same face, same outfit, same pose. Only improve the background, environment, lighting, and scene atmosphere to better match the story context. Do NOT change any character\'s appearance.',
     }
 ];
 
@@ -95,7 +104,7 @@ export const QuickPresets: React.FC<QuickPresetsProps> = ({
                 </p>
             </div>
 
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3">
+            <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 sm:gap-3">
                 {QUICK_PRESETS.map((preset) => {
                     const isSelected = selectedPresetIds.includes(preset.id);
 

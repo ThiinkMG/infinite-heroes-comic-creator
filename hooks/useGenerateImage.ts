@@ -260,6 +260,22 @@ export const useGenerateImage = (config: GenerateImageConfig) => {
         })
       : profiles;
 
+    // Costume-change drift detection
+    const COSTUME_CHANGE_KEYWORDS = ['removes', 'changes into', 'transforms', 'reveals new', 'tears off', 'replaces outfit', 'new costume'];
+    const sceneTextLower = (beat?.scene ?? '').toLowerCase();
+    const hasCostumeChange = COSTUME_CHANGE_KEYWORDS.some(kw => sceneTextLower.includes(kw));
+    if (hasCostumeChange) {
+      const characterLocks = useCharacterStore.getState().characterLocks;
+      const allProfiles = useCharacterStore.getState().getProfilesArray();
+      const lockedOutfitNames = Array.from(characterLocks.entries())
+        .filter(([_, lock]) => lock.lockOutfit)
+        .map(([id]) => allProfiles.find(p => p.id === id)?.name)
+        .filter(Boolean) as string[];
+      if (lockedOutfitNames.length > 0) {
+        console.warn(`[DriftWarning] Page ${pageIndex ?? 0}: Scene describes a costume change but outfit is locked for: ${lockedOutfitNames.join(', ')}`);
+      }
+    }
+
     // Feature A: compiled reference objects (built once after profile generation)
     const compiledRefs = getReferencesArray();
 
@@ -614,7 +630,8 @@ export const useGenerateImage = (config: GenerateImageConfig) => {
         sceneText = formatReinforcedScene(focusProfile, action, environment);
       }
 
-      promptText += `TYPE: Vertical comic panel.\nSCENE: ${sceneText}\n`;
+      const settingPrefix = pagePlanForFilter?.location ? `[SETTING: ${pagePlanForFilter.location}]\n` : '';
+      promptText += `TYPE: Vertical comic panel.\n${settingPrefix}SCENE: ${sceneText}\n`;
 
       // Comic fundamentals (Task 5.2.4 - minimal in compact mode)
       const pagePlan = pageIndex !== undefined

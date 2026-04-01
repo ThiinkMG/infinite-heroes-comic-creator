@@ -44,6 +44,7 @@ import { useGenerateImage, ComicOverrides } from './hooks/useGenerateImage';
 import { useGenerateProfile } from './hooks/useGenerateProfile';
 import { useGenerateOutline } from './hooks/useGenerateOutline';
 import { useExportImport } from './hooks/useExportImport';
+import { buildAllCharacterReferences } from './utils/buildCharacterReference';
 
 // --- Feature G: Visual Drift Detection ---
 import { checkVisualDrift } from './utils/visualDriftDetector';
@@ -97,6 +98,24 @@ const App: React.FC = () => {
         if (parsed.friend) store.setFriend(parsed.friend);
         if (parsed.additionalCharacters) {
           parsed.additionalCharacters.forEach((char: Persona) => store.addCharacter(char));
+        }
+
+        // Phase 1.2 — Rebuild characterReferences from persisted profiles.
+        // Profiles are already in the store (Zustand persist hydrates before this useEffect runs).
+        // References are derived data and must be rebuilt on each session start.
+        const storeState = useCharacterStore.getState();
+        const persistedProfiles = storeState.getProfilesArray();
+        if (persistedProfiles.length > 0) {
+          const personas: Persona[] = [
+            parsed.hero,
+            parsed.friend,
+            ...(parsed.additionalCharacters ?? []),
+          ].filter(Boolean) as Persona[];
+          if (personas.length > 0) {
+            const refs = buildAllCharacterReferences(personas, persistedProfiles);
+            storeState.setAllReferences(refs);
+            console.log(`[CharacterStore] Rebuilt ${refs.length} character reference(s) from persisted profiles.`);
+          }
         }
       } catch(e){ console.error("Failed to load cast", e); }
     }
@@ -229,6 +248,13 @@ const App: React.FC = () => {
   };
 
   const handleUpdateCharacter = (id: string, updates: Partial<Persona>) => {
+    // Phase 5.2 — Mark profile stale when portrait changes for additional characters
+    if (updates.base64) {
+      const existing = useCharacterStore.getState().getCharacterById(id);
+      if (existing && updates.base64 !== existing.base64) {
+        useCharacterStore.getState().markProfileStale(id);
+      }
+    }
     useCharacterStore.getState().updateCharacter(id, updates);
   };
 
@@ -249,6 +275,9 @@ const App: React.FC = () => {
   const [comicFaces, setComicFaces] = useState<ComicFace[]>([]);
   const [currentSheetIndex, setCurrentSheetIndex] = useState(0);
   const [isStarted, setIsStarted] = useState(false);
+
+  // Phase 4.2 — Outline Mode generation progress (null = not generating)
+  const [generationProgress, setGenerationProgress] = useState<{ current: number; total: number } | null>(null);
 
   // --- Sync comicFaces to Zustand store ---
   useEffect(() => {
@@ -900,17 +929,28 @@ const App: React.FC = () => {
       });
       newFaces.forEach(f => { if (!historyRef.current.find(h => h.id === f.id)) historyRef.current.push(f); });
 
+      // Phase 4.2 — Show progress bar in Outline Mode
+      if (generateFromOutlineRef.current && !isNovelMode) {
+          setGenerationProgress({ current: 0, total: config.TOTAL_PAGES });
+      }
+
       try {
           for (const pageNum of pagesToGen) {
                if (isStoppedRef.current) break;
                await generateSinglePage(`page-${pageNum}`, pageNum, pageNum === config.BACK_COVER_PAGE ? 'back_cover' : 'story');
                generatingPages.current.delete(pageNum);
+               // Phase 4.2 — Update progress after each page completes
+               if (generateFromOutlineRef.current && !isNovelMode) {
+                   const completedSoFar = historyRef.current.filter(f => f.imageUrl && !f.isLoading).length;
+                   setGenerationProgress({ current: completedSoFar, total: config.TOTAL_PAGES });
+               }
           }
       } catch (e) {
           console.error("Batch generation error", e);
       } finally {
           if (isStoppedRef.current) {
               setComicFaces(prev => prev.filter(f => !f.isLoading || !!f.imageUrl || f.id === 'cover'));
+              setGenerationProgress(null); // Phase 4.2 — Clear on stop
           }
           pagesToGen.forEach(p => generatingPages.current.delete(p));
 
@@ -924,6 +964,8 @@ const App: React.FC = () => {
                           generateBatch(maxGenerated + 1, config.BATCH_SIZE);
                       }
                   }, 100);
+              } else {
+                  setGenerationProgress(null); // Phase 4.2 — Clear when all pages done
               }
           }
       }
@@ -2004,10 +2046,18 @@ Create a powerful, memorable conclusion that honors the user's story path.
   };
 
   const handleHeroUpdate = async (updates: Partial<Persona>) => {
+    // Phase 5.2 — Mark profile stale when portrait changes
+    if (updates.base64 && hero && updates.base64 !== hero.base64) {
+      useCharacterStore.getState().markProfileStale(hero.id);
+    }
     setHero(hero ? { ...hero, ...updates } : { id: 'hero', name: 'Hero', base64: '', desc: 'Main Hero', ...updates });
   };
 
   const handleFriendUpdate = async (updates: Partial<Persona>) => {
+    // Phase 5.2 — Mark profile stale when portrait changes
+    if (updates.base64 && friend && updates.base64 !== friend.base64) {
+      useCharacterStore.getState().markProfileStale(friend.id);
+    }
     setFriend(friend ? { ...friend, ...updates } : { id: 'friend', name: 'Co-Star', base64: '', desc: 'Sidekick', ...updates });
   };
 
@@ -2942,6 +2992,21 @@ Return ONLY the improved description text. No explanations, no markdown, no quot
                    {generateFromOutline ? "📖 OUTLINE MODE" : "🎲 NOVEL MODE"}
                 </span>
             </div>
+        </div>
+      )}
+
+      {/* Phase 4.2 — Outline Mode Generation Progress Bar */}
+      {generationProgress && isStarted && !showSetup && (
+        <div className="fixed bottom-20 left-1/2 -translate-x-1/2 z-[200] bg-white border-[3px] border-black shadow-[4px_4px_0px_rgba(0,0,0,1)] px-4 py-3 min-w-[280px] max-w-[400px] w-full sm:w-auto">
+          <p className="font-comic text-xs font-bold uppercase text-center mb-2 text-gray-700">
+            📄 Generating page {generationProgress.current} of {generationProgress.total}…
+          </p>
+          <div className="w-full bg-gray-200 rounded-full h-2.5 border border-gray-300">
+            <div
+              className="bg-yellow-400 h-2.5 rounded-full transition-all duration-500"
+              style={{ width: `${Math.min(100, Math.round((generationProgress.current / generationProgress.total) * 100))}%` }}
+            />
+          </div>
         </div>
       )}
 

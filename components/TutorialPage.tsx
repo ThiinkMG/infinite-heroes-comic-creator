@@ -348,8 +348,8 @@ export const TutorialPage: React.FC<TutorialPageProps> = ({ show, onBack }) => {
                         </div>
 
                         <div>
-                            <h3 className="font-comic font-bold text-base uppercase border-b-2 border-black pb-1 mb-2">Expert Mode — Visual Style Overrides</h3>
-                            <p className="font-comic text-sm text-gray-700 mb-2">Toggle Expert Mode (🔧 button in the header) to access visual style controls and character profile editing.</p>
+                            <h3 className="font-comic font-bold text-base uppercase border-b-2 border-black pb-1 mb-2">⚙ More Options — Visual Style Overrides</h3>
+                            <p className="font-comic text-sm text-gray-700 mb-2">Open the "⚙ More Options" panel in the Reroll modal to access visual style controls, reference images, and character profile editing.</p>
                             <Table
                                 headers={['Control', 'What it does']}
                                 rows={[

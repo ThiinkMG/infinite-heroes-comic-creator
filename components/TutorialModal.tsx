@@ -96,9 +96,9 @@ export const TutorialModal: React.FC<TutorialModalProps> = ({ show, onClose, onO
                             <p className="font-bold text-lg leading-tight uppercase">Reroll & Refine</p>
                             <p className="text-gray-700 mb-1">Click any page to open the <strong>Reroll panel</strong> and regenerate it.</p>
                             <ul className="text-gray-600 text-xs list-disc list-inside space-y-0.5">
-                                <li><strong>Quick Presets:</strong> One tap to pick mode — Full, Characters Only, Outfit, Expression, Emblem, Weapon</li>
+                                <li><strong>Quick Presets:</strong> One tap — Fix Face, Keep Background, Fix Outfit, Fix Background, Lock Everything, Full Redo</li>
                                 <li><strong>Instructions:</strong> Tell the AI exactly what to change (AI Improve expands your text)</li>
-                                <li><strong>Expert Mode:</strong> Override camera shot, dialogue style, or flashback styling</li>
+                                <li><strong>More Options:</strong> Strength slider, negative prompts, reference images, and visual style overrides in the ⚙ panel</li>
                                 <li><strong>History:</strong> Each page keeps 10 versions — revert anytime!</li>
                             </ul>
                         </div>

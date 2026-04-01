@@ -31,6 +31,12 @@ export interface CharacterState {
    * Built once at session start from Persona + CharacterProfile.
    */
   characterReferences: Map<string, CharacterReferenceObject>;
+  /**
+   * Session-only set of character IDs whose portrait was updated since their
+   * last profile analysis. Cleared per-character when the profile is re-analyzed.
+   * NOT persisted — resets on page refresh.
+   */
+  staledProfileIds: Set<string>;
 }
 
 export interface CharacterActions {
@@ -63,6 +69,10 @@ export interface CharacterActions {
   updateCharacterLock: (id: string, partial: Partial<Omit<CharacterLockState, 'characterId'>>) => void;
   getCharacterLock: (id: string) => CharacterLockState;
   clearCharacterLocks: () => void;
+
+  // Stale profile flag actions (V6 Phase 5.2)
+  markProfileStale: (characterId: string) => void;
+  clearProfileStale: (characterId: string) => void;
 
   // Character reference actions (Feature A)
   setCharacterReference: (id: string, ref: CharacterReferenceObject) => void;
@@ -102,6 +112,7 @@ const initialState: CharacterState = {
   characterProfiles: new Map(),
   characterLocks: new Map(),
   characterReferences: new Map(),
+  staledProfileIds: new Set(),
 };
 
 // ============================================================================
@@ -288,6 +299,26 @@ export const useCharacterStore = create<CharacterStore>()(
   },
 
   // -------------------------------------------------------------------------
+  // STALE PROFILE FLAG ACTIONS (V6 Phase 5.2)
+  // -------------------------------------------------------------------------
+
+  markProfileStale: (characterId: string) => {
+    set((state) => {
+      const next = new Set(state.staledProfileIds);
+      next.add(characterId);
+      return { staledProfileIds: next };
+    });
+  },
+
+  clearProfileStale: (characterId: string) => {
+    set((state) => {
+      const next = new Set(state.staledProfileIds);
+      next.delete(characterId);
+      return { staledProfileIds: next };
+    });
+  },
+
+  // -------------------------------------------------------------------------
   // CHARACTER REFERENCE ACTIONS (Feature A)
   // -------------------------------------------------------------------------
 
@@ -327,6 +358,7 @@ export const useCharacterStore = create<CharacterStore>()(
       characterProfiles: new Map(),
       characterLocks: new Map(),
       characterReferences: new Map(),
+      staledProfileIds: new Set(),
     });
   },
 
@@ -406,15 +438,34 @@ export const useCharacterStore = create<CharacterStore>()(
     }),
     {
       name: 'infinite-heroes-character-locks',
-      partialize: (state) => ({
-        characterLocks: Array.from(state.characterLocks.entries()),
-      }),
+      partialize: (state) => {
+        // Serialize characterProfiles with size guard (~1.5MB limit).
+        // Profiles can grow large if colorPalette/extractedColors contain verbose text.
+        const profileEntries = Array.from(state.characterProfiles.entries());
+        const serializedProfiles = JSON.stringify(profileEntries);
+        const profilesTooLarge = serializedProfiles.length > 1_500_000;
+        if (profilesTooLarge) {
+          console.warn(
+            `[CharacterStore] Profiles too large to persist (~${Math.round(serializedProfiles.length / 1024)}KB). Skipping profile persistence.`
+          );
+        }
+        return {
+          characterLocks: Array.from(state.characterLocks.entries()),
+          characterProfiles: profilesTooLarge ? [] : profileEntries,
+        };
+      },
       merge: (persistedState: unknown, currentState) => {
-        const ps = persistedState as { characterLocks?: Array<[string, CharacterLockState]> };
+        const ps = persistedState as {
+          characterLocks?: Array<[string, CharacterLockState]>;
+          characterProfiles?: Array<[string, CharacterProfile]>;
+        };
         return {
           ...currentState,
           characterLocks: ps?.characterLocks
             ? new Map(ps.characterLocks)
+            : new Map(),
+          characterProfiles: ps?.characterProfiles && ps.characterProfiles.length > 0
+            ? new Map(ps.characterProfiles)
             : new Map(),
         };
       },

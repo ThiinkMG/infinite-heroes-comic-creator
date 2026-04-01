@@ -132,7 +132,8 @@ export const RerollModal: React.FC<RerollModalProps> = ({
     const [applyFlashbackStyle, setApplyFlashbackStyle] = useState(false);
 
     // === SCENE CONTINUITY STATE ===
-    const [usePrevPage, setUsePrevPage] = useState(false);
+    // Phase 2.3: Auto-enable prev-page continuity when a previous page exists
+    const [usePrevPage, setUsePrevPage] = useState(!!prevPageImageUrl);
     const [useNextPage, setUseNextPage] = useState(false);
 
     // === CHARACTER PRESERVE STATE ===
@@ -140,7 +141,6 @@ export const RerollModal: React.FC<RerollModalProps> = ({
 
     // === UI STATE ===
     const [showTips, setShowTips] = useState(false);
-    const [expertMode, setExpertMode] = useState(false);
     const [showHistory, setShowHistory] = useState(false);
     const [copied, setCopied] = useState(false);
 
@@ -334,17 +334,7 @@ export const RerollModal: React.FC<RerollModalProps> = ({
                         🎲 Reroll #{pageIndex}
                     </h2>
                     <div className="flex items-center gap-1 sm:gap-2">
-                        {/* Expert Mode Toggle (2.1.2) */}
-                        <button
-                            onClick={() => setExpertMode(!expertMode)}
-                            className={`comic-btn ${expertMode ? 'bg-purple-600' : 'bg-gray-500'} text-white min-w-[48px] min-h-[48px] px-2 sm:px-3 py-2 flex items-center justify-center gap-1 font-bold text-xs sm:text-sm border-[3px] border-black hover:opacity-90 touch-manipulation`}
-                            title={expertMode ? "Switch to Simple mode" : "Switch to Expert mode"}
-                            aria-pressed={expertMode}
-                        >
-                            <span className="hidden sm:inline">{expertMode ? '🔧 Expert' : '✨ Simple'}</span>
-                            <span className="sm:hidden">{expertMode ? '🔧' : '✨'}</span>
-                        </button>
-                        {/* History Toggle (2.3.2) */}
+                        {/* History Toggle */}
                         {pageHistory.length > 0 && (
                             <button
                                 onClick={() => setShowHistory(!showHistory)}
@@ -430,256 +420,249 @@ export const RerollModal: React.FC<RerollModalProps> = ({
                     </div>
                 )}
 
-                {/* Scrollable content area - NEW SECTION ORDER */}
-                <div className="flex-1 overflow-y-auto p-3 sm:p-4 md:p-5 pb-24 sm:pb-5 flex flex-col gap-4 sm:gap-5">
+                {/* Scrollable content area - 3-ZONE LAYOUT */}
+                <div className="flex-1 overflow-y-auto pb-24 sm:pb-5 flex flex-col">
 
-                    {/* 1. CURRENT IMAGE PREVIEW (Context) */}
-                    {currentImageUrl && (
-                        <CurrentImagePreview
-                            imageUrl={currentImageUrl}
-                            pageIndex={pageIndex}
-                            caption={currentCaption}
+                    {/* CONTEXT PREVIEWS (above zones — display only) */}
+                    <div className="p-3 sm:p-4 md:p-5 flex flex-col gap-4">
+                        {currentImageUrl && (
+                            <CurrentImagePreview
+                                imageUrl={currentImageUrl}
+                                pageIndex={pageIndex}
+                                caption={currentCaption}
+                            />
+                        )}
+                        <ConsistencyPreview
+                            characterLocks={characterLocks}
+                            profiles={fullProfiles}
                         />
-                    )}
+                    </div>
 
-                    {/* Feature F: Consistency Preview — show locked attributes before user submits */}
-                    <ConsistencyPreview
-                        characterLocks={characterLocks}
-                        profiles={fullProfiles}
-                    />
-
-                    {/* Character Fix Targeting — preserve specific characters, regenerate others */}
-                    {availableProfiles.length >= 2 && (
-                        <CharacterFocusSelector
-                            characters={availableProfiles}
-                            preserveIds={preserveCharacterIds}
-                            onToggle={(id) => {
-                                setPreserveCharacterIds(prev =>
-                                    prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
-                                );
-                            }}
+                    {/* ═══ ZONE 1 — Sticky "What to fix?" strip ═══ */}
+                    <div className="sticky top-0 z-10 bg-white border-b-[3px] border-black shadow-[0_2px_0px_rgba(0,0,0,0.15)] px-3 sm:px-4 md:px-5 pb-3 pt-1 flex flex-col gap-3">
+                        {/* Character Fix Targeting */}
+                        {availableProfiles.length >= 2 && (
+                            <CharacterFocusSelector
+                                characters={availableProfiles}
+                                preserveIds={preserveCharacterIds}
+                                onToggle={(id) => {
+                                    setPreserveCharacterIds(prev =>
+                                        prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
+                                    );
+                                }}
+                            />
+                        )}
+                        {/* Quick Presets */}
+                        <QuickPresets
+                            selectedPresetIds={selectedPresetIds}
+                            onSelectPreset={handlePresetSelect}
                         />
-                    )}
+                    </div>
 
-                    {/* 2. QUICK PRESETS (Speed) */}
-                    <QuickPresets
-                        selectedPresetIds={selectedPresetIds}
-                        onSelectPreset={handlePresetSelect}
-                    />
+                    {/* ═══ ZONE 2 — Instruction + Subtle toggle + Submit ═══ */}
+                    <div className="p-3 sm:p-4 md:p-5 flex flex-col gap-3">
+                        <InstructionInput
+                            instruction={instruction}
+                            negativePrompt={negativePrompt}
+                            selectedLocationId={selectedLocationId}
+                            selectedPoseId={selectedPoseId}
+                            isImprovingInstruction={isImprovingInstruction}
+                            isImprovingNegative={isImprovingNegative}
+                            onInstructionChange={setInstruction}
+                            onNegativePromptChange={setNegativePrompt}
+                            onLocationChange={setSelectedLocationId}
+                            onPoseChange={setSelectedPoseId}
+                            onImproveInstruction={onImproveText ? handleImproveInstruction : undefined}
+                            onImproveNegative={onImproveText ? handleImproveNegative : undefined}
+                            hideAdvanced={true}
+                        />
 
-                    {/* 3. INSTRUCTION + STRENGTH (Primary action) */}
-                    <InstructionInput
-                        instruction={instruction}
-                        negativePrompt={negativePrompt}
-                        selectedLocationId={selectedLocationId}
-                        selectedPoseId={selectedPoseId}
-                        isImprovingInstruction={isImprovingInstruction}
-                        isImprovingNegative={isImprovingNegative}
-                        onInstructionChange={setInstruction}
-                        onNegativePromptChange={setNegativePrompt}
-                        onLocationChange={setSelectedLocationId}
-                        onPoseChange={setSelectedPoseId}
-                        onImproveInstruction={onImproveText ? handleImproveInstruction : undefined}
-                        onImproveNegative={onImproveText ? handleImproveNegative : undefined}
-                    />
+                        {/* Subtle change toggle */}
+                        <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer select-none px-1">
+                            <input
+                                type="checkbox"
+                                checked={strengthValue < 1.0}
+                                onChange={e => setStrengthValue(e.target.checked ? 0.4 : 1.0)}
+                                className="w-4 h-4 accent-gray-700"
+                            />
+                            <span className="font-comic">Subtle change <span className="text-gray-400">(keep most of the image)</span></span>
+                        </label>
 
-                    {/* STRENGTH SLIDER */}
-                    <StrengthSlider
-                        value={strengthValue}
-                        onChange={setStrengthValue}
-                    />
+                        {/* Desktop Submit Button */}
+                        <button
+                            ref={submitRef}
+                            onClick={handleSubmit}
+                            className="hidden sm:block comic-btn w-full bg-yellow-400 text-black py-4 text-xl md:text-2xl font-bold uppercase tracking-wider border-[4px] border-black shadow-[4px_4px_0px_rgba(0,0,0,1)] hover:bg-yellow-300 hover:-translate-y-1 transition-transform"
+                            aria-label={`Reroll panel ${pageIndex}`}
+                        >
+                            🎲 Reroll Panel #{pageIndex}
+                        </button>
+                    </div>
 
-                    {/* 4. REFERENCE IMAGES */}
-                    <ReferenceImageGallery
-                        allRefImages={allRefImages}
-                        selectedIds={selectedIds}
-                        deleteMode={deleteMode}
-                        onToggleImage={toggleImage}
-                        onToggleDeleteMode={() => setDeleteMode(!deleteMode)}
-                        onSelectAll={selectAllImages}
-                        onSelectNone={selectNoneImages}
-                        onDeleteRef={onDeleteRef}
-                        onUploadRef={onUploadRef}
-                    />
-
-                    {/* 5. SCENE CONTINUITY — adjacent page references */}
-                    {(prevPageImageUrl || nextPageImageUrl) && (
-                        <div className="border-[3px] border-blue-400 p-3 bg-blue-50 shadow-[3px_3px_0px_rgba(0,0,0,1)]">
-                            <h3 className="font-comic text-sm font-bold uppercase mb-1 text-blue-900">📎 Scene Continuity</h3>
-                            <p className="text-xs text-gray-600 mb-2">
-                                Include adjacent pages as costume/scene reference. Character faces always come from portraits — these images guide outfit, pose, and background continuity only.
-                            </p>
-                            <div className="flex flex-col gap-2">
-                                {prevPageImageUrl && (
-                                    <label className="flex items-center gap-3 cursor-pointer">
-                                        <input
-                                            type="checkbox"
-                                            checked={usePrevPage}
-                                            onChange={e => setUsePrevPage(e.target.checked)}
-                                            className="w-4 h-4 accent-blue-600"
-                                        />
-                                        <img src={prevPageImageUrl} alt="prev page" className="w-14 h-14 object-cover border-2 border-black rounded" />
-                                        <span className="text-sm font-semibold">Use previous page (#{pageIndex - 1}) for continuity</span>
-                                    </label>
-                                )}
-                                {nextPageImageUrl && (
-                                    <label className="flex items-center gap-3 cursor-pointer">
-                                        <input
-                                            type="checkbox"
-                                            checked={useNextPage}
-                                            onChange={e => setUseNextPage(e.target.checked)}
-                                            className="w-4 h-4 accent-blue-600"
-                                        />
-                                        <img src={nextPageImageUrl} alt="next page" className="w-14 h-14 object-cover border-2 border-black rounded" />
-                                        <span className="text-sm font-semibold">Use next page (#{pageIndex + 1}) for continuity</span>
-                                    </label>
-                                )}
-                            </div>
-                        </div>
-                    )}
-
-                    {/* 6. ADVANCED OPTIONS - Only visible in Expert Mode (2.1.2) */}
-                    {expertMode && (
-                        <details className="border-[3px] border-purple-400 bg-purple-50 group" open>
+                    {/* ═══ ZONE 3 — ⚙ More options (collapsed) ═══ */}
+                    <div className="px-3 sm:px-4 md:px-5 pb-3 sm:pb-5">
+                        <details className="border-[3px] border-gray-300 bg-gray-50 group">
                             <summary className="p-3 sm:p-4 cursor-pointer flex justify-between items-center list-none touch-manipulation min-h-[48px]">
-                                <p className="font-comic text-sm sm:text-base font-bold uppercase text-purple-800">
-                                    🔧 Expert Options
-                                </p>
-                                <span className="text-purple-600 group-open:rotate-180 transition-transform">▼</span>
-                            </summary>
-                            <div className="px-3 sm:px-4 pb-3 sm:pb-4 border-t-2 border-purple-200 space-y-4 mt-3">
-                                {/* Comic Fundamentals Overrides */}
-                                <ComicFundamentalsOverrides
-                                    shotTypeOverride={shotTypeOverride}
-                                    balloonShapeOverride={balloonShapeOverride}
-                                    applyFlashbackStyle={applyFlashbackStyle}
-                                    onShotTypeChange={setShotTypeOverride}
-                                    onBalloonShapeChange={setBalloonShapeOverride}
-                                    onFlashbackStyleChange={setApplyFlashbackStyle}
-                                />
-
-                                {/* Character Profiles */}
-                                <ProfileSelector
-                                    availableProfiles={availableProfiles}
-                                    fullProfiles={fullProfiles}
-                                    selectedProfileIds={selectedProfileIds}
-                                    onToggleProfile={toggleProfile}
-                                    onSelectAll={selectAllProfiles}
-                                    onSelectNone={selectNoneProfiles}
-                                    onProfileUpdate={onProfileUpdate}
-                                    onAnalyzeProfile={onAnalyzeProfile}
-                                    onAddNewCharacter={onAddNewCharacter}
-                                    showLockToggles={true}
-                                />
-                            </div>
-                        </details>
-                    )}
-
-                    {/* Simple mode hint when not in expert mode */}
-                    {!expertMode && (
-                        <div className="text-center py-2">
-                            <button
-                                onClick={() => setExpertMode(true)}
-                                className="font-comic text-xs text-gray-500 hover:text-purple-600 underline"
-                            >
-                                Need more control? Switch to Expert Mode →
-                            </button>
-                        </div>
-                    )}
-
-                    {/* 7. DEBUG INFO - Only visible in Expert Mode */}
-                    {expertMode && (outline || originalPrompt) && (
-                        <details className="border-[3px] border-black bg-gray-100 group">
-                            <summary className="p-3 sm:p-4 cursor-pointer flex justify-between items-center list-none touch-manipulation min-h-[48px]">
-                                <p className="font-comic text-sm sm:text-base font-bold uppercase text-gray-600">
-                                    🔍 Debug Info
+                                <p className="font-comic text-sm sm:text-base font-bold uppercase text-gray-700">
+                                    ⚙ More Options
                                 </p>
                                 <span className="text-gray-500 group-open:rotate-180 transition-transform">▼</span>
                             </summary>
-                            <div className="px-3 sm:px-4 pb-3 sm:pb-4 border-t-2 border-gray-300 space-y-4 mt-3">
-                                {/* Story Outline */}
-                                {outline && (
-                                    <div className="bg-blue-50 border-2 border-blue-200 p-3 rounded">
-                                        <div className="flex justify-between items-center mb-2">
-                                            <p className="font-comic text-sm font-bold text-blue-900">📖 Story Outline</p>
-                                            <div className="flex gap-2">
-                                                <button
-                                                    onClick={() => {
-                                                        navigator.clipboard.writeText(outline);
-                                                    }}
-                                                    className="text-xs px-2 py-1 bg-blue-500 text-white border border-black rounded hover:bg-blue-400"
-                                                    aria-label="Copy outline to clipboard"
-                                                    title="Copy outline to clipboard"
-                                                >📋</button>
-                                                <button
-                                                    onClick={handleDownloadOutline}
-                                                    className="text-xs px-2 py-1 bg-blue-600 text-white border border-black rounded hover:bg-blue-500"
-                                                    aria-label="Download outline as text file"
-                                                    title="Download outline as text file"
-                                                >⬇</button>
-                                            </div>
+                            <div className="px-3 sm:px-4 pb-3 sm:pb-4 border-t-2 border-gray-200 flex flex-col gap-4 mt-3">
+
+                                {/* Strength Slider (full control) */}
+                                <StrengthSlider
+                                    value={strengthValue}
+                                    onChange={setStrengthValue}
+                                />
+
+                                {/* Negative Prompt + Pose/Location (via InstructionInput in advanced-only mode) */}
+                                <InstructionInput
+                                    instruction={instruction}
+                                    negativePrompt={negativePrompt}
+                                    selectedLocationId={selectedLocationId}
+                                    selectedPoseId={selectedPoseId}
+                                    isImprovingInstruction={false}
+                                    isImprovingNegative={isImprovingNegative}
+                                    onInstructionChange={setInstruction}
+                                    onNegativePromptChange={setNegativePrompt}
+                                    onLocationChange={setSelectedLocationId}
+                                    onPoseChange={setSelectedPoseId}
+                                    onImproveNegative={onImproveText ? handleImproveNegative : undefined}
+                                    hideAdvanced={false}
+                                />
+
+                                {/* Reference Images */}
+                                <ReferenceImageGallery
+                                    allRefImages={allRefImages}
+                                    selectedIds={selectedIds}
+                                    deleteMode={deleteMode}
+                                    onToggleImage={toggleImage}
+                                    onToggleDeleteMode={() => setDeleteMode(!deleteMode)}
+                                    onSelectAll={selectAllImages}
+                                    onSelectNone={selectNoneImages}
+                                    onDeleteRef={onDeleteRef}
+                                    onUploadRef={onUploadRef}
+                                />
+
+                                {/* Scene Continuity */}
+                                {(prevPageImageUrl || nextPageImageUrl) && (
+                                    <div className="border-[3px] border-blue-400 p-3 bg-blue-50 shadow-[3px_3px_0px_rgba(0,0,0,1)]">
+                                        <h3 className="font-comic text-sm font-bold uppercase mb-1 text-blue-900">📎 Scene Continuity</h3>
+                                        <p className="text-xs text-gray-600 mb-2">
+                                            Include adjacent pages as reference. Character faces always come from portraits — these images guide background &amp; setting continuity only.
+                                        </p>
+                                        <div className="flex flex-col gap-2">
+                                            {prevPageImageUrl && (
+                                                <label className="flex items-center gap-3 cursor-pointer">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={usePrevPage}
+                                                        onChange={e => setUsePrevPage(e.target.checked)}
+                                                        className="w-4 h-4 accent-blue-600"
+                                                    />
+                                                    <img src={prevPageImageUrl} alt="prev page" className="w-14 h-14 object-cover border-2 border-black rounded" />
+                                                    <span className="text-sm font-semibold">Previous page (#{pageIndex - 1}) — background &amp; setting reference</span>
+                                                </label>
+                                            )}
+                                            {nextPageImageUrl && (
+                                                <label className="flex items-center gap-3 cursor-pointer">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={useNextPage}
+                                                        onChange={e => setUseNextPage(e.target.checked)}
+                                                        className="w-4 h-4 accent-blue-600"
+                                                    />
+                                                    <img src={nextPageImageUrl} alt="next page" className="w-14 h-14 object-cover border-2 border-black rounded" />
+                                                    <span className="text-sm font-semibold">Next page (#{pageIndex + 1}) for continuity</span>
+                                                </label>
+                                            )}
                                         </div>
-                                        <pre className="text-xs font-mono bg-white border border-gray-300 p-2 max-h-24 overflow-y-auto whitespace-pre-wrap text-gray-700">
-                                            {outline}
-                                        </pre>
                                     </div>
                                 )}
 
-                                {/* Original Prompt */}
-                                {originalPrompt && (
-                                    <div className="bg-gray-50 border-2 border-gray-300 p-3 rounded">
-                                        <div className="flex justify-between items-center mb-2">
-                                            <p className="font-comic text-sm font-bold text-gray-700">🔧 Original Prompt</p>
-                                            <div className="flex gap-2">
-                                                <button
-                                                    onClick={async () => {
-                                                        try {
-                                                            await navigator.clipboard.writeText(originalPrompt);
-                                                            setCopied(true);
-                                                            console.debug('[RerollModal] Original prompt copied to clipboard, length:', originalPrompt.length);
-                                                            setTimeout(() => setCopied(false), 2000);
-                                                        } catch (e) {
-                                                            console.warn('[RerollModal] Clipboard copy failed:', e);
-                                                        }
-                                                    }}
-                                                    className="comic-btn bg-gray-700 text-white px-2 py-1 text-xs border border-gray-500 hover:bg-gray-600"
-                                                    aria-label="Copy original prompt to clipboard"
-                                                    title="Copy to clipboard"
-                                                >{copied ? '✓ Copied' : '📋 Copy'}</button>
-                                                <button
-                                                    onClick={() => {
-                                                        const blob = new Blob([originalPrompt], { type: 'text/plain' });
-                                                        const url = URL.createObjectURL(blob);
-                                                        const a = document.createElement('a');
-                                                        a.href = url;
-                                                        a.download = `page-${pageIndex}-prompt.txt`;
-                                                        a.click();
-                                                        URL.revokeObjectURL(url);
-                                                    }}
-                                                    className="text-xs px-2 py-1 bg-gray-600 text-white border border-black rounded hover:bg-gray-500"
-                                                    aria-label="Download original prompt as text file"
-                                                    title="Download original prompt as text file"
-                                                >⬇</button>
-                                            </div>
-                                        </div>
-                                        <pre className="text-[10px] font-mono bg-white border border-gray-300 p-2 max-h-32 overflow-y-auto whitespace-pre-wrap text-gray-600">
-                                            {originalPrompt}
-                                        </pre>
+                                {/* Expert Options (nested in Zone 3) */}
+                                <details className="border-[3px] border-purple-400 bg-purple-50 group/expert">
+                                    <summary className="p-3 sm:p-4 cursor-pointer flex justify-between items-center list-none touch-manipulation min-h-[48px]">
+                                        <p className="font-comic text-sm sm:text-base font-bold uppercase text-purple-800">
+                                            🔧 Expert Options
+                                        </p>
+                                        <span className="text-purple-600 group-open/expert:rotate-180 transition-transform">▼</span>
+                                    </summary>
+                                    <div className="px-3 sm:px-4 pb-3 sm:pb-4 border-t-2 border-purple-200 space-y-4 mt-3">
+                                        <ComicFundamentalsOverrides
+                                            shotTypeOverride={shotTypeOverride}
+                                            balloonShapeOverride={balloonShapeOverride}
+                                            applyFlashbackStyle={applyFlashbackStyle}
+                                            onShotTypeChange={setShotTypeOverride}
+                                            onBalloonShapeChange={setBalloonShapeOverride}
+                                            onFlashbackStyleChange={setApplyFlashbackStyle}
+                                        />
+                                        <ProfileSelector
+                                            availableProfiles={availableProfiles}
+                                            fullProfiles={fullProfiles}
+                                            selectedProfileIds={selectedProfileIds}
+                                            onToggleProfile={toggleProfile}
+                                            onSelectAll={selectAllProfiles}
+                                            onSelectNone={selectNoneProfiles}
+                                            onProfileUpdate={onProfileUpdate}
+                                            onAnalyzeProfile={onAnalyzeProfile}
+                                            onAddNewCharacter={onAddNewCharacter}
+                                            showLockToggles={true}
+                                        />
                                     </div>
+                                </details>
+
+                                {/* Debug Info */}
+                                {(outline || originalPrompt) && (
+                                    <details className="border-[3px] border-black bg-gray-100 group/debug">
+                                        <summary className="p-3 sm:p-4 cursor-pointer flex justify-between items-center list-none touch-manipulation min-h-[48px]">
+                                            <p className="font-comic text-sm sm:text-base font-bold uppercase text-gray-600">
+                                                🔍 Debug Info
+                                            </p>
+                                            <span className="text-gray-500 group-open/debug:rotate-180 transition-transform">▼</span>
+                                        </summary>
+                                        <div className="px-3 sm:px-4 pb-3 sm:pb-4 border-t-2 border-gray-300 space-y-4 mt-3">
+                                            {outline && (
+                                                <div className="bg-blue-50 border-2 border-blue-200 p-3 rounded">
+                                                    <div className="flex justify-between items-center mb-2">
+                                                        <p className="font-comic text-sm font-bold text-blue-900">📖 Story Outline</p>
+                                                        <div className="flex gap-2">
+                                                            <button onClick={() => navigator.clipboard.writeText(outline)} className="text-xs px-2 py-1 bg-blue-500 text-white border border-black rounded hover:bg-blue-400" aria-label="Copy outline">📋</button>
+                                                            <button onClick={handleDownloadOutline} className="text-xs px-2 py-1 bg-blue-600 text-white border border-black rounded hover:bg-blue-500" aria-label="Download outline">⬇</button>
+                                                        </div>
+                                                    </div>
+                                                    <pre className="text-xs font-mono bg-white border border-gray-300 p-2 max-h-24 overflow-y-auto whitespace-pre-wrap text-gray-700">{outline}</pre>
+                                                </div>
+                                            )}
+                                            {originalPrompt && (
+                                                <div className="bg-gray-50 border-2 border-gray-300 p-3 rounded">
+                                                    <div className="flex justify-between items-center mb-2">
+                                                        <p className="font-comic text-sm font-bold text-gray-700">🔧 Original Prompt</p>
+                                                        <div className="flex gap-2">
+                                                            <button
+                                                                onClick={async () => {
+                                                                    try { await navigator.clipboard.writeText(originalPrompt); setCopied(true); setTimeout(() => setCopied(false), 2000); } catch (e) { console.warn('[RerollModal] Clipboard copy failed:', e); }
+                                                                }}
+                                                                className="comic-btn bg-gray-700 text-white px-2 py-1 text-xs border border-gray-500 hover:bg-gray-600"
+                                                                aria-label="Copy original prompt"
+                                                            >{copied ? '✓ Copied' : '📋 Copy'}</button>
+                                                            <button
+                                                                onClick={() => { const blob = new Blob([originalPrompt], { type: 'text/plain' }); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = `page-${pageIndex}-prompt.txt`; a.click(); URL.revokeObjectURL(url); }}
+                                                                className="text-xs px-2 py-1 bg-gray-600 text-white border border-black rounded hover:bg-gray-500"
+                                                                aria-label="Download original prompt"
+                                                            >⬇</button>
+                                                        </div>
+                                                    </div>
+                                                    <pre className="text-[10px] font-mono bg-white border border-gray-300 p-2 max-h-32 overflow-y-auto whitespace-pre-wrap text-gray-600">{originalPrompt}</pre>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </details>
                                 )}
                             </div>
                         </details>
-                    )}
-
-                    {/* 8. DESKTOP SUBMIT BUTTON */}
-                    <button
-                        ref={submitRef}
-                        onClick={handleSubmit}
-                        className="hidden sm:block comic-btn w-full bg-yellow-400 text-black py-4 text-xl md:text-2xl font-bold uppercase tracking-wider border-[4px] border-black shadow-[4px_4px_0px_rgba(0,0,0,1)] hover:bg-yellow-300 hover:-translate-y-1 transition-transform"
-                        aria-label={`Reroll panel ${pageIndex}`}
-                    >
-                        🎲 Reroll Panel #{pageIndex}
-                    </button>
+                    </div>
                 </div>
 
                 {/* Mobile Sticky Footer with Submit Button */}

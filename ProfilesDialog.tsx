@@ -20,6 +20,23 @@ interface Props {
     onCancel: () => void;
 }
 
+const getProfileScore = (profile: CharacterProfile): 'complete' | 'partial' | 'sparse' => {
+  const fields = [
+    profile.faceDescription,
+    profile.bodyType,
+    profile.clothing,
+    profile.colorPalette,
+    profile.distinguishingFeatures,
+    profile.identityHeader,
+    profile.extractedColors,
+    profile.hardNegatives?.length ? profile.hardNegatives : null,
+  ];
+  const populated = fields.filter(Boolean).length;
+  if (populated >= 7) return 'complete';
+  if (populated >= 4) return 'partial';
+  return 'sparse';
+};
+
 export const ProfilesDialog: React.FC<Props> = ({ profiles, onUpdate, onAnalyze, onConfirm, onCancel }) => {
     const [analyzingIdx, setAnalyzingIdx] = useState<number | null>(null);
     const [bulkMatches, setBulkMatches] = useState<BulkMatch[] | null>(null);
@@ -29,6 +46,12 @@ export const ProfilesDialog: React.FC<Props> = ({ profiles, onUpdate, onAnalyze,
     // Feature D: Character lock state
     const characterLocks = useCharacterStore((state) => state.characterLocks);
     const updateCharacterLock = useCharacterStore((state) => state.updateCharacterLock);
+
+    // Task 1.3: Staleness check — characterReferences holds compiledAt timestamps
+    const characterReferences = useCharacterStore((state) => state.characterReferences);
+
+    // Task 5.2: Portrait-change stale flag
+    const staledProfileIds = useCharacterStore((state) => state.staledProfileIds);
 
     const getLock = (id: string) =>
         characterLocks.get(id) ?? { characterId: id, lockFace: false, lockOutfit: false, lockWeapon: false, lockEmblem: false };
@@ -190,6 +213,16 @@ export const ProfilesDialog: React.FC<Props> = ({ profiles, onUpdate, onAnalyze,
                     </div>
                 )}
 
+                {/* Task 1.3: Staleness warning — shown if any profile was compiled more than 24h ago */}
+                {profiles.some(p => {
+                    const ref = characterReferences?.get(p.id);
+                    return ref && (Date.now() - (ref.compiledAt ?? Date.now())) > 24 * 60 * 60 * 1000;
+                }) && (
+                    <div className="bg-amber-100 border-2 border-amber-400 px-3 py-2 mb-3 text-sm text-amber-800 rounded font-comic">
+                        ⚠️ Some profiles may be outdated — re-analyze to refresh.
+                    </div>
+                )}
+
                 <div className="overflow-y-auto flex-1 pr-2 space-y-6">
                     {profiles.map((p, idx) => {
                         const profileQuality = validateProfileCompleteness(p);
@@ -202,6 +235,13 @@ export const ProfilesDialog: React.FC<Props> = ({ profiles, onUpdate, onAnalyze,
 
                         return (
                         <div key={p.id} className="border-4 border-black p-4 bg-gray-50 flex flex-col gap-3">
+                            {/* Task 5.2: Portrait-change stale flag — shown when portrait was updated after profile was compiled */}
+                            {staledProfileIds.has(p.id) && (
+                                <div className="bg-yellow-100 border-2 border-yellow-400 px-3 py-2 mb-2 text-sm text-yellow-800 rounded flex items-center gap-2 font-comic">
+                                    📸 Portrait updated — Re-analyze to refresh profile
+                                </div>
+                            )}
+
                             {/* Profile Quality Warning Banner */}
                             {profileQuality.score < 80 && (
                                 <div className={`border-2 rounded p-3 ${profileQuality.score < 50 ? 'bg-yellow-100 border-yellow-500' : 'bg-blue-50 border-blue-300'}`}>
@@ -243,6 +283,14 @@ export const ProfilesDialog: React.FC<Props> = ({ profiles, onUpdate, onAnalyze,
                                 <div className="flex flex-col gap-1.5">
                                     <div className="flex items-center gap-3">
                                         <h3 className="font-comic text-2xl font-bold uppercase text-blue-800">{p.name || 'Unknown'}</h3>
+                                        {(() => {
+                                          const score = getProfileScore(p);
+                                          const dot = score === 'complete' ? '🟢' : score === 'partial' ? '🟡' : '🔴';
+                                          const label = score === 'complete' ? 'Complete' : score === 'partial' ? 'Partial' : 'Sparse';
+                                          return (
+                                            <span className="ml-2 text-xs" title={`Profile: ${label}`}>{dot}</span>
+                                          );
+                                        })()}
                                         <ProfileQualityIndicator profile={p} />
                                         {profileQuality.score < 80 && (
                                             <span

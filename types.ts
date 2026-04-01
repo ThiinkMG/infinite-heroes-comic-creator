@@ -829,6 +829,9 @@ export interface PageCharacterPlan {
   /** Brief scene description from outline */
   sceneDescription?: string;
 
+  /** Extracted setting/environment from sceneDescription */
+  location?: string;
+
   /** Whether this is a decision/choice page (Novel Mode) */
   isDecisionPage: boolean;
 

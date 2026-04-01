@@ -197,7 +197,7 @@ export const useGenerateOutline = (config: GenerateOutlineConfig) => {
       const flashbackStr = extractField(block, 'Flashback').toLowerCase();
       const isFlashback = flashbackStr === 'yes' || flashbackStr === 'true';
 
-      return {
+      const plan: PageCharacterPlan = {
         pageIndex: pageNum,
         primaryCharacters: primaryCharacters.length > 0 ? primaryCharacters : ['hero'],
         focusCharacter: focusCharacter || 'hero',
@@ -210,6 +210,13 @@ export const useGenerateOutline = (config: GenerateOutlineConfig) => {
         pacingIntent,
         isFlashback
       };
+
+      const locationMatch = plan.sceneDescription?.match(
+        /\b(?:in|at|on|near|inside|outside|within|atop|beneath|above|below)\b.{0,60}/i
+      );
+      if (locationMatch) plan.location = locationMatch[0].trim();
+
+      return plan;
     };
 
     // ===== STRATEGY 1: Strict format (original regex) =====
