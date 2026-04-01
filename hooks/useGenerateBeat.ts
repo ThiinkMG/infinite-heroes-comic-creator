@@ -94,7 +94,7 @@ const buildStorySummary = (history: ComicFace[], maxPages = 3): string => {
     const caption = f.narrative?.caption ?? '';
     return `Page ${f.pageIndex}: ${scene}${caption ? ` — "${caption}"` : ''}`;
   });
-  return `[STORY SO FAR]\n${lines.join('\n')}\n[END SUMMARY]`;
+  return `Story so far:\n${lines.join('\n')}\n`;
 };
 
 // ============================================================================

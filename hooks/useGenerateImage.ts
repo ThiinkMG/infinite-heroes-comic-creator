@@ -159,7 +159,7 @@ const buildCriticalDirectivesV2 = (profiles: CharacterProfile[]): string => {
   const uniqueNegatives = [...new Set(allNegatives)];
   const negativesList = uniqueNegatives.length > 0 ? uniqueNegatives.join(', ') : 'nothing specific';
 
-  let result = '\n[CHARACTER CONSISTENCY — CRITICAL]\n';
+  let result = '\nCharacter consistency — critical:\n';
 
   // Per-character face anchor: specific values give the model something concrete to lock onto
   profiles.forEach(p => {
@@ -322,21 +322,21 @@ export const useGenerateImage = (config: GenerateImageConfig) => {
         const ih = profile.identityHeader;
         if (ih) {
           const sigStr = ih.signature?.length ? `\nSignature: ${ih.signature.slice(0, 2).join(', ')}` : '';
-          return `[${role}: ${profile.name.toUpperCase()}${roleTag}]\nFace: ${ih.face} | Eyes: ${ih.eyes} | Hair: ${ih.hair} | Skin: ${ih.skin} | Build: ${ih.build}${sigStr}\n[PORTRAIT — COPY THIS FACE EXACTLY]:`;
+          return `${profile.name.toUpperCase()} (${role.toLowerCase()}${roleTag}) — face and outfit reference:\nFace: ${ih.face} | Eyes: ${ih.eyes} | Hair: ${ih.hair} | Skin: ${ih.skin} | Build: ${ih.build}${sigStr}\nMatch face, hair, skin, and outfit from this portrait. Draw in a scene-appropriate pose — do NOT copy the standing pose:`;
         }
         const hairInfo = profile.hairDetails
           ? `${profile.hairDetails.style} ${profile.hairDetails.color} hair`
           : 'match portrait';
-        return `[${role}: ${profile.name.toUpperCase()}${roleTag}]\nFace: ${profile.faceDescription || 'match portrait'} | Hair: ${hairInfo} | Skin: match portrait\n[PORTRAIT — COPY THIS FACE EXACTLY]:`;
+        return `${profile.name.toUpperCase()} (${role.toLowerCase()}${roleTag}) — face and outfit reference:\nFace: ${profile.faceDescription || 'match portrait'} | Hair: ${hairInfo} | Skin: match portrait\nMatch face, hair, skin, and outfit. Draw in a scene-appropriate pose — do NOT copy the standing pose:`;
       }
-      return `[${role}: ${name.toUpperCase()}${roleTag}]\n[PORTRAIT — COPY THIS FACE EXACTLY]:`;
+      return `${name.toUpperCase()} (${role.toLowerCase()}${roleTag}) — face and outfit reference. Match face and outfit. Draw in a scene-appropriate pose — do NOT copy the standing pose:`;
     };
 
     // Push character references with inline identity headers (Task 5.2.3 - identity immediately before each image)
     // Phase 3.2: Focus-character portrait ordering — Gemini weights later images most heavily,
     // so the focus character's portraits appear LAST for maximum face/costume accuracy.
     const pushCharacterReferences = () => {
-      contents.push({ text: "\n=== CHARACTER VISUAL REFERENCES (Match these EXACTLY) ===" });
+      contents.push({ text: "\nCharacter visual references — match exactly:\nReference images show characters in neutral standing poses. Draw all characters in natural poses fitting the scene — do NOT replicate the standing pose from portraits." });
 
       // Unified helper: push one character's full reference block
       const pushCharBlock = (persona: Persona, role: 'HERO' | 'CO-STAR' | 'CHARACTER', requirePortrait = false) => {
@@ -346,17 +346,17 @@ export const useGenerateImage = (config: GenerateImageConfig) => {
           contents.push(createInlineImage(persona.base64));
         }
         getAllRefs(persona).slice(0, MAX_COSTUME_REFS).forEach((ref, i) => {
-          contents.push({ text: `[${persona.name.toUpperCase()} COSTUME REF ${i + 1}]:` });
+          contents.push({ text: `${persona.name} outfit reference ${i + 1}:` });
           contents.push(createInlineImage(ref));
         });
         const emb = getEmblemDesc(persona);
         if (emb) {
-          contents.push({ text: `[${persona.name.toUpperCase()} EMBLEM - place on ${emb.placement}]:` });
+          contents.push({ text: `${persona.name}'s emblem (place on ${emb.placement}):` });
           contents.push(createInlineImage(emb.image));
         }
         const wpn = getWeaponDesc(persona);
         if (wpn) {
-          contents.push({ text: `[${persona.name.toUpperCase()} WEAPON - ${wpn.description}]:` });
+          contents.push({ text: `${persona.name}'s weapon (${wpn.description}):` });
           contents.push(createInlineImage(wpn.image));
         }
       };
@@ -421,13 +421,13 @@ export const useGenerateImage = (config: GenerateImageConfig) => {
         const ih = profile.identityHeader;
         if (ih) {
           const negatives = profile.hardNegatives?.length ? ` | NEVER: ${profile.hardNegatives.slice(0, 3).join(', ')}` : '';
-          summaries.push(`[${profile.name.toUpperCase()}] face: ${ih.face} | eyes: ${ih.eyes} | hair: ${ih.hair} | skin: ${ih.skin} | build: ${ih.build}${negatives}`);
+          summaries.push(`${profile.name.toUpperCase()}: face: ${ih.face} | eyes: ${ih.eyes} | hair: ${ih.hair} | skin: ${ih.skin} | build: ${ih.build}${negatives}`);
         } else {
-          summaries.push(`[${profile.name.toUpperCase()}]: ${profile.faceDescription || 'standard'}, ${profile.colorPalette || 'standard colors'}`);
+          summaries.push(`${profile.name.toUpperCase()}: ${profile.faceDescription || 'standard'}, ${profile.colorPalette || 'standard colors'}`);
         }
       });
       return summaries.length > 0
-        ? `=== CHARACTER IDENTITIES (memorize before drawing) ===\n${summaries.join('\n')}\n===\n`
+        ? `Character identities — memorize before drawing:\n${summaries.join('\n')}\n`
         : '';
     };
 
@@ -453,22 +453,22 @@ export const useGenerateImage = (config: GenerateImageConfig) => {
 
         if (lock.lockFace && profile?.identityHeader) {
           const ih = profile.identityHeader;
-          lines.push(`[ABSOLUTE CONSTRAINT — ${charName.toUpperCase()} FACE] Face: ${ih.face} | Eyes: ${ih.eyes} | Hair: ${ih.hair} | Skin: ${ih.skin} — MUST NOT CHANGE across any page.`);
+          lines.push(`${charName}'s face is locked — must not change: Face: ${ih.face} | Eyes: ${ih.eyes} | Hair: ${ih.hair} | Skin: ${ih.skin}.`);
         }
         if (lock.lockOutfit && profile?.clothing) {
-          lines.push(`[ABSOLUTE CONSTRAINT — ${charName.toUpperCase()} OUTFIT] ${profile.clothing} — MUST NOT CHANGE. Same colors, materials, and accessories as reference.`);
+          lines.push(`${charName}'s outfit is locked — must not change: ${profile.clothing}. Same colors, materials, and accessories as reference.`);
         }
         if (lock.lockEmblem && profile?.emblemDescription) {
           const placement = profile.emblemPlacement ? ` at ${profile.emblemPlacement}` : '';
-          lines.push(`[ABSOLUTE CONSTRAINT — ${charName.toUpperCase()} EMBLEM] ${profile.emblemDescription}${placement} — MUST BE PRESENT AND UNCHANGED.`);
+          lines.push(`${charName}'s emblem is locked — must remain visible: ${profile.emblemDescription}${placement}.`);
         }
         if (lock.lockWeapon && profile?.weaponDescription) {
-          lines.push(`[ABSOLUTE CONSTRAINT — ${charName.toUpperCase()} WEAPON] ${profile.weaponDescription} — MUST BE PRESENT AND UNCHANGED.`);
+          lines.push(`${charName}'s weapon is locked — must remain visible: ${profile.weaponDescription}.`);
         }
       });
 
       if (lines.length === 0) return '';
-      return `\n=== LOCKED CHARACTER ATTRIBUTES (IMMUTABLE — DO NOT CHANGE) ===\n${lines.join('\n')}\n===\n`;
+      return `\nLocked character attributes — do not change:\n${lines.join('\n')}\n`;
     };
 
     // When referenceImagePriority=true (default): portraits appear LAST (highest weight).
@@ -476,16 +476,16 @@ export const useGenerateImage = (config: GenerateImageConfig) => {
     if (!referenceImagePriority) {
       // Scene-first order: portraits go before context images
       if (useOnlySelectedRefs && extraRefImages && extraRefImages.length > 0) {
-        contents.push({ text: "\n=== SELECTED REFERENCES (Use ONLY these) ===" });
+        contents.push({ text: "\nSelected character references — use only these:" });
         extraRefImages.forEach((ref, i) => {
-          contents.push({ text: `[SELECTED REF ${i + 1}]:` });
+          contents.push({ text: `Reference ${i + 1}:` });
           contents.push(createInlineImage(ref));
         });
       } else {
         pushCharacterReferences();
         if (extraRefImages && extraRefImages.length > 0) {
           extraRefImages.forEach((ref, i) => {
-            contents.push({ text: `[ADDITIONAL REF ${i + 1}]:` });
+            contents.push({ text: `Additional reference ${i + 1}:` });
             contents.push(createInlineImage(ref));
           });
         }
@@ -494,14 +494,14 @@ export const useGenerateImage = (config: GenerateImageConfig) => {
 
     // STEP 2: Previous page image — scene context only, placed before portraits when referenceImagePriority=true.
     if (prevImage && prevBeat) {
-      contents.push({ text: "\n[SCENE CONTEXT — previous page. For background/lighting/pose continuity ONLY.]\n⚠️ Do NOT copy face, hair, or skin from this. Faces come from the CHARACTER PORTRAITS below." });
+      contents.push({ text: "\nPrevious page — use for background, lighting, and pose continuity only. Do NOT copy face, hair, or skin from this. Faces come from character portraits below." });
       contents.push(createInlineImage(prevImage.split(',')[1] || prevImage));
     }
 
     // STEP 2b: Adjacent page images (prev/next) for scene/outfit continuity.
     if (adjacentPageImages && adjacentPageImages.length > 0) {
       for (const adj of adjacentPageImages) {
-        contents.push({ text: `\n[${adj.label} — SCENE & OUTFIT CONTINUITY ONLY. Do NOT copy faces, hair, or skin from this. Faces come from character portraits below.]\n` });
+        contents.push({ text: `\n${adj.label} — scene and outfit continuity reference. Do not copy faces, hair, or skin. Faces come from character portraits below.` });
         contents.push(createInlineImage(adj.base64));
       }
     }
@@ -509,9 +509,9 @@ export const useGenerateImage = (config: GenerateImageConfig) => {
     // STEP 3: CHARACTER PORTRAITS (last images when referenceImagePriority=true — highest weight)
     if (referenceImagePriority) {
       if (useOnlySelectedRefs && extraRefImages && extraRefImages.length > 0) {
-        contents.push({ text: "\n=== SELECTED REFERENCES (Use ONLY these) ===" });
+        contents.push({ text: "\nSelected character references — use only these:" });
         extraRefImages.forEach((ref, i) => {
-          contents.push({ text: `[SELECTED REF ${i + 1}]:` });
+          contents.push({ text: `Reference ${i + 1}:` });
           contents.push(createInlineImage(ref));
         });
       } else {
@@ -520,12 +520,12 @@ export const useGenerateImage = (config: GenerateImageConfig) => {
         // Configurable re-anchor interval (Feature E): uses reAnchorEveryN from settings
         if (pageIndex !== undefined && pageIndex >= reAnchorEveryN && pageIndex % reAnchorEveryN === 0) {
           const charList = profiles.map(p => p.name.toUpperCase()).join(', ');
-          contents.push({ text: `\n[RE-ANCHOR — Page ${pageIndex}] Faces MUST match the PORTRAIT images immediately above for ${charList}.` });
+          contents.push({ text: `\nPage ${pageIndex} re-anchor: faces must match the portrait images above for ${charList}.` });
         }
 
         if (extraRefImages && extraRefImages.length > 0) {
           extraRefImages.forEach((ref, i) => {
-            contents.push({ text: `[ADDITIONAL REF ${i + 1}]:` });
+            contents.push({ text: `Additional reference ${i + 1}:` });
             contents.push(createInlineImage(ref));
           });
         }
@@ -534,7 +534,7 @@ export const useGenerateImage = (config: GenerateImageConfig) => {
       // Scene-first: re-anchor still fires but after scene images
       if (!useOnlySelectedRefs && pageIndex !== undefined && pageIndex >= reAnchorEveryN && pageIndex % reAnchorEveryN === 0) {
         const charList = profiles.map(p => p.name.toUpperCase()).join(', ');
-        contents.push({ text: `\n[RE-ANCHOR — Page ${pageIndex}] Faces MUST match the PORTRAIT images shown above for ${charList}.` });
+        contents.push({ text: `\nPage ${pageIndex} re-anchor: faces must match the portrait images above for ${charList}.` });
       }
     }
 
@@ -543,8 +543,8 @@ export const useGenerateImage = (config: GenerateImageConfig) => {
       const preserveData = currentImageToPreserve.includes(',')
         ? currentImageToPreserve.split(',')[1]
         : currentImageToPreserve;
-      contents.push({ text: "\n=== CURRENT PANEL (PRESERVE SCENE) ===" });
-      contents.push({ text: "[PRESERVE] Keep background, lighting, composition. Only modify as specified." });
+      contents.push({ text: "\nExisting panel — modify as specified:" });
+      contents.push({ text: "Keep the background, lighting, and composition unchanged. Only modify what is specified below." });
       contents.push(createInlineImage(preserveData));
     }
 
@@ -557,7 +557,7 @@ export const useGenerateImage = (config: GenerateImageConfig) => {
         !params.preserveCharacterIds!.includes(p.id)
       );
 
-      const lines: string[] = ['\n[CHARACTER TARGETING]'];
+      const lines: string[] = ['\nCharacter modification instructions:'];
 
       if (preservedProfiles.length > 0) {
         lines.push('PRESERVE exactly from the reference panel above — do NOT change these characters:');
@@ -575,7 +575,7 @@ export const useGenerateImage = (config: GenerateImageConfig) => {
     // Publisher logo for cover (if applicable, add near other images)
     let publisherLogoAdded = false;
     if (type === 'cover' && !storyContext.useOverlayLogo && storyContext.publisherLogo) {
-      contents.push({ text: "[PUBLISHER LOGO]:" });
+      contents.push({ text: "Publisher logo:" });
       contents.push(createInlineImage(storyContext.publisherLogo));
       publisherLogoAdded = true;
     }
@@ -588,9 +588,9 @@ export const useGenerateImage = (config: GenerateImageConfig) => {
 
     // STEP 3: Style/Genre tags (SHORT - Task 5.2.4 compact mode uses minimal)
     if (compactMode) {
-      promptText += `\n[STYLE: ${styleEra}${artStyleTag}]\n`;
+      promptText += `\nStyle: ${styleEra}${artStyleTag}.\n`;
     } else {
-      promptText += `\n[GENRE: ${selectedGenre}] [STYLE: ${storyContext.artStyle || 'Comic Book'}]\n`;
+      promptText += `\nGenre: ${selectedGenre}. Style: ${storyContext.artStyle || 'Comic Book'}.\n`;
       promptText += `${styleEra} comic art${artStyleTag}, detailed ink, vibrant colors.\n`;
     }
 
@@ -630,8 +630,8 @@ export const useGenerateImage = (config: GenerateImageConfig) => {
         sceneText = formatReinforcedScene(focusProfile, action, environment);
       }
 
-      const settingPrefix = pagePlanForFilter?.location ? `[SETTING: ${pagePlanForFilter.location}]\n` : '';
-      promptText += `TYPE: Vertical comic panel.\n${settingPrefix}SCENE: ${sceneText}\n`;
+      const settingInfix = pagePlanForFilter?.location ? ` (${pagePlanForFilter.location})` : '';
+      promptText += `TYPE: Vertical comic panel.\nSCENE${settingInfix}: ${sceneText}\n`;
 
       // Comic fundamentals (Task 5.2.4 - minimal in compact mode)
       const pagePlan = pageIndex !== undefined
@@ -644,7 +644,7 @@ export const useGenerateImage = (config: GenerateImageConfig) => {
 
       if (effectiveShotType) {
         if (compactMode) {
-          promptText += `[SHOT: ${effectiveShotType}] `;
+          promptText += `Shot type: ${effectiveShotType}. `;
         } else {
           promptText += `${getShotInstructions(effectiveShotType)} `;
         }

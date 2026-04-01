@@ -768,6 +768,17 @@ const App: React.FC = () => {
            beat = await generateBeat(historyRef.current, pageNum % 2 === 0, pageNum, isDecision, instruction, previousChoices);
       }
 
+      // Ensure decision pages always have choices — AI occasionally returns an empty array
+      if (isDecision && type === 'story' && (!beat.choices || beat.choices.length < 2)) {
+          beat = {
+              ...beat,
+              choices: [
+                  'Press forward — the mission cannot wait',
+                  'Take a different approach — adapt to the situation'
+              ]
+          };
+      }
+
       if (beat.focus_char === 'friend' && !getFriend() && type === 'story') {
           try {
               const newSidekick = await generatePersona(selectedGenre === 'Custom' ? "A fitting sidekick for this story" : `Sidekick for ${selectedGenre} story.`);
